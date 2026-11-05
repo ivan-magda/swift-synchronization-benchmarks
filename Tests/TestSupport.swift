@@ -173,49 +173,99 @@ enum GoldenAttempt {
 
         lines.append(
             RunLine(
-                schema: 1, request: .golden, build: build, phone: phone,
+                schema: 1,
+                request: .golden,
+                build: build,
+                phone: phone,
                 conditions: conditions(ticks: 100, wallClock: "2026-11-05T00:00:00Z")
             )
         )
         lines.append(
-            ReferenceLine(when: "start", iterations: 10, start: 110, end: 120, cpuReadings: [0, 0])
+            ReferenceLine(
+                when: "start",
+                iterations: 10,
+                start: 110,
+                end: 120,
+                cpuReadings: [0, 0]
+            )
         )
         lines.append(
             BlockLine(
-                block: 0, mechanism: "mutex", operation: "increment", threads: 1,
-                qos: .userInitiated, operationsPerBatch: 4, start: 130, end: 200,
-                voluntaryContextSwitches: 1, involuntaryContextSwitches: 0, taskContextSwitches: 1,
-                thermalStateAtStart: "nominal", thermalStateAtEnd: "nominal"
+                block: 0,
+                mechanism: "mutex",
+                operation: "increment",
+                threads: 1,
+                qos: .userInitiated,
+                operationsPerBatch: 4,
+                start: 130,
+                end: 200,
+                voluntaryContextSwitches: 1,
+                involuntaryContextSwitches: 0,
+                taskContextSwitches: 1,
+                thermalStateAtStart: "nominal",
+                thermalStateAtEnd: "nominal"
             )
         )
         lines.append(
             BatchLine(
-                block: 0, batch: 0, thread: 0, warmup: true, operations: 4, start: 140, end: 150,
-                cpuReadings: [0, 0, 0], executorCPUReadings: nil
+                block: 0,
+                batch: 0,
+                thread: 0,
+                warmup: true,
+                operations: 4,
+                start: 140,
+                end: 150,
+                cpuReadings: [0, 0, 0],
+                executorCPUReadings: nil
             )
         )
         lines.append(
             BatchLine(
-                block: 0, batch: 1, thread: 0, warmup: false, operations: 4, start: 160, end: 170,
-                cpuReadings: [0, 0, 0], executorCPUReadings: nil
+                block: 0,
+                batch: 1,
+                thread: 0,
+                warmup: false,
+                operations: 4,
+                start: 160,
+                end: 170,
+                cpuReadings: [0, 0, 0],
+                executorCPUReadings: nil
             )
         )
         lines.append(
             BatchLine(
-                block: 0, batch: 2, thread: 0, warmup: false, operations: 4, start: 180, end: 190,
-                cpuReadings: [0, 0, 0], executorCPUReadings: nil
+                block: 0,
+                batch: 2,
+                thread: 0,
+                warmup: false,
+                operations: 4,
+                start: 180,
+                end: 190,
+                cpuReadings: [0, 0, 0],
+                executorCPUReadings: nil
             )
         )
         lines.append(
-            ReferenceLine(when: "end", iterations: 10, start: 210, end: 220, cpuReadings: [0, 0])
+            ReferenceLine(
+                when: "end",
+                iterations: 10,
+                start: 210,
+                end: 220,
+                cpuReadings: [0, 0]
+            )
         )
         lines.append(
             EndLine(
-                status: "completed", reasonCode: nil, reason: nil,
+                status: "completed",
+                reasonCode: nil,
+                reason: nil,
                 checks: [
                     CheckResult(
-                        name: "baseComparison.increment", block: 0, passed: true,
-                        detail: "expected 12, got 12", violations: nil
+                        name: "baseComparison.increment",
+                        block: 0,
+                        passed: true,
+                        detail: "expected 12, got 12",
+                        violations: nil
                     )
                 ],
                 blockLines: 1,

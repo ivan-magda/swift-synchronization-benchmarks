@@ -15,7 +15,10 @@ func writeReadIncrement(_ mechanism: MechanismID) async {
 }
 
 // Catches a read/modify/write increment that loses updates under contention.
-@Test(.timeLimit(.minutes(1)), arguments: MechanismID.allCases.filter { $0 != .unsynchronized })
+@Test(
+    .timeLimit(.minutes(1)),
+    arguments: MechanismID.allCases.filter { $0 != .unsynchronized }
+)
 func concurrentIncrementsAreExact(_ mechanism: MechanismID) async {
     let task = await onBenchmarkThread {
         SharedIntegers.visit(mechanism, initialValue: 0, with: ConcurrentIncrementsVisitor())
@@ -40,6 +43,7 @@ private struct WriteReadIncrementVisitor: SharedIntegerVisitor {
         integer.write(7)
         integer.waitForPendingWrites()
         let readValue = integer.read()
+
         for _ in 0..<3 {
             integer.increment()
         }
@@ -51,6 +55,7 @@ private struct WriteReadIncrementVisitor: SharedIntegerVisitor {
         Task.detached {
             await integer.write(7)
             let readValue = await integer.read()
+
             for _ in 0..<3 {
                 await integer.increment()
             }
@@ -75,9 +80,11 @@ private struct ConcurrentIncrementsVisitor: SharedIntegerVisitor {
                 }
             }
         }
+
         for thread in threads {
             thread.join()
         }
+
         let finalValue = integer.finalValue()
         return Task.detached { IncrementResult(actual: finalValue, expected: 20_000) }
     }
@@ -94,9 +101,11 @@ private struct ConcurrentIncrementsVisitor: SharedIntegerVisitor {
                     }
                 }
             }
+
             for task in tasks {
                 await task.value
             }
+
             return IncrementResult(actual: await integer.finalValue(), expected: 8_000)
         }
     }

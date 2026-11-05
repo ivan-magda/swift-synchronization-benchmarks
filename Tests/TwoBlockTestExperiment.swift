@@ -13,8 +13,12 @@ struct TwoBlockTestExperiment: Experiment {
     var blocks: [BlockDescription] {
         ["first", "second"].map {
             BlockDescription(
-                mechanism: $0, operation: "increment", threads: request.tunables.threads,
-                qos: request.tunables.qos, operationsPerBatch: 4)
+                mechanism: $0,
+                operation: "increment",
+                threads: request.tunables.threads,
+                qos: request.tunables.qos,
+                operationsPerBatch: 4
+            )
         }
     }
 
@@ -24,8 +28,14 @@ struct TwoBlockTestExperiment: Experiment {
                 barrier.arriveAndWait()
             }
             block.appendSamples(SamplesLine(
-                block: block.position, thread: nil, metric: "clock", unit: "ticks",
-                values: [1, 2], cpuAtStart: nil, cpuAtEnd: nil))
+                block: block.position,
+                thread: nil,
+                metric: "clock",
+                unit: "ticks",
+                values: [1, 2],
+                cpuAtStart: nil,
+                cpuAtEnd: nil
+            ))
             return []
         }
 
@@ -33,16 +43,23 @@ struct TwoBlockTestExperiment: Experiment {
         if request.variant == "tasks" {
             logs = block.runInTasks { _, barrier, log in
                 await BatchTimer.timeBatches(
-                    layout: block.layout, barrier: barrier, log: log,
+                    layout: block.layout,
+                    barrier: barrier,
+                    log: log,
                     recordExecutorCPU: { $0.store(CPU.current()) },
-                    runOperations: { _, _, count in count })
+                    runOperations: { _, _, count in count }
+                )
             }
         } else {
             logs = block.runOnThreads { _, barrier, log in
                 BatchTimer.timeBatches(
-                    layout: block.layout, barrier: barrier, log: log,
-                    recordExecutorCPU: { _ in }, waitForPendingWrites: {},
-                    runOperations: { _, _, count in count })
+                    layout: block.layout,
+                    barrier: barrier,
+                    log: log,
+                    recordExecutorCPU: { _ in },
+                    waitForPendingWrites: {},
+                    runOperations: { _, _, count in count }
+                )
             }
         }
 
@@ -51,7 +68,11 @@ struct TwoBlockTestExperiment: Experiment {
                 (0..<block.layout.totalBatches).allSatisfy { log.checkValue(ofBatch: $0) == 4 }
             }
         return [CheckResult(
-            name: block.description.mechanism + ".count", block: block.position,
-            passed: passed, detail: "Each batch must perform four operations", violations: nil)]
+            name: block.description.mechanism + ".count",
+            block: block.position,
+            passed: passed,
+            detail: "Each batch must perform four operations",
+            violations: nil
+        )]
     }
 }

@@ -115,57 +115,87 @@ struct PreflightCase: Sendable {
         PreflightCase(batteryState: "full", expected: .proceed),
         PreflightCase(
             configuration: "Debug",
-            expected: .refuse(.configuration, detail: "configuration=Debug (requires Release)")),
-        PreflightCase(
-            debuggerAttached: true,
-            expected: .refuse(.debugger, detail: "debuggerAttached=true")),
-        PreflightCase(
-            thermalState: "fair", expected: .refuse(.thermal, detail: "thermalState=fair")),
-        PreflightCase(
-            lowPowerMode: true, expected: .refuse(.lowPower, detail: "lowPowerMode=true")),
-        PreflightCase(
-            batteryState: "unplugged", expected: .refuse(.battery, detail: "batteryState=unplugged")
+            expected: .refuse(.configuration, detail: "configuration=Debug (requires Release)")
         ),
         PreflightCase(
-            batteryState: "unknown", expected: .refuse(.battery, detail: "batteryState=unknown")),
+            debuggerAttached: true,
+            expected: .refuse(.debugger, detail: "debuggerAttached=true")
+        ),
+        PreflightCase(
+            thermalState: "fair",
+            expected: .refuse(.thermal, detail: "thermalState=fair")
+        ),
+        PreflightCase(
+            lowPowerMode: true,
+            expected: .refuse(.lowPower, detail: "lowPowerMode=true")
+        ),
+        PreflightCase(
+            batteryState: "unplugged",
+            expected: .refuse(.battery, detail: "batteryState=unplugged")
+        ),
+        PreflightCase(
+            batteryState: "unknown",
+            expected: .refuse(.battery, detail: "batteryState=unknown")
+        ),
         PreflightCase(
             applicationState: "inactive",
-            expected: .refuse(.applicationState, detail: "applicationState=inactive")),
+            expected: .refuse(.applicationState, detail: "applicationState=inactive")
+        ),
         PreflightCase(
             applicationState: "background",
-            expected: .refuse(.applicationState, detail: "applicationState=background")),
+            expected: .refuse(.applicationState, detail: "applicationState=background")
+        ),
         PreflightCase(
             environment: ["PTHREAD_MUTEX_DEFAULT_POLICY": ""],
-            expected: .refuse(.environment, detail: "environment=PTHREAD_MUTEX_DEFAULT_POLICY")),
+            expected: .refuse(.environment, detail: "environment=PTHREAD_MUTEX_DEFAULT_POLICY")
+        ),
         PreflightCase(
             environment: ["PTHREAD_MUTEX_USE_ULOCK": "1"],
-            expected: .refuse(.environment, detail: "environment=PTHREAD_MUTEX_USE_ULOCK")),
+            expected: .refuse(.environment, detail: "environment=PTHREAD_MUTEX_USE_ULOCK")
+        ),
         PreflightCase(
             environment: ["PTHREAD_MUTEX_ADAPTIVE_SPIN": "1"],
-            expected: .refuse(.environment, detail: "environment=PTHREAD_MUTEX_ADAPTIVE_SPIN")),
+            expected: .refuse(.environment, detail: "environment=PTHREAD_MUTEX_ADAPTIVE_SPIN")
+        ),
         PreflightCase(
             environment: ["LIBDISPATCH_COOPERATIVE_POOL_STRICT": "1"],
             expected: .refuse(
-                .environment, detail: "environment=LIBDISPATCH_COOPERATIVE_POOL_STRICT")),
+                .environment,
+                detail: "environment=LIBDISPATCH_COOPERATIVE_POOL_STRICT"
+            )
+        ),
         PreflightCase(
             environment: ["SWIFT_UNEXPECTED_EXECUTOR_LOG_LEVEL": "1"],
             expected: .refuse(
-                .environment, detail: "environment=SWIFT_UNEXPECTED_EXECUTOR_LOG_LEVEL")),
+                .environment,
+                detail: "environment=SWIFT_UNEXPECTED_EXECUTOR_LOG_LEVEL"
+            )
+        ),
         PreflightCase(
-            thermalState: "fair", lowPowerMode: true,
-            expected: .refuse(.thermal, detail: "thermalState=fair; lowPowerMode=true")),
+            thermalState: "fair",
+            lowPowerMode: true,
+            expected: .refuse(.thermal, detail: "thermalState=fair; lowPowerMode=true")
+        ),
         PreflightCase(
-            thermalState: "critical", lowPowerMode: true, batteryState: "unplugged",
-            debuggerAttached: true, applicationState: "background",
-            environment: ["PTHREAD_MUTEX_USE_ULOCK": "1"], configuration: "Debug",
+            thermalState: "critical",
+            lowPowerMode: true,
+            batteryState: "unplugged",
+            debuggerAttached: true,
+            applicationState: "background",
+            environment: ["PTHREAD_MUTEX_USE_ULOCK": "1"],
+            configuration: "Debug",
             expected: .refuse(
                 .configuration,
                 detail:
                     "configuration=Debug (requires Release); debuggerAttached=true; thermalState=critical; lowPowerMode=true; batteryState=unplugged; applicationState=background; environment=PTHREAD_MUTEX_USE_ULOCK"
-            )),
+            )
+        ),
         PreflightCase(
-            thermalState: "critical", lowPowerMode: true, batteryState: "unplugged",
-            debuggerAttached: true, applicationState: "background",
+            thermalState: "critical",
+            lowPowerMode: true,
+            batteryState: "unplugged",
+            debuggerAttached: true,
+            applicationState: "background",
             environment: ["PTHREAD_MUTEX_USE_ULOCK": "1"], configuration: "Debug", smoke: true,
             expected: .proceed),
     ]

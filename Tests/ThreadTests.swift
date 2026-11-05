@@ -9,11 +9,13 @@ func threadRunsWithRequestedQoS(_ qos: QoS) async {
     let observation = await onBenchmarkThread {
         let observedQoS = Mutex<qos_class_t?>(nil)
         let ranOnMainThread = Mutex(true)
+
         let thread = BenchmarkThread.start(name: "qos-test", qos: qos) {
             observedQoS.withLock { $0 = qos_class_self() }
             ranOnMainThread.withLock { $0 = pthread_main_np() != 0 }
         }
         thread.join()
+
         return (observedQoS.withLock { $0 }, ranOnMainThread.withLock { $0 })
     }
 
@@ -23,18 +25,21 @@ func threadRunsWithRequestedQoS(_ qos: QoS) async {
 
 @Test func threadLogStartsEmptyAndIsAligned() {
     let log = ThreadLog(batches: 3, readingsPerBatch: 5)
+
     #expect(log.cpuReadings(ofBatch: 0) == [-1, -1, -1, -1, -1])
     #expect(log.executorCPUReadings(ofBatch: 2) == nil)
     #expect(log.baseAddressForTesting % 128 == 0)
 
     log.recordCPU(batch: 1, reading: 4, cpu: 7)
     log.executorSlot(batch: 1, reading: 0).store(3)
+
     #expect(log.cpuReadings(ofBatch: 1) == [-1, -1, -1, -1, 7])
     #expect(log.executorCPUReadings(ofBatch: 1) == [3, -1, -1, -1, -1])
     #expect(log.executorCPUReadings(ofBatch: 0) == nil)
 
     // A failed CPU query is still an executor reading, rather than an unused batch.
     log.executorSlot(batch: 2, reading: 0).store(-1)
+
     #expect(log.executorCPUReadings(ofBatch: 2) == [-1, -1, -1, -1, -1])
 }
 
@@ -97,9 +102,11 @@ func threadBarrierReleasesNobodyEarly() async {
                 }
             }
         }
+
         for thread in threads {
             thread.join()
         }
+
         return violations.load(ordering: .relaxed)
     }
 
@@ -118,6 +125,7 @@ func taskBarrierWorksWithMoreTasksThanCores() async {
                 for round in 1...50 {
                     slots[index].value.store(round, ordering: .relaxed)
                     await barrier.arriveAndWait()
+
                     for slot in slots where slot.value.load(ordering: .relaxed) < round {
                         violations.wrappingAdd(1, ordering: .relaxed)
                     }

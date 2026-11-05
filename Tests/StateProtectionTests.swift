@@ -48,7 +48,10 @@ func synchronousWriteFinishesBeforeReturning(_ mechanism: MechanismID) async {
     #expect(finished)
 }
 
-@Test(.timeLimit(.minutes(1)), arguments: MechanismID.stateProtections.filter { $0 != .unsynchronized })
+@Test(
+    .timeLimit(.minutes(1)),
+    arguments: MechanismID.stateProtections.filter { $0 != .unsynchronized }
+)
 func eightThreadsCountExactly(_ mechanism: MechanismID) async {
     let value = await onBenchmarkThread {
         let protection = makeIntegerProtection(mechanism, initialValue: 0)
@@ -63,9 +66,11 @@ func eightThreadsCountExactly(_ mechanism: MechanismID) async {
                 }
             }
         }
+
         for thread in threads {
             thread.join()
         }
+
         protection.waitForPendingWrites()
         return protection.withSharedAccess { $0 }
     }
@@ -73,13 +78,18 @@ func eightThreadsCountExactly(_ mechanism: MechanismID) async {
     #expect(value == 80_000)
 }
 
-@Test(arguments: [MechanismID.pthreadReadWriteLock, .barrierQueueSyncWrite, .barrierQueueAsyncWrite])
+@Test(arguments: [
+    MechanismID.pthreadReadWriteLock,
+    .barrierQueueSyncWrite,
+    .barrierQueueAsyncWrite
+])
 func readersOverlap(_ mechanism: MechanismID) async {
     let overlapped = await onBenchmarkThread {
         let protection = makeIntegerProtection(mechanism, initialValue: 0)
         let firstEntered = DispatchSemaphore(value: 0)
         let secondEntered = DispatchSemaphore(value: 0)
         let overlapped = Mutex(false)
+
         let first = BenchmarkThread.start(name: "first-reader", qos: .userInitiated) {
             protection.withSharedAccess { _ in
                 firstEntered.signal()
@@ -105,11 +115,13 @@ func readersOverlap(_ mechanism: MechanismID) async {
     let observation = await onBenchmarkThread {
         let protection = BarrierQueueAsyncWriteProtection<Int>(0)
         let log = ThreadLog(batches: 1, readingsPerBatch: 1)
+
         for newValue in 0..<1_000 {
             protection.write(newValue) { value, newValue in
                 value = newValue
             }
         }
+
         protection.recordExecutorCPU(into: log.executorSlot(batch: 0, reading: 0))
         protection.waitForPendingWrites()
         // Observe completion before a synchronous read could drain the queue itself.
@@ -129,6 +141,7 @@ func readersOverlap(_ mechanism: MechanismID) async {
         let readerEntered = DispatchSemaphore(value: 0)
         let writerReturned = DispatchSemaphore(value: 0)
         let returnedBeforeReaderFinished = Mutex(false)
+
         let reader = BenchmarkThread.start(name: "held-reader", qos: .userInitiated) {
             protection.withSharedAccess { _ in
                 readerEntered.signal()

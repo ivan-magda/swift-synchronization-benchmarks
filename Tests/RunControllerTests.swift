@@ -8,12 +8,14 @@ import Testing
     // Missing/reordered records or an inaccurate marker makes a completed attempt unusable.
     @Test func completedRunHasLinesInOrder() async throws {
         let run = try await recordRun()
+
         #expect(run.lines.map { $0["type"] as? String } == [
             "run", "reference", "block", "batch", "batch", "batch",
             "block", "batch", "batch", "batch", "reference", "end",
         ])
         #expect(run.outcome.status == "completed")
         #expect(run.outcome.reasonCode == nil)
+
         let end = try #require(run.lines.last)
         #expect(end["blockLines"] as? Int == 2)
         #expect(end["warmupBatchLines"] as? Int == 2)
@@ -23,10 +25,12 @@ import Testing
         #expect(run.marker.sha256 == SHA256.hash(data: run.data)
             .map { String(format: "%02x", $0) }.joined())
         #expect(run.marker.attemptID == RunRequest.golden.attemptID)
+
         for block in run.lines.filter({ $0["type"] as? String == "block" }) {
             let position = try #require(block["block"] as? Int)
             let start = try #require(block["start"] as? UInt64)
             let end = try #require(block["end"] as? UInt64)
+
             for batch in run.lines.filter({
                 $0["type"] as? String == "batch" && $0["block"] as? Int == position
             }) {
@@ -43,6 +47,7 @@ import Testing
     func blocksFollowTheSeededOrder(_ seed: UInt64, _ expected: [String]) async throws {
         var request = RunRequest.golden
         request.seed = seed
+
         let run = try await recordRun(request)
         let mechanisms = run.lines.filter { $0["type"] as? String == "block" }
             .compactMap { $0["mechanism"] as? String }
@@ -53,6 +58,7 @@ import Testing
     @Test func refusalWritesOnlyRunAndEnd() async throws {
         var request = RunRequest.golden
         request.smoke = false
+
         let run = try await recordRun(request, conditions: testConditions(thermal: "serious"))
         #expect(run.lines.map { $0["type"] as? String } == ["run", "end"])
         #expect(run.outcome.status == "refused")
@@ -65,6 +71,7 @@ import Testing
         let run = try await recordRun(makeExperiment: { _ throws(RequestError) in
             throw RequestError(message: "unknown experiment")
         })
+
         #expect(run.lines.map { $0["type"] as? String } == ["run", "end"])
         #expect(run.outcome.status == "failed")
         #expect(run.outcome.reasonCode == "invalidRequest")
@@ -74,9 +81,11 @@ import Testing
     @Test func failedCheckFailsTheRun() async throws {
         var request = RunRequest.golden
         request.variant = "failedCheck"
+
         let run = try await recordRun(request)
         #expect(run.outcome.status == "failed")
         #expect(run.outcome.reasonCode == "check")
+
         let reason = try #require(run.lines.last?["reason"] as? String)
         #expect(reason.contains("first.count"))
         #expect(reason.contains("second.count"))
@@ -87,15 +96,18 @@ import Testing
         var request = RunRequest.golden
         request.variant = "tasks"
         request.tunables.threads = 3
+
         let run = try await recordRun(request)
         #expect(run.outcome.status == "completed")
         let batches = run.lines.filter { $0["type"] as? String == "batch" }
         #expect(batches.count == 18)
+
         for block in 0..<2 {
             for thread in 0..<3 {
                 let records = batches.filter {
                     $0["block"] as? Int == block && $0["thread"] as? Int == thread
                 }
+
                 #expect(records.compactMap { $0["batch"] as? Int } == [0, 1, 2])
                 #expect(records.compactMap { $0["warmup"] as? Bool } == [true, false, false])
                 #expect(records.allSatisfy { ($0["executorCPUReadings"] as? [Int])?.count == 3 })
@@ -107,6 +119,7 @@ import Testing
     @Test func sampleOnlyBlocksWriteNoBatches() async throws {
         var request = RunRequest.golden
         request.variant = "samples"
+
         let run = try await recordRun(request)
         #expect(run.lines.map { $0["type"] as? String } == [
             "run", "reference", "block", "samples", "block", "samples", "reference", "end",
@@ -120,6 +133,7 @@ import Testing
     @Test func unsafeAttemptIDUsesSafeDiagnosticFile() async throws {
         var request = RunRequest.golden
         request.attemptID = "../escape"
+
         let run = try await recordRun(request)
         #expect(run.outcome.reasonCode == "invalidRequest")
         #expect(RunRequest.isValidIdentifier(run.marker.attemptID))
@@ -131,16 +145,22 @@ import Testing
     @Test func endConditionsAreRecordedWithoutOverridingPassedChecks() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
+
         let outcome = await onBenchmarkThread {
             var calls = 0
             return RunController.runToCompletion(
-                .golden, writingTo: directory, makeExperiment: TwoBlockTestExperiment.init,
+                .golden,
+                writingTo: directory,
+                makeExperiment: TwoBlockTestExperiment.init,
                 captureConditions: {
                     calls += 1
                     return testConditions(thermal: calls == 1 ? "nominal" : "serious")
-                }, build: releaseBuild)
+                },
+                build: releaseBuild
+            )
         }
         let lines = try readLines(Data(contentsOf: directory.appending(path: outcome.marker.file)))
+
         #expect(outcome.status == "completed")
         #expect((lines.last?["conditions"] as? [String: Any])?["thermalState"] as? String == "serious")
     }
@@ -150,7 +170,8 @@ import Testing
     func impossibleStorageFailsValidation(_ field: String) async throws {
         var request = RunRequest.golden
         switch field {
-        case "totalBatches": request.tunables.warmupBatches = Int.max
+        case "totalBatches":
+            request.tunables.warmupBatches = Int.max
         case "readings":
             request.tunables.subBatches = Int.max
             request.tunables.operationsPerBatch["default"] = Int.max
@@ -158,6 +179,7 @@ import Testing
             request.tunables.threads = 64
             request.tunables.measuredBatches = Int.max / 512
         }
+
         let run = try await recordRun(request)
         #expect(run.outcome.reasonCode == "invalidRequest")
         #expect(run.lines.map { $0["type"] as? String } == ["run", "end"])
@@ -165,15 +187,27 @@ import Testing
 }
 
 private let releaseBuild = BuildInfo(
-    buildID: "test", commit: "test", dirty: false, target: "ios26", minimumOS: "26.0",
-    configuration: "Release")
+    buildID: "test",
+    commit: "test",
+    dirty: false,
+    target: "ios26",
+    minimumOS: "26.0",
+    configuration: "Release"
+)
 
 private func testConditions(thermal: String = "nominal") -> Conditions {
     Conditions(
-        thermalState: thermal, lowPowerMode: false, batteryState: "charging",
-        batteryLevelPermille: 800, screenBrightnessPermille: 500, debuggerAttached: false,
-        applicationState: "active", environment: [:], ticks: Clock.now(),
-        wallClock: "2026-11-05T00:00:00Z")
+        thermalState: thermal,
+        lowPowerMode: false,
+        batteryState: "charging",
+        batteryLevelPermille: 800,
+        screenBrightnessPermille: 500,
+        debuggerAttached: false,
+        applicationState: "active",
+        environment: [:],
+        ticks: Clock.now(),
+        wallClock: "2026-11-05T00:00:00Z"
+    )
 }
 
 private struct RecordedRun {
@@ -192,12 +226,18 @@ private func recordRun(
     defer { try? FileManager.default.removeItem(at: directory) }
     let outcome = await onBenchmarkThread {
         RunController.runToCompletion(
-            request, writingTo: directory, makeExperiment: makeExperiment,
-            captureConditions: { conditions }, build: releaseBuild)
+            request,
+            writingTo: directory,
+            makeExperiment: makeExperiment,
+            captureConditions: { conditions },
+            build: releaseBuild
+        )
     }
     let data = try Data(contentsOf: directory.appending(path: outcome.marker.file))
     let marker = try JSONDecoder().decode(
-        DoneMarker.self, from: Data(contentsOf: directory.appending(path: outcome.marker.attemptID + ".done")))
+        DoneMarker.self,
+        from: Data(contentsOf: directory.appending(path: outcome.marker.attemptID + ".done"))
+    )
     return RecordedRun(outcome: outcome, marker: marker, data: data, lines: try readLines(data))
 }
 

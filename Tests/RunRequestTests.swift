@@ -35,12 +35,16 @@ import Testing
     ["--bench-request", "e30="]
 ])
 func malformedRequestArgumentsThrow(_ arguments: [String]) {
-    #expect(throws: RequestError.self) { try RunRequest.decode(launchArguments: arguments) }
+    #expect(throws: RequestError.self) {
+        try RunRequest.decode(launchArguments: arguments)
+    }
 }
 
 @Test(arguments: InvalidRequestCase.all)
 func invalidRequestNamesTheField(_ invalidCase: InvalidRequestCase) {
-    let error = #expect(throws: RequestError.self) { try invalidCase.request.validate() }
+    let error = #expect(throws: RequestError.self) {
+        try invalidCase.request.validate()
+    }
 
     #expect(error?.message.contains(invalidCase.field) == true)
 }

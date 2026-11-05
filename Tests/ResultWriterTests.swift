@@ -45,7 +45,11 @@ func writerRejectsUnsafeAttemptIDs(_ attemptID: String) {
     defer { try? FileManager.default.removeItem(at: directory) }
 
     #expect(throws: RequestError.self) {
-        try ResultWriter.write(GoldenAttempt.lines(), attemptID: attemptID, to: directory)
+        try ResultWriter.write(
+            GoldenAttempt.lines(),
+            attemptID: attemptID,
+            to: directory
+        )
     }
     #expect(!FileManager.default.fileExists(atPath: directory.path))
 }
