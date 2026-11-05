@@ -1,5 +1,73 @@
 # Phase 1 device acceptance
 
+## Direct queue correction acceptance (2026-11-05)
+
+This is the latest full acceptance. Concrete queue counters were implemented in
+`3579043`; the clean source revision used for both signed builds is
+`b2c9f9dae09cae8c14007c11221894bb0fe67bc7`. Standard Release `-O`/WMO and default
+exclusivity remain enabled; no `@exclusivity(unchecked)` is used. All recorded
+sessions have `dev: false`.
+
+| Deployment target | Build ID | Exact stripped-executable SHA-256 |
+| --- | --- | --- |
+| ios26 | `b2c9f9dae09c-clean-ios26-20261105T094500Z` | `f1d9307b6c54396a8c7da340c1247bf2a60ded6b16c18f4cc0caaf8d04bdcf98` |
+| ios18 | `b2c9f9dae09c-clean-ios18-20261105T094756Z` | `b193eb9fb025b20a381117ffed75307f36492548ad7703a65f2646e17103506c` |
+
+Both profiles cover both configured phones, so each target's same signed app was
+used on both devices. iPhone 11 Pro Max remains on iOS 26.6 (23G71), and iPhone 15
+Pro Max remains on iOS 26.6.2 (23G90). Automatic updates remain disabled per Ivan's
+preparation decision. No OS update or setting change was performed. The initial
+live doctor calls and the strict plans verified the expected OS builds.
+
+| Phone | Check | Session ID | Outcome |
+| --- | --- | --- | --- |
+| iphone11 | iOS 26, 1/2/6/12 threads | `20261105T094801Z.acceptance-base-comparison.01176119` | 4 accepted, 0 rejected/refused |
+| iphone11 | Calibration | `20261105T095039Z.calibration.adbc88f2` | 1 accepted, 0 rejected/refused |
+| iphone11 | Crash/hang | `20261105T095130Z.crash-and-hang.3edc3663` | crashed + timeout; original .ips copied; hang terminated |
+| iphone11 | Strict non-smoke | `20261105T095325Z.queue-correction-strict-iphone11.2c3dfb06` | 1 accepted, 0 rejected/refused |
+| iphone11 | iOS 18, 1/2/6/12 threads | `20261105T095523Z.acceptance-base-comparison-ios18.0bd7feb3` | 4 accepted, 0 rejected/refused |
+| iphone15 | iOS 26, 1/2/6/12 threads | `20261105T094801Z.acceptance-base-comparison.2a81adbe` | 4 accepted, 0 rejected/refused |
+| iphone15 | Calibration | `20261105T095036Z.calibration.7f70a01a` | 1 accepted, 0 rejected/refused |
+| iphone15 | Crash/hang | `20261105T095126Z.crash-and-hang.def58cf8` | crashed + timeout; original .ips copied; hang terminated |
+| iphone15 | Strict non-smoke | `20261105T095321Z.queue-correction-strict-iphone15.19f4c81a` | 1 accepted, 0 rejected/refused |
+| iphone15 | iOS 18, 1/2/6/12 threads | `20261105T095523Z.acceptance-base-comparison-ios18.82e69ddb` | 4 accepted, 0 rejected/refused |
+
+All 20 completed attempts (16 base comparison, two calibration, two strict) were
+independently rechecked with `bench.py check`, reconstructing each launch request
+from its plan and checking the known build ID. All passed. Every iOS 18 result
+records `minimumOS: 18.0`. Every session ended without a stop reason. The two
+crash/hang commands intentionally returned exit 1: their statuses are `crashed`
+and `timeout`, not accepted measurements. Each crash has one nonempty original
+`.ips` in its attempt folder; no redaction or provenance sidecar is generated.
+The timeout path completed process termination successfully on each phone.
+
+Strict plans pin each phone's OS build and run Mutex plus all three corrected
+queue counters, read/write/increment, with one warm-up and two measured batches,
+four sub-batches, 10,000 operations per batch (2,000 for the async-barrier row),
+and 100,000 reference iterations. They use `smoke: false`. Both results have
+12 passing block checks, 12 warm-up and 24 measured batch records; preflight and
+end conditions pass, including `applicationState: active` at both endpoints.
+These short checks verify normal launch/conditions, not performance rankings.
+
+- iphone11 calibration: performance CPUs `[4, 5]`, efficiency CPUs `[0, 1, 2, 3]`.
+- iphone11 strict plan SHA-256: `b61c44356a10aac849aabe101a15ece5c1953a878578031168163e1910bf5bf4`.
+- iphone15 calibration: performance CPUs `[4, 5]`, efficiency CPUs `[0, 1, 2, 3]`.
+- iphone15 strict plan SHA-256: `827e7d7e457c102f4c9292c3ed6dd8b9ca4846989fc07e4527bbdb2d3c1ea0e1`.
+
+Local verification: all 38 Swift test functions pass, including real queue drain
+and executor-slot completion; Python suites pass 82 tests on both Python 3.15
+and 3.9.6. The bounded code/assembly review found no blocker. New queue bodies
+have no dynamic access checks; the [build checks](build-checks/2026-11-phase-1.md#direct-queue-counters-2026-11-05-correction)
+record the independent arm64/iOS 26 reference, corrected ManagedAtomic attribution,
+and the lock optimizer differences rather than claiming byte-identical lock code.
+
+Session files remain under `results/<phone>/<session>/`. Local commands,
+reconstructed requests, independent checker verdicts and the consolidated summary
+remain under ignored `build/queue-revision/`. Older acceptance below is historical
+and does not replace these clean-build results.
+
+## Earlier acceptance and lifecycle work
+
 On 2026-11-05 I ran the implemented CLI on both cable-connected physical phones.
 All 16 base-comparison attempts passed, covering both deployment targets and
 1, 2, 6, and 12 threads on each phone. Both calibrations passed. After fixing
