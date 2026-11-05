@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "name": "crash-and-hang",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuild": null,
+  "seed": 20261105,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "crash",
+      "experiment": "baseComparison",
+      "variant": "oneThread",
+      "repeats": 1,
+      "timeLimitSeconds": 60,
+      "simulation": "crash",
+      "mechanisms": [
+        "mutex"
+      ],
+      "operations": [
+        "increment"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "hang",
+      "experiment": "baseComparison",
+      "variant": "oneThread",
+      "repeats": 1,
+      "timeLimitSeconds": 60,
+      "simulation": "hang",
+      "mechanisms": [
+        "mutex"
+      ],
+      "operations": [
+        "increment"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ],
+  "shuffle": false
+}

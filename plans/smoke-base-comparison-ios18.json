@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "name": "smoke-base-comparison-ios18",
+  "buildTarget": "ios18",
+  "smoke": true,
+  "iosBuild": null,
+  "seed": 20261105,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "one-thread",
+      "experiment": "baseComparison",
+      "variant": "oneThread",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed",
+        "mutex"
+      ],
+      "operations": [
+        "read",
+        "write",
+        "increment"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "two-threads",
+      "experiment": "baseComparison",
+      "variant": "twoThreads",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed",
+        "mutex"
+      ],
+      "operations": [
+        "read",
+        "write",
+        "increment"
+      ],
+      "tunables": {
+        "threads": 2,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}

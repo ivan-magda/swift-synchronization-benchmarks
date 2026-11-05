@@ -1,0 +1,201 @@
+{
+  "schema": 1,
+  "name": "acceptance-base-comparison",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuild": null,
+  "seed": 20261105,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "one-thread",
+      "experiment": "baseComparison",
+      "variant": "oneThread",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "unsynchronized",
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "actor",
+        "mainActor",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read",
+        "write",
+        "increment"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "two-threads",
+      "experiment": "baseComparison",
+      "variant": "twoThreads",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "actor",
+        "mainActor",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read",
+        "write",
+        "increment"
+      ],
+      "tunables": {
+        "threads": 2,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "six-threads",
+      "experiment": "baseComparison",
+      "variant": "sixThreads",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "actor",
+        "mainActor",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read",
+        "write",
+        "increment"
+      ],
+      "tunables": {
+        "threads": 6,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "twelve-threads",
+      "experiment": "baseComparison",
+      "variant": "twelveThreads",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "actor",
+        "mainActor",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read",
+        "write",
+        "increment"
+      ],
+      "tunables": {
+        "threads": 12,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400,
+          "barrierQueueAsyncWrite": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}
