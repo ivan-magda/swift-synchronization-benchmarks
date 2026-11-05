@@ -33,37 +33,44 @@ final class ThreadLog: @unchecked Sendable {
     private let executorCPUs: UnsafeMutablePointer<Int>
     private let executorSlotsWritten: UnsafeMutablePointer<Bool>
 
+    /// Mirrors the allocation's exact byte layout without allocating it.
+    static func storageByteCount(batches: Int, readingsPerBatch: Int) throws(RequestError) -> Int {
+        guard batches >= 0, readingsPerBatch >= 0 else {
+            throw RequestError(message: "negative thread log size")
+        }
+        let (readings, readingsOverflow) = batches.multipliedReportingOverflow(by: readingsPerBatch)
+        let (batchBytes, batchOverflow) = batches.multipliedReportingOverflow(by: MemoryLayout<Batch>.stride)
+        let (readingBytes, readingOverflow) = readings.multipliedReportingOverflow(by: MemoryLayout<Int>.stride)
+        let (allReadingBytes, allReadingOverflow) = readingBytes.multipliedReportingOverflow(by: 2)
+        let (writtenBytes, writtenOverflow) = readings.multipliedReportingOverflow(by: MemoryLayout<Bool>.stride)
+        let (valueBytes, valueOverflow) = batchBytes.addingReportingOverflow(allReadingBytes)
+        let (totalBytes, totalOverflow) = valueBytes.addingReportingOverflow(writtenBytes)
+        guard !readingsOverflow, !batchOverflow, !readingOverflow, !allReadingOverflow,
+            !writtenOverflow, !valueOverflow, !totalOverflow
+        else {
+            throw RequestError(message: "thread log size overflow")
+        }
+        return max(totalBytes, 1)
+    }
+
     init(batches: Int, readingsPerBatch: Int) {
-        precondition(batches >= 0 && readingsPerBatch >= 0)
+        let totalBytes: Int
+        do throws(RequestError) {
+            totalBytes = try Self.storageByteCount(batches: batches, readingsPerBatch: readingsPerBatch)
+        } catch {
+            preconditionFailure(error.message)
+        }
 
         self.batches = batches
         self.readingsPerBatch = readingsPerBatch
-
-        let (readingCount, readingOverflow) = batches.multipliedReportingOverflow(
-            by: readingsPerBatch
-        )
-        precondition(!readingOverflow)
+        // Every operation below was checked by storageByteCount before allocation.
+        let readingCount = batches * readingsPerBatch
         self.readingCount = readingCount
+        let batchBytes = batches * MemoryLayout<Batch>.stride
+        let readingBytes = readingCount * MemoryLayout<Int>.stride
+        let valueBytes = batchBytes + readingBytes * 2
 
-        let (batchBytes, batchOverflow) = batches.multipliedReportingOverflow(
-            by: MemoryLayout<Batch>.stride
-        )
-        let (readingBytes, readingBytesOverflow) = readingCount.multipliedReportingOverflow(
-            by: MemoryLayout<Int>.stride
-        )
-        let (allReadingBytes, allReadingOverflow) = readingBytes.multipliedReportingOverflow(by: 2)
-        let (writtenBytes, writtenOverflow) = readingCount.multipliedReportingOverflow(
-            by: MemoryLayout<Bool>.stride
-        )
-        let (valueBytes, valueOverflow) = batchBytes.addingReportingOverflow(allReadingBytes)
-        let (totalBytes, totalOverflow) = valueBytes.addingReportingOverflow(writtenBytes)
-
-        precondition(
-            !batchOverflow && !readingBytesOverflow && !allReadingOverflow
-                && !writtenOverflow && !valueOverflow && !totalOverflow
-        )
-
-        allocation = UnsafeMutableRawPointer.allocate(byteCount: max(totalBytes, 1), alignment: 128)
+        allocation = UnsafeMutableRawPointer.allocate(byteCount: totalBytes, alignment: 128)
 
         times = allocation.bindMemory(to: Batch.self, capacity: batches)
         callerCPUs = allocation.advanced(by: batchBytes).bindMemory(

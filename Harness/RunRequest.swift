@@ -126,6 +126,15 @@ struct RunRequest: Codable, Equatable, Sendable {
             throw RequestError(message: "referenceLoopIterations must be at least 1")
         }
 
+        for operations in tunables.operationsPerBatch.values {
+            try BatchLayout(
+                warmupBatches: tunables.warmupBatches,
+                measuredBatches: tunables.measuredBatches,
+                operationsPerBatch: operations,
+                subBatches: tunables.subBatches
+            ).validate(threads: tunables.threads)
+        }
+
         guard simulation == nil || smoke else {
             throw RequestError(message: "simulation requires smoke")
         }

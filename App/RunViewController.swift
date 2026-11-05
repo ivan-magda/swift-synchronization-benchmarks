@@ -3,6 +3,10 @@ import UIKit
 /// The only screen. Shows the run status, which never changes during timed work.
 @MainActor
 final class RunViewController: UIViewController {
+    private var decodedRequest = false
+    private var pendingRequest: RunRequest?
+    private var displayLink: CADisplayLink?
+    private var displayedFrames = 0
     private let statusLabel: UILabel = {
         let label = UILabel()
         label.text = "SyncBench idle"
@@ -30,5 +34,33 @@ final class RunViewController: UIViewController {
 
     func showStatus(_ text: String) {
         statusLabel.text = text
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !decodedRequest else { return }
+        decodedRequest = true
+        do {
+            pendingRequest = try RunRequest.decode(launchArguments: ProcessInfo.processInfo.arguments)
+        } catch {
+            showStatus(error.message)
+            exit(2)
+        }
+        guard pendingRequest != nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(frameDisplayed))
+        displayLink = link
+        link.add(to: .main, forMode: .common)
+    }
+
+    @objc private func frameDisplayed() {
+        displayedFrames += 1
+        guard displayedFrames == 2 else { return }
+        displayLink?.invalidate()
+        displayLink = nil
+        guard let request = pendingRequest else { return }
+        pendingRequest = nil
+        RunController.launch(request) { [weak self] status in
+            MainActor.assumeIsolated { self?.showStatus(status) }
+        }
     }
 }
