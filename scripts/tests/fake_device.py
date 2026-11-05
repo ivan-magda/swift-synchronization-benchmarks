@@ -48,13 +48,16 @@ class FakeCaffeinate:
 
 
 class FakeRecorder:
-    """Control trace startup delay/failure and expose resource lifecycle ordering."""
+    """Control trace startup/finalization failures and resource lifecycle ordering."""
 
-    def __init__(self, events, clock, start_elapsed=0, start_error=None):
+    def __init__(
+        self, events, clock, start_elapsed=0, start_error=None, stop_error=None
+    ):
         self.events = events
         self.clock = clock
         self.start_elapsed = start_elapsed
         self.start_error = start_error
+        self.stop_error = stop_error
         self.started = None
         self.stopped = False
 
@@ -68,6 +71,8 @@ class FakeRecorder:
     def stop(self):
         self.events.append('trace stop')
         self.stopped = True
+        if self.stop_error is not None:
+            raise self.stop_error
 
 
 class FakeDevice:

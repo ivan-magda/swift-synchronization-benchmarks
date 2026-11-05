@@ -239,6 +239,7 @@ def run_session(
                 pid = None
                 recorder = None
                 trace_file = None
+                trace_error = None
                 try:
                     if run.traced:
                         trace_file = Path('traces') / (attempt_id + '.trace')
@@ -321,7 +322,12 @@ def run_session(
                                 pass
                 finally:
                     if recorder is not None:
-                        recorder.stop()
+                        try:
+                            recorder.stop()
+                        except SessionError as error:
+                            trace_error = str(error)
+                        except OSError:
+                            trace_error = 'System Trace finalization failed'
 
                 if pid is not None:
                     files_copied = False
@@ -400,17 +406,25 @@ def run_session(
                 if run.traced:
                     record['traced'] = True
                     record['traceFile'] = trace_file.as_posix()
-                if verdict.reason_code is not None:
+                    record['traceStatus'] = 'failed' if trace_error else 'completed'
+                    if trace_error:
+                        record['traceReason'] = trace_error
+                        record['appVerdict'] = asdict(verdict)
+                        record['status'] = 'traceFailed'
+                        record['accepted'] = False
+                        record['reasons'] = [trace_error]
+                        stop = trace_error
+                if verdict.reason_code is not None and trace_error is None:
                     record['reasonCode'] = verdict.reason_code
                 state.record_attempt(run.run_id, record)
                 line = json.dumps(record, sort_keys=True)
                 with (folder / 'session.log').open('a', encoding='utf-8') as output:
                     output.write(line + '\n')
                 log(line)
-                if verdict.accepted:
+                if record['accepted']:
                     summary.accepted += 1
                     failures = 0
-                elif verdict.status == 'refused':
+                elif record['status'] == 'refused':
                     summary.refused += 1
                     failures = 0
                 else:

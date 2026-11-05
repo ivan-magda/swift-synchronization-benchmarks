@@ -85,10 +85,14 @@ class RunState:
         for run in self.plan.runs:
             attempts = self._runs[run.run_id]
             accepted = any(attempt["accepted"] for attempt in attempts)
+            # Recorder failures retain history without exhausting an ordinary retry.
             counted = sum(
                 not (
-                    attempt.get("status") == "refused"
-                    and attempt.get("reasonCode") == "thermal"
+                    attempt.get("status") == "traceFailed"
+                    or (
+                        attempt.get("status") == "refused"
+                        and attempt.get("reasonCode") == "thermal"
+                    )
                 )
                 for attempt in attempts
             )

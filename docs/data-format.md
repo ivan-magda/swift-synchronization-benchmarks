@@ -182,3 +182,21 @@ SplitMix64 and descending Fisher–Yates determine seeded order: for each index 
 The writer atomically publishes `<attemptID>.jsonl`, then atomically publishes `<attemptID>.done` in the result directory. The marker has `attemptID`, `file`, `bytes`, `sha256` (lowercase hex of the exact JSONL bytes). Both files have sorted keys. A file without its marker is incomplete. Replacing an attempt first removes its old marker. The writer independently rejects an unsafe attempt ID before creating a directory or file, including for invalid decoded requests.
 
 `Tests/Fixtures/golden-base-comparison.jsonl` fixes the writer/checker contract. It uses the one-thread request with seed 7, one mutex increment block, one warm-up and two measured batches of four operations, and the check `expected 12, got 12`. Phone facts and conditions are fixed fictional values. Tests compare bytes against this reviewed fixture and never rewrite it.
+
+## Host trace attempt records
+
+The host's schema-1 run state and `session.log` retain `traced: true` and the
+session-relative `traceFile` for traced attempts. New records also have
+`traceStatus`: `completed` when recorder finalization succeeds, or `failed`.
+`completed` describes the recorder lifecycle; it does not certify trace contents
+or override a rejected app verdict.
+
+On recorder failure, the host record has `status: traceFailed`, `accepted: false`,
+`traceReason` and `reasons` describing the recorder failure, and `appVerdict`
+containing the unchanged app checker verdict (`status`, `accepted`, `reason_code`,
+`reasons`). The copied JSONL, marker and `.check.json` remain unchanged, and the
+trace path remains available for diagnostics. The session reports a rejection
+and stops with the trace reason. Failed traces do not count toward `maxAttempts`,
+so the same CLI command can retry with a new attempt ID without editing state.
+Older records without these optional fields keep their existing meaning and are
+not rewritten or retroactively validated.

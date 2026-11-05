@@ -47,25 +47,37 @@ class TraceRecorder:
         try:
             # Listen first, so the notification cannot be missed.
             self.listener = self.popen(['notifyutil', '-1', name])
-            self.process = self.popen([
-                'xcrun', 'xctrace', 'record',
-                '--template', 'System Trace',
-                '--device', udid,
-                '--all-processes',
-                '--time-limit', f'{time_limit_seconds}s',
-                '--output', str(output),
-                '--notify-tracing-started', name,
-                '--no-prompt',
-            ])
+            self.process = self.popen(
+                [
+                    'xcrun',
+                    'xctrace',
+                    'record',
+                    '--template',
+                    'System Trace',
+                    '--device',
+                    udid,
+                    '--all-processes',
+                    '--time-limit',
+                    f'{time_limit_seconds}s',
+                    '--output',
+                    str(output),
+                    '--notify-tracing-started',
+                    name,
+                    '--no-prompt',
+                ]
+            )
             if not self.wait(self.listener, timeout_seconds=60):
                 raise SessionError('System Trace did not start within 60 seconds')
             if self.listener.returncode != 0:
                 raise SessionError('System Trace start notification failed')
-        except OSError:
-            self.stop()
-            raise SessionError('System Trace could not start') from None
-        except BaseException:
-            self.stop()
+        except BaseException as error:
+            try:
+                self.stop()
+            except (SessionError, OSError):
+                # Cleanup failure must not replace the original startup error.
+                pass
+            if isinstance(error, OSError):
+                raise SessionError('System Trace could not start') from None
             raise
 
     def stop(self) -> None:
@@ -75,7 +87,12 @@ class TraceRecorder:
         self.process = None
         self.listener = None
         try:
-            if process is not None and process.poll() is None:
+            if process is not None:
+                exit_status = process.poll()
+                if exit_status is not None:
+                    raise SessionError(
+                        f'System Trace recorder exited before stop (status {exit_status})'
+                    )
                 try:
                     # SIGINT lets xctrace finish the file before it exits.
                     try:
@@ -88,6 +105,13 @@ class TraceRecorder:
                     raise
                 if not exited:
                     _kill_and_reap(process, self.wait)
+                    raise SessionError(
+                        'System Trace finalization timed out; recorder killed'
+                    )
+                if process.returncode != 0:
+                    raise SessionError(
+                        f'System Trace finalization failed (status {process.returncode})'
+                    )
         finally:
             if listener is not None and listener.poll() is None:
                 try:
