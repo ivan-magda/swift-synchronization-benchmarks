@@ -77,11 +77,13 @@ enum RunController {
             for description in descriptions {
                 let layout = layout(for: description, request: request)
                 try layout.validate(threads: description.threads)
+
                 let count = layout.totalBatches * description.threads
                 let (total, overflow) = batchLines.addingReportingOverflow(count)
                 guard !overflow else {
                     throw RequestError(message: "run batch line count overflow")
                 }
+
                 batchLines = total
             }
         } catch {
