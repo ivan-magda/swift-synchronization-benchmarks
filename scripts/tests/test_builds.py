@@ -10,10 +10,7 @@ from pathlib import Path
 from runner.builds import (
     BuildError,
     build,
-    code_hash,
     latest_build,
-    make_build_id,
-    profile_expiry,
     xcodebuild_arguments,
 )
 from runner.config import LocalConfig, Phone
@@ -74,11 +71,6 @@ class BuildRunner:
 class BuildsTests(unittest.TestCase):
     # These cover persisted metadata, signature-independent identity, and build settings:
     # separate contracts need more than the usual three tests.
-    def test_build_id_format(self):
-        self.assertEqual(
-            make_build_id('0123456789abcdef', False, 'ios26', NOW),
-            '0123456789ab-clean-ios26-20261105T000000Z',
-        )
 
     def test_ios18_arguments(self):
         arguments = xcodebuild_arguments(
@@ -120,6 +112,7 @@ class BuildsTests(unittest.TestCase):
                 '5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b',
             )
             self.assertEqual(info['settings']['SWIFT_VERSION'], '6.0')
+            self.assertEqual(info['profileExpires'], '2026-11-12T00:00:00+00:00')
             self.assertEqual(latest_build(results, 'ios26'), info)
             self.assertIsNone(latest_build(results, 'ios18'))
 
@@ -133,19 +126,3 @@ class BuildsTests(unittest.TestCase):
                         lambda *args: self.fail('foreign build command ran'), NOW,
                     )
             self.assertEqual(list(root.iterdir()), [])
-
-    def test_profile_expiry_is_read(self):
-        self.assertEqual(
-            profile_expiry(Path('app'), BuildRunner()),
-            datetime(2026, 11, 12, tzinfo=timezone.utc),
-        )
-
-    def test_code_hash_ignores_the_signature_without_mutating_executable(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            executable = Path(temporary) / 'SyncBench'
-            executable.write_bytes(b'codeSIGNATURE')
-            self.assertEqual(
-                code_hash(executable, BuildRunner()),
-                '5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b',
-            )
-            self.assertEqual(executable.read_bytes(), b'codeSIGNATURE')

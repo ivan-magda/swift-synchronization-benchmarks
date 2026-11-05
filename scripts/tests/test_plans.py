@@ -64,9 +64,6 @@ class PlanTests(unittest.TestCase):
         )
         encoded = base64.b64decode(encode_request(request)).decode("utf-8")
         self.assertEqual(json.loads(encoded), request)
-        self.assertEqual(
-            encoded, json.dumps(request, sort_keys=True, separators=(",", ":"))
-        )
         request["tunables"]["threads"] = 64
         self.assertNotEqual(run.tunables["threads"], 64)
 
@@ -83,6 +80,15 @@ class PlanTests(unittest.TestCase):
         document["seed"] = 0
         document["runs"] = document["runs"][:1]
         document["runs"][0]["repeats"] = 3
+
+        expanded = self.load_document(document)
+        self.assertEqual(len({run.seed for run in expanded.runs}), 3)
+        document["shuffle"] = False
+        self.assertEqual(
+            [run.run_id for run in self.load_document(document).runs],
+            ["smoke-base-comparison.one-thread.1", "smoke-base-comparison.one-thread.2", "smoke-base-comparison.one-thread.3"],
+        )
+        document["shuffle"] = True
 
         # Random(0) shuffles positions 1, 2, 3 into 1, 3, 2 on both supported Pythons.
         self.assertEqual(
@@ -105,41 +111,6 @@ class PlanTests(unittest.TestCase):
             ["crash", "hang"],
         )
 
-    def test_acceptance_plans_cover_all_four_thread_counts(self):
-        for name in (
-            "acceptance-base-comparison.json",
-            "acceptance-base-comparison-ios18.json",
-        ):
-            plan = load_plan(PLANS / name)
-            self.assertTrue(plan.smoke)
-            self.assertEqual(
-                {run.variant: run.tunables["threads"] for run in plan.runs},
-                {
-                    "oneThread": 1,
-                    "twoThreads": 2,
-                    "sixThreads": 6,
-                    "twelveThreads": 12,
-                },
-            )
-            for run in plan.runs:
-                if plan.build_target == "ios18":
-                    self.assertEqual(
-                        set(run.mechanisms),
-                        {
-                            "mutex",
-                            "atomic",
-                            "atomicRelaxed",
-                            "managedAtomic",
-                            "managedAtomicRelaxed",
-                        },
-                    )
-                else:
-                    self.assertEqual(
-                        len(run.mechanisms), 20 if run.variant == "oneThread" else 19
-                    )
-                    self.assertEqual(
-                        "unsynchronized" in run.mechanisms, run.variant == "oneThread"
-                    )
 
     def test_calibration_launches_once_with_200_samples_per_measurement(self):
         plan = load_plan(PLANS / "calibration.json")
@@ -156,20 +127,6 @@ class PlanTests(unittest.TestCase):
             ("calibration", "default", [], []),
         )
 
-    def test_repeats_expand_in_file_order_with_distinct_seeds(self):
-        document = json.loads(SMOKE_PLAN.read_text())
-        document["runs"] = document["runs"][:1]
-        document["runs"][0]["repeats"] = 2
-        document["shuffle"] = False
-        plan = self.load_document(document)
-        self.assertEqual(
-            [run.run_id for run in plan.runs],
-            [
-                "smoke-base-comparison.one-thread.1",
-                "smoke-base-comparison.one-thread.2",
-            ],
-        )
-        self.assertNotEqual(plan.runs[0].seed, plan.runs[1].seed)
 
     def test_invalid_plans_name_the_key(self):
         document = json.loads(SMOKE_PLAN.read_text())

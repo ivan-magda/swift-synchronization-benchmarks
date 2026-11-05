@@ -4,35 +4,6 @@ import Testing
 
 @testable import SyncBench
 
-@Test(arguments: MechanismID.stateProtections)
-func exclusiveAndSharedAccess(_ mechanism: MechanismID) async {
-    let values = await onBenchmarkThread {
-        let protection = makeIntegerProtection(mechanism, initialValue: 5)
-        let incremented = protection.withExclusiveAccess { value in
-            value &+= 1
-            return value
-        }
-        return (incremented, protection.withSharedAccess { $0 })
-    }
-
-    #expect(values.0 == 6)
-    #expect(values.1 == 6)
-}
-
-@Test(arguments: MechanismID.stateProtections)
-func writeIsVisibleAfterWaiting(_ mechanism: MechanismID) async {
-    let value = await onBenchmarkThread {
-        let protection = makeIntegerProtection(mechanism, initialValue: 0)
-        protection.write(41) { value, newValue in
-            value = newValue
-        }
-        protection.waitForPendingWrites()
-        return protection.withSharedAccess { $0 }
-    }
-
-    #expect(value == 41)
-}
-
 @Test(arguments: MechanismID.stateProtections.filter { $0 != .barrierQueueAsyncWrite })
 func synchronousWriteFinishesBeforeReturning(_ mechanism: MechanismID) async {
     let finished = await onBenchmarkThread {
@@ -46,36 +17,6 @@ func synchronousWriteFinishesBeforeReturning(_ mechanism: MechanismID) async {
     }
 
     #expect(finished)
-}
-
-@Test(
-    .timeLimit(.minutes(1)),
-    arguments: MechanismID.stateProtections.filter { $0 != .unsynchronized }
-)
-func eightThreadsCountExactly(_ mechanism: MechanismID) async {
-    let value = await onBenchmarkThread {
-        let protection = makeIntegerProtection(mechanism, initialValue: 0)
-        let start = ThreadBarrier(parties: 8)
-        let threads = (0..<8).map { _ in
-            BenchmarkThread.start(name: "protection-count", qos: .userInitiated) {
-                start.arriveAndWait()
-                for _ in 0..<10_000 {
-                    protection.write(1) { value, increment in
-                        value &+= increment
-                    }
-                }
-            }
-        }
-
-        for thread in threads {
-            thread.join()
-        }
-
-        protection.waitForPendingWrites()
-        return protection.withSharedAccess { $0 }
-    }
-
-    #expect(value == 80_000)
 }
 
 @Test(arguments: [

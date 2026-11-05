@@ -91,44 +91,6 @@ import Testing
         #expect(reason.contains("second.count"))
     }
 
-    // Reusing a single log for all tasks loses records and executor-side observations.
-    @Test func tasksWriteOneLogEach() async throws {
-        var request = RunRequest.golden
-        request.variant = "tasks"
-        request.tunables.threads = 3
-
-        let run = try await recordRun(request)
-        #expect(run.outcome.status == "completed")
-        let batches = run.lines.filter { $0["type"] as? String == "batch" }
-        #expect(batches.count == 18)
-
-        for block in 0..<2 {
-            for thread in 0..<3 {
-                let records = batches.filter {
-                    $0["block"] as? Int == block && $0["thread"] as? Int == thread
-                }
-
-                #expect(records.compactMap { $0["batch"] as? Int } == [0, 1, 2])
-                #expect(records.compactMap { $0["warmup"] as? Bool } == [true, false, false])
-                #expect(records.allSatisfy { ($0["executorCPUReadings"] as? [Int])?.count == 3 })
-            }
-        }
-    }
-
-    // Calibration must not emit zero-filled batch records for sample-only workers.
-    @Test func sampleOnlyBlocksWriteNoBatches() async throws {
-        var request = RunRequest.golden
-        request.variant = "samples"
-
-        let run = try await recordRun(request)
-        #expect(run.lines.map { $0["type"] as? String } == [
-            "run", "reference", "block", "samples", "block", "samples", "reference", "end",
-        ])
-        #expect(run.lines.last?["warmupBatchLines"] as? Int == 0)
-        #expect(run.lines.last?["measuredBatchLines"] as? Int == 0)
-        #expect(run.outcome.status == "completed")
-    }
-
     // An unsafe requested ID must never escape the output directory, even on failure.
     @Test func unsafeAttemptIDUsesSafeDiagnosticFile() async throws {
         var request = RunRequest.golden

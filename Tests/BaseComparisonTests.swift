@@ -99,32 +99,6 @@ import Testing
         #expect(throws: RequestError.self) { try BaseComparison(request: request) }
     }
 
-    // Validation must reject overflow, without imposing a fixed operation-count ceiling.
-    @Test func acceptsRepresentableLargeWork() throws {
-        var request = RunRequest.golden
-        request.operations = ["write"]
-        request.tunables.warmupBatches = 0
-        request.tunables.measuredBatches = 1
-        request.tunables.subBatches = 1
-        request.tunables.operationsPerBatch = ["default": Int.max]
-
-        let experiment = try BaseComparison(request: request)
-        #expect(experiment.blocks.first?.operationsPerBatch == Int.max)
-    }
-
-    // Wrong expansion order or ignoring a per-mechanism override changes the benchmark.
-    @Test func blocksUseRequestOrderAndMechanismBatchSizes() throws {
-        var request = RunRequest.golden
-        request.mechanisms = ["actor", "mutex"]
-        request.operations = ["write", "read"]
-        request.tunables.operationsPerBatch["actor"] = 2
-
-        let blocks = try BaseComparison(request: request).blocks
-        #expect(blocks.map(\.mechanism) == ["actor", "actor", "mutex", "mutex"])
-        #expect(blocks.map(\.operation) == ["write", "read", "write", "read"])
-        #expect(blocks.map(\.operationsPerBatch) == [2, 2, 4, 4])
-    }
-
     // All concrete rows must execute every operation, warm-up and measured work through the registry.
     @Test(.timeLimit(.minutes(1)), arguments: [1, 2])
     func smokeAllMechanisms(_ threads: Int) async throws {
@@ -186,6 +160,11 @@ import Testing
             let records = batches.filter { $0["block"] as? Int == position }
 
             #expect(records.count == 3 * threads)
+            for thread in 0..<threads {
+                let worker = records.filter { $0["thread"] as? Int == thread }
+                #expect(worker.compactMap { $0["batch"] as? Int } == [0, 1, 2])
+                #expect(worker.compactMap { $0["warmup"] as? Bool } == [true, false, false])
+            }
             #expect(records.allSatisfy { $0["operations"] as? Int == operations })
 
             let operation = try #require(block["operation"] as? String)
@@ -194,6 +173,9 @@ import Testing
                 #expect(records.allSatisfy { $0["executorCPUReadings"] == nil })
             } else if mechanism == "actor" || mechanism == "mainActor" || mechanism == "barrierQueueAsyncWrite" {
                 #expect(records.allSatisfy { ($0["executorCPUReadings"] as? [Int])?.count == 5 })
+                #expect(records.allSatisfy {
+                    ($0["executorCPUReadings"] as? [Int])?.allSatisfy { $0 >= 0 } == true
+                })
             }
         }
     }

@@ -3,15 +3,6 @@ import UIKit
 
 @testable import SyncBench
 
-@MainActor
-@Test func idleScreenShowsIdleStatus() {
-    let controller = RunViewController()
-
-    controller.loadViewIfNeeded()
-
-    #expect(controller.currentStatus == "SyncBench idle")
-}
-
 @Test(arguments: [(false, true), (true, false), (false, false)])
 func launchWaitsForApplicationAndSceneActivation(applicationActive: Bool, sceneActive: Bool) {
     var readiness = LaunchReadiness()

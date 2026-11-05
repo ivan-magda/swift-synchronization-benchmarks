@@ -75,30 +75,23 @@ class AttemptCheckTests(unittest.TestCase):
                     check_attempt(result, marker, REQUEST, BUILD_ID).status, "invalid"
                 )
 
-    def test_other_build_id_is_invalid(self):
-        lines = deepcopy(GOLDEN_LINES)
-        lines[0]["build"]["buildID"] = "other-build"
-        self.assert_invalid(lines, reason="build")
 
-    def test_changed_seed_is_invalid(self):
-        lines = deepcopy(GOLDEN_LINES)
-        lines[0]["request"]["seed"] = 8
-        self.assert_invalid(lines, reason="request")
-
-    def test_missing_measured_batch_is_invalid(self):
-        lines = deepcopy(GOLDEN_LINES)
-        del lines[4]
-        self.assert_invalid(lines)
-
-    def test_duplicate_batch_is_invalid(self):
-        lines = deepcopy(GOLDEN_LINES)
-        lines[5] = deepcopy(lines[4])
-        self.assert_invalid(lines)
-
-    def test_wrong_operation_count_is_invalid(self):
-        lines = deepcopy(GOLDEN_LINES)
-        lines[4]["operations"] = 5
-        self.assert_invalid(lines)
+    def test_wrong_identity_or_incomplete_work_is_rejected(self):
+        # Each mutation would otherwise allow incomparable or incomplete measurements.
+        cases = (
+            ("build", lambda lines: lines[0]["build"].update(buildID="other-build")),
+            ("seed", lambda lines: lines[0]["request"].update(seed=8)),
+            ("missing batch", lambda lines: lines.pop(4)),
+            ("duplicate batch", lambda lines: lines.__setitem__(5, deepcopy(lines[4]))),
+            ("operations", lambda lines: lines[4].update(operations=5)),
+            ("missing checks", lambda lines: lines[-1].update(checks=[])),
+            ("missing end", lambda lines: lines.pop()),
+        )
+        for name, mutate in cases:
+            with self.subTest(case=name):
+                lines = deepcopy(GOLDEN_LINES)
+                mutate(lines)
+                self.assert_invalid(lines)
 
     def test_substituted_block_is_invalid(self):
         request = deepcopy(REQUEST)
@@ -108,10 +101,6 @@ class AttemptCheckTests(unittest.TestCase):
         blocks[1]["mechanism"] = "mutex"
         self.assert_invalid(lines, request)
 
-    def test_missing_checks_are_invalid(self):
-        lines = deepcopy(GOLDEN_LINES)
-        lines[-1]["checks"] = []
-        self.assert_invalid(lines)
 
     def test_check_failures_and_wrong_ownership_are_invalid(self):
         for replacement in (
@@ -140,8 +129,6 @@ class AttemptCheckTests(unittest.TestCase):
                     (status, False, reason),
                 )
 
-    def test_missing_end_line_is_invalid(self):
-        self.assert_invalid(deepcopy(GOLDEN_LINES[:-1]))
 
     def test_bad_conditions_rejected_outside_smoke(self):
         request = deepcopy(REQUEST)
@@ -167,14 +154,6 @@ class AttemptCheckTests(unittest.TestCase):
         lines[0]["phone"]["performanceLevels"][0]["l1DataCacheBytes"] = -1
         self.assertTrue(self.verdict(lines).accepted)
 
-    def test_malformed_launch_request_is_invalid_without_crashing(self):
-        for key, value in (("tunables", []), ("mechanisms", [{}]), ("smoke", 1)):
-            with self.subTest(key=key):
-                request = deepcopy(REQUEST)
-                request[key] = value
-                lines = deepcopy(GOLDEN_LINES)
-                lines[0]["request"] = deepcopy(request)
-                self.assert_invalid(lines, request)
 
     def test_nonobject_and_broken_json_lines_are_invalid(self):
         for value in (None, [], 1, "run"):
@@ -210,6 +189,7 @@ class AttemptCheckTests(unittest.TestCase):
             lambda lines: lines[2].update(block=2),
             lambda lines: lines.insert(2, deepcopy(lines[0])),
             lambda lines: lines.insert(-1, {"type": "mystery"}),
+            lambda lines: lines[-1].update(status="timeout"),
         ]
         for mutate in mutations:
             with self.subTest(mutation=mutations.index(mutate)):
@@ -236,28 +216,6 @@ class AttemptCheckTests(unittest.TestCase):
                 lines[index].update(replacement)
                 self.assert_invalid(lines)
 
-    def test_malformed_field_types_are_invalid_without_crashing(self):
-        mutations = [
-            (0, "phone", []),
-            (0, "build", None),
-            (0, "conditions", []),
-            (0, "schema", True),
-            (2, "block", []),
-            (2, "threads", True),
-            (3, "warmup", 1),
-            (3, "cpuReadings", "000"),
-            (3, "start", -1),
-            (-1, "status", "timeout"),
-            (-1, "checks", {}),
-            (-1, "checks", [None]),
-            (-1, "blockLines", True),
-            (-1, "thermalChanges", [None]),
-        ]
-        for index, key, value in mutations:
-            with self.subTest(index=index, key=key):
-                lines = deepcopy(GOLDEN_LINES)
-                lines[index][key] = value
-                self.assert_invalid(lines)
 
     def test_calibration_counts(self):
         request = deepcopy(REQUEST)

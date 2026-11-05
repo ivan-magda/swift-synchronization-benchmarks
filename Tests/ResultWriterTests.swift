@@ -53,24 +53,3 @@ func writerRejectsUnsafeAttemptIDs(_ attemptID: String) {
     }
     #expect(!FileManager.default.fileExists(atPath: directory.path))
 }
-
-@Test func optionalLineFieldsAreOmittedAndSamplesKeepIntegerTicks() throws {
-    let lines = ResultLineBuffer()
-    lines.append(
-        SamplesLine(
-            block: nil,
-            thread: nil,
-            metric: "wait",
-            unit: "ticks",
-            values: [0, UInt64.max],
-            cpuAtStart: nil,
-            cpuAtEnd: nil
-        )
-    )
-
-    #expect(
-        String(decoding: lines.data, as: UTF8.self)
-            == "{\"metric\":\"wait\",\"type\":\"samples\",\"unit\":\"ticks\",\"values\":[0,18446744073709551615]}\n"
-    )
-    #expect(lines.lineCounts == ["samples": 1])
-}

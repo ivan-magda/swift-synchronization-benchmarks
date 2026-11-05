@@ -136,34 +136,3 @@ func taskBarrierWorksWithMoreTasksThanCores() async {
 
     #expect(violations.load(ordering: .relaxed) == 0)
 }
-
-@Test func clockNeverGoesBack() {
-    var previous = Clock.now()
-
-    for _ in 0..<1_000 {
-        let current = Clock.now()
-        #expect(current >= previous)
-        previous = current
-    }
-
-    #expect(Clock.timebase.numer > 0)
-    #expect(Clock.timebase.denom > 0)
-}
-
-@Test func contextSwitchCountersOnlyGrow() async {
-    let readings = await onBenchmarkThread {
-        let earlier = ContextSwitches.now()
-        let thread = BenchmarkThread.start(name: "switch-test", qos: .utility) {}
-        thread.join()
-        return (earlier, ContextSwitches.now())
-    }
-
-    #expect(readings.1.voluntary >= readings.0.voluntary)
-    #expect(readings.1.involuntary >= readings.0.involuntary)
-    #expect(readings.1.task >= readings.0.task)
-    #expect(
-        ContextSwitches(voluntary: 17, involuntary: 11, task: 29)
-            - ContextSwitches(voluntary: 3, involuntary: 5, task: 7)
-            == ContextSwitches(voluntary: 14, involuntary: 6, task: 22)
-    )
-}

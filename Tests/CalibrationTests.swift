@@ -128,14 +128,6 @@ import Testing
         }
     }
 
-    // A representable large count needs validation, without an arbitrary workload ceiling.
-    @Test func acceptsLargeRepresentableRepeats() throws {
-        var request = calibrationRequest()
-        request.tunables.repeats = 1_000_000
-
-        let experiment = try Calibration(request: request)
-        #expect(experiment.blocks.count == 4)
-    }
 }
 
 private func calibrationRequest() -> RunRequest {

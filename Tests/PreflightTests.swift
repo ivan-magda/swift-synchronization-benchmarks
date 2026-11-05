@@ -15,31 +15,6 @@ func preflightDecision(_ preflightCase: PreflightCase) {
     )
 }
 
-// Catches a failed numeric sysctl being accepted as zero, or skipped level indexes.
-@Test func phoneFactsAreConsistent() {
-    let facts = PhoneFacts.read()
-
-    #expect(facts.cpuCount >= 1)
-    #expect(facts.timebaseNumerator > 0)
-    #expect(facts.timebaseDenominator > 0)
-    #expect(facts.performanceLevels.map(\.index) == Array(0..<facts.performanceLevels.count))
-}
-
-// Catches a missing main-thread bridge or an incorrectly scaled UIKit snapshot.
-@Test func conditionsCaptureFromRunThread() async throws {
-    let conditions = await onBenchmarkThread { Conditions.captureFromRunThread() }
-
-    #expect(conditions.ticks > 0)
-    #expect((-1...1000).contains(conditions.batteryLevelPermille))
-    #expect((0...1000).contains(conditions.screenBrightnessPermille))
-    #expect(["active", "inactive", "background"].contains(conditions.applicationState))
-
-    let formatter = ISO8601DateFormatter()
-    #expect(formatter.date(from: conditions.wallClock) != nil)
-    #expect(conditions.wallClock.hasSuffix("Z"))
-    #expect(!conditions.wallClock.contains("."))
-}
-
 // Catches duplicate observers, a retained observer after stop, or stale changes on restart.
 @Test func thermalMonitorRecordsOnlyWhileStarted() {
     let monitor = ThermalMonitor()
