@@ -88,10 +88,12 @@ final class RunViewController: UIViewController {
 
     @objc
     private func frameDisplayed() {
-        guard launchReadiness.frameDisplayed(
+        let isReadyToLaunch = launchReadiness.frameDisplayed(
             applicationIsActive: UIApplication.shared.applicationState == .active,
             sceneIsActive: view.window?.windowScene?.activationState == .foregroundActive
-        ) else {
+        )
+
+        guard isReadyToLaunch else {
             return
         }
 
