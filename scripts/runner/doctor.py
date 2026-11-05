@@ -7,6 +7,12 @@ import re
 from typing import Any, Dict, List, Optional
 
 from runner.builds import BuildError, FROZEN_SWIFT, FROZEN_XCODE, latest_build
+from runner.calibration import (
+    CalibrationError,
+    load_phone_calibration,
+    needs_calibration,
+    resolve_tunables,
+)
 from runner.config import LocalConfig, Phone
 from runner.device_control import DeviceControl, DeviceControlError
 from runner.plans import Plan
@@ -94,6 +100,23 @@ def doctor(
         )
     except DeviceControlError as error:
         finding('unlocked', False, str(error))
+
+    if plan is not None and any(needs_calibration(run.tunables) for run in plan.runs):
+        try:
+            calibration = load_phone_calibration(results, phone.key)
+            for run in plan.runs:
+                resolve_tunables(run.tunables, calibration)
+            calibrated = True
+        except CalibrationError:
+            calibrated = False
+        finding(
+            'calibration',
+            calibrated,
+            'results/'
+            + phone.key
+            + '/calibration.json must contain priorityInversion for '
+            'holderWorkIterations fromCalibration; run bench.py calibrate',
+        )
 
     target = plan.build_target if plan else 'ios26'
     try:

@@ -1,4 +1,5 @@
-/// Clock overhead and fixed CPU work, measured alone and across all CPUs.
+/// Clock overhead and fixed CPU work, measured alone and across all CPUs, and the
+/// single-thread work that sizes the priority-inversion holder.
 struct Calibration: Experiment {
     let blocks: [BlockDescription]
     private let repeats: Int
@@ -33,11 +34,17 @@ struct Calibration: Experiment {
 
         self.repeats = repeats
         iterations = request.tunables.referenceLoopIterations
-        blocks = ["clockSingleThread", "clockAllCPUs", "cpuSpeedUserInteractive", "cpuSpeedBackground"].map {
+        blocks = [
+            "clockSingleThread",
+            "clockAllCPUs",
+            "cpuSpeedUserInteractive",
+            "cpuSpeedBackground",
+            "holderWorkSingleThread"
+        ].map {
             BlockDescription(
                 mechanism: $0,
                 operation: "",
-                threads: $0 == "clockSingleThread" ? 1 : cpuCount,
+                threads: $0.hasSuffix("SingleThread") ? 1 : cpuCount,
                 qos: $0 == "cpuSpeedBackground" ? .background : .userInteractive,
                 operationsPerBatch: request.operationsPerBatch(for: $0)
             )
@@ -57,6 +64,8 @@ struct Calibration: Experiment {
         // Allocate and initialize every worker's storage before the block envelope starts.
         let buffers = (0..<block.description.threads).map { _ in CalibrationSamples(capacity: repeats) }
         let measuresClock = block.description.mechanism.hasPrefix("clock")
+        // The holder work has its own metric: the core map pools every referenceLoop line.
+        let workMetric = block.description.mechanism == "holderWorkSingleThread" ? "holderWork" : "referenceLoop"
         let repeats = repeats
         let iterations = iterations
 
@@ -95,7 +104,7 @@ struct Calibration: Experiment {
             block.appendSamples(SamplesLine(
                 block: block.position,
                 thread: thread,
-                metric: measuresClock ? "clockRead1000" : "referenceLoop",
+                metric: measuresClock ? "clockRead1000" : workMetric,
                 unit: "ticks",
                 values: values,
                 cpuAtStart: measuresClock ? nil : samples.map(\.cpuAtStart),

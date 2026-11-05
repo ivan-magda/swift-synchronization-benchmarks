@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 import json
 import os
@@ -14,6 +14,12 @@ from uuid import uuid4
 
 from runner.attempt_check import AttemptVerdict, check_attempt
 from runner.builds import latest_build
+from runner.calibration import (
+    CalibrationError,
+    load_phone_calibration,
+    needs_calibration,
+    resolve_tunables,
+)
 from runner.config import LocalConfig, Phone
 from runner.device_control import DeviceControl, DeviceControlError
 from runner.doctor import doctor
@@ -158,6 +164,22 @@ def run_session(
         ),
         plan,
     )
+    pending_runs = state.pending_runs()
+    calibration = None
+    if any(needs_calibration(run.tunables) for run in pending_runs):
+        try:
+            calibration = load_phone_calibration(results, phone.key)
+        except CalibrationError as error:
+            raise SessionError(str(error)) from None
+        try:
+            pending_runs = [
+                replace(run, tunables=resolve_tunables(run.tunables, calibration))
+                for run in pending_runs
+            ]
+        except CalibrationError as error:
+            raise SessionError(
+                'results/' + phone.key + '/calibration.json: ' + str(error)
+            ) from None
     started = now().astimezone(timezone.utc)
     session_id = (
         started.strftime('%Y%m%dT%H%M%SZ') + '.' + plan.name + '.' + uuid4().hex[:8]
@@ -176,6 +198,8 @@ def run_session(
         planSHA256=plan.sha256,
         start=started.isoformat(),
     )
+    if calibration is not None:
+        metadata['calibrationAttemptID'] = calibration.get('attemptID')
     _write_json(folder / 'session.json', metadata)
     (folder / 'session.log').touch()
     caffeine = None
@@ -197,7 +221,7 @@ def run_session(
         sleep(plan.settle_seconds)
         failures = 0
 
-        for run in state.pending_runs():
+        for run in pending_runs:
             # Thermal retries are a per-run allowance for this session. Persisted
             # refusals remain history and never exhaust ordinary maxAttempts.
             thermal_count = 0

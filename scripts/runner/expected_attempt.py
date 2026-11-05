@@ -42,12 +42,15 @@ class ExpectedAttempt:
     run_checks: FrozenSet[str]
 
 
-# Calibration blocks: mechanism, thread count (None means every CPU), QoS, sample metric.
+# Calibration blocks: mechanism, thread count (None means every CPU), QoS,
+# sample metric, and whether samples carry cpuAtStart and cpuAtEnd.
 _CALIBRATION_BLOCKS = (
     ("clockSingleThread", 1, "userInteractive", "clockRead1000", False),
     ("clockAllCPUs", None, "userInteractive", "clockRead1000", False),
     ("cpuSpeedUserInteractive", None, "userInteractive", "referenceLoop", True),
     ("cpuSpeedBackground", None, "background", "referenceLoop", True),
+    # A separate metric keeps the holder work out of the referenceLoop core map.
+    ("holderWorkSingleThread", 1, "userInteractive", "holderWork", True),
 )
 
 

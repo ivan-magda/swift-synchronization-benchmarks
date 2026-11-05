@@ -294,7 +294,7 @@ class AttemptCheckTests(unittest.TestCase):
         )
         request["tunables"]["repeats"] = 3
         lines = make_attempt_lines(request, BUILD_ID, cpu_count=2)
-        # Four blocks and 1 + 3*2 = 7 sample lines, each with three raw values.
+        # Five blocks and 2 + 3*2 = 8 sample lines, each with three raw values.
         self.assertTrue(self.verdict(lines, request).accepted)
         samples = [
             index for index, line in enumerate(lines) if line["type"] == "samples"

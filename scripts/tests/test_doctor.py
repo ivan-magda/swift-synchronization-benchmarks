@@ -170,6 +170,65 @@ class DoctorTests(unittest.TestCase):
                 else:
                     self.assertEqual(findings['ios-build'].ok, expected)
 
+    def test_calibration_finding_requires_the_phone_work_size(self):
+        base = load_plan(Path('plans/smoke-base-comparison.json'))
+        run = base.runs[0]
+        tunables = dict(
+            run.tunables, priorityInversion={'holderWorkIterations': 'fromCalibration'}
+        )
+        plan = replace(base, runs=(replace(run, tunables=tunables),))
+
+        class Devices:
+            def list_devices(self):
+                return [
+                    DeviceInfo(PHONE.udid, 'iPhone', '26.0', 'FIXTURE', True, True)
+                ]
+
+            def is_unlocked(self, udid):
+                return True
+
+        info = {
+            'buildID': 'fixture',
+            'codeHash': 'a' * 64,
+            'profileExpires': (NOW + timedelta(days=1)).isoformat(),
+            'dirty': True,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            results = Path(temporary) / 'results'
+
+            def calibration_finding(checked_plan):
+                findings = doctor(
+                    CONFIG,
+                    PHONE,
+                    checked_plan,
+                    results,
+                    BuildRunner(),
+                    Devices(),
+                    NOW,
+                    build_info=info,
+                )
+                return next(
+                    (item for item in findings if item.name == 'calibration'), None
+                )
+
+            self.assertIsNone(calibration_finding(base))
+            missing = calibration_finding(plan)
+            self.assertFalse(missing.ok)
+            self.assertIn('results/' + PHONE.key + '/calibration.json', missing.detail)
+            (results / PHONE.key).mkdir(parents=True)
+            path = results / PHONE.key / 'calibration.json'
+            path.write_text(json.dumps({'attemptID': 'calibration-fixture'}))
+            self.assertFalse(calibration_finding(plan).ok)
+            path.write_text(
+                json.dumps(
+                    {
+                        'attemptID': 'calibration-fixture',
+                        'priorityInversion': {'holderWorkIterations': 5_000_000},
+                    }
+                )
+            )
+            self.assertTrue(calibration_finding(plan).ok)
+
     def test_profile_budget_covers_retries_waits_pauses_and_only_pending_runs(self):
         plan = replace(
             load_plan(Path('plans/smoke-base-comparison.json')),

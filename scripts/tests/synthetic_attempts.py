@@ -41,7 +41,7 @@ def make_attempt_lines(
     lines = [run, start_reference]
     calibration = request["experiment"] == "calibration"
 
-    # These are the four measurements specified by Calibration, independently of the checker.
+    # These are the five measurements specified by Calibration, independently of the checker.
     measurements = (
         [
             ("clockSingleThread", "", 1, "userInteractive", "clockRead1000"),
@@ -54,6 +54,7 @@ def make_attempt_lines(
                 "referenceLoop",
             ),
             ("cpuSpeedBackground", "", cpu_count, "background", "referenceLoop"),
+            ("holderWorkSingleThread", "", 1, "userInteractive", "holderWork"),
         ]
         if calibration
         else [
@@ -92,7 +93,7 @@ def make_attempt_lines(
                     unit="ticks",
                     values=[3] * count,
                 )
-                if metric == "referenceLoop":
+                if metric in ("referenceLoop", "holderWork"):
                     sample.update(
                         cpuAtStart=[thread] * count, cpuAtEnd=[thread] * count
                     )

@@ -36,13 +36,33 @@ Refusal reason codes are `thermal`, `lowPower`, `battery`, `debugger`, `applicat
 
 ### Calibration work and checks
 
-Calibration writes four blocks with operation `""`: `clockSingleThread` (one thread),
+Calibration writes five blocks with operation `""`: `clockSingleThread` (one thread),
 `clockAllCPUs`, `cpuSpeedUserInteractive`, and `cpuSpeedBackground` (each using
-`phone.cpuCount` threads). Clock blocks use metric `clockRead1000`; CPU-speed
-blocks use `referenceLoop`. Each block writes one `samples` line per thread,
-with unit `ticks` and exactly `tunables.repeats` values. Calibration writes no
+`phone.cpuCount` threads), and `holderWorkSingleThread` (one thread). Every block
+uses QoS `userInteractive` except `cpuSpeedBackground` (`background`). Clock blocks
+use metric `clockRead1000`; CPU-speed blocks use `referenceLoop`;
+`holderWorkSingleThread` uses `holderWork`. Each block writes one `samples` line
+per thread, with unit `ticks` and exactly `tunables.repeats` values, so an attempt
+has `2 + 3 × cpuCount` samples lines. `referenceLoop` and `holderWork` samples time
+`referenceLoop(iterations: tunables.referenceLoopIterations)` and carry
+`cpuAtStart` and `cpuAtEnd`; clock samples carry neither. The core map pools every
+`referenceLoop` line, so the holder work keeps its own metric. Calibration writes no
 batch lines. Each block owns exactly one `calibration.samples` correctness check
 with its block position; there is no separate run-level calibration check.
+
+`bench.py calibrate` writes `results/<phone>/calibration.json` from the accepted
+attempt: `attemptID`, `phone` (the run line's phone facts), `coreMap`
+(`performance`, `efficiency`, `medianTicksByCPU`) and `priorityInversion`. The
+holder work size uses integers only: it keeps the `holderWork` samples whose
+`cpuAtStart` equals `cpuAtEnd` and is a performance CPU of the core map (at least
+half of all samples, or calibration fails), takes their median ticks, and scales
+the measured iterations to 5 ms
+(`5_000_000 × timebaseDenominator // timebaseNumerator` ticks).
+`priorityInversion` holds `holderWorkIterations`, `targetMilliseconds` (5),
+`iterationsMeasured`, `medianTicks` and `samplesUsed`. A plan's
+`"holderWorkIterations": "fromCalibration"` is replaced with this integer before
+launch; the session records `calibrationAttemptID` in `session.json`, and stops
+before installation when the file or its `priorityInversion` is missing.
 
 The attempt checker's `ExpectedAttempt.check_per_block` is the experiment prefix
 `baseComparison` (followed by `.<operation>`) or the fixed calibration check name

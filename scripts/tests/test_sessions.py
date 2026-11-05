@@ -487,6 +487,64 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.devices.installed, [])
         self.assertFalse(self.results.exists())
 
+    def use_holder_work_from_calibration(self):
+        run = self.plan.runs[0]
+        tunables = dict(
+            run.tunables,
+            priorityInversion={
+                'holderWorkIterations': 'fromCalibration',
+                'loadQoS': 'userInitiated',
+                'loadMilliseconds': 40,
+                'mainDelayMicroseconds': 1000,
+                'pauseMilliseconds': 5,
+                'warmupTrials': 1,
+                'trials': 3,
+            },
+        )
+        self.plan = replace(self.plan, runs=(replace(run, tunables=tunables),))
+
+    def write_phone_calibration(self, document):
+        (self.results / PHONE.key).mkdir(parents=True, exist_ok=True)
+        (self.results / PHONE.key / 'calibration.json').write_text(
+            json.dumps(document)
+        )
+
+    def test_from_calibration_without_phone_work_size_stops_before_install(self):
+        self.use_holder_work_from_calibration()
+        with self.assertRaisesRegex(SessionError, 'results/fixture/calibration.json'):
+            self.run_session()
+        self.write_phone_calibration({'attemptID': 'calibration-fixture'})
+        with self.assertRaisesRegex(SessionError, 'results/fixture/calibration.json'):
+            self.run_session()
+        self.assertEqual(self.devices.installed, [])
+        self.assertEqual(self.devices.requests, [])
+
+    def test_from_calibration_launches_the_phone_work_size(self):
+        self.use_holder_work_from_calibration()
+        self.write_phone_calibration(
+            {
+                'attemptID': 'calibration-fixture',
+                'priorityInversion': {'holderWorkIterations': 5_000_000},
+            }
+        )
+        summary = self.run_session(['complete'])
+        self.assertEqual(
+            [r['tunables']['priorityInversion']['holderWorkIterations']
+             for r in self.devices.requests],
+            [5_000_000],
+        )
+        self.assertEqual(
+            self.metadata(summary)['calibrationAttemptID'], 'calibration-fixture'
+        )
+        self.assertEqual(
+            self.plan.runs[0].tunables['priorityInversion']['holderWorkIterations'],
+            'fromCalibration',
+        )
+
+    def test_session_without_from_calibration_records_no_calibration(self):
+        summary = self.run_session(['complete', 'complete'])
+        self.assertNotIn('calibrationAttemptID', self.metadata(summary))
+
     def test_install_failure_still_finishes_metadata_and_caffeinate(self):
         self.devices.install_error = True
         summary = self.run_session()
@@ -569,6 +627,17 @@ class SessionTests(unittest.TestCase):
             )
             self.assertEqual(calibration['coreMap']['performance'], [0, 1])
             self.assertEqual(calibration['phone']['cpuCount'], 6)
+            # Synthetic holderWork samples take 3 ticks on CPU 0; 5 ms is 120,000 ticks.
+            self.assertEqual(
+                calibration['priorityInversion'],
+                {
+                    'holderWorkIterations': 4_000_000_000,
+                    'targetMilliseconds': 5,
+                    'iterationsMeasured': 100_000,
+                    'medianTicks': 3,
+                    'samplesUsed': 200,
+                },
+            )
             self.assertTrue(
                 calibration['attemptID'].startswith(
                     'calibration.calibration.1.attempt1.'

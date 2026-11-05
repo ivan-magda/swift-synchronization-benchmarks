@@ -6,7 +6,13 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from runner.calibration import CalibrationError, derive_core_map
+from runner.calibration import (
+    CalibrationError,
+    derive_core_map,
+    derive_holder_work,
+    load_phone_calibration,
+    resolve_tunables,
+)
 from runner.plans import load_plan, make_request
 
 from tests.synthetic_attempts import make_attempt_lines, write_attempt
@@ -101,3 +107,102 @@ class CalibrationTests(unittest.TestCase):
             mutation(lines)
             with self.assertRaises(CalibrationError):
                 self.derive(lines)
+
+
+class HolderWorkTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+
+    def derive(self, values, starts, ends):
+        # Timebase 125/3, 100,000 measured iterations; CPUs 4 and 5 are faster.
+        plan = load_plan(Path(__file__).resolve().parents[2] / 'plans/calibration.json')
+        request = make_request(plan.runs[0], 'holder-work-fixture', 1)
+        request['tunables']['repeats'] = len(values)
+        lines = make_attempt_lines(request, 'fixture-build')
+        for line in lines:
+            if line['type'] != 'samples':
+                continue
+            if line['metric'] == 'referenceLoop':
+                line['values'] = [200 if line['thread'] < 4 else 100] * len(values)
+            elif line['metric'] == 'holderWork':
+                line.update(values=values, cpuAtStart=starts, cpuAtEnd=ends)
+        path, _ = write_attempt(self.directory, lines)
+        return derive_holder_work(path, derive_core_map(path))
+
+    def test_holder_work_uses_only_samples_on_one_performance_cpu(self):
+        # 5 ms = 120,000 ticks; 120,000 x 100,000 / 2,400. The efficiency-CPU sample (1)
+        # and the migrated sample (9) would move the median to 2,300.
+        self.assertEqual(
+            self.derive(
+                [2400, 2300, 2500, 1, 9], [4, 5, 4, 0, 4], [4, 5, 4, 0, 5]
+            ),
+            {
+                'holderWorkIterations': 5_000_000,
+                'targetMilliseconds': 5,
+                'iterationsMeasured': 100_000,
+                'medianTicks': 2400,
+                'samplesUsed': 3,
+            },
+        )
+
+    def test_fewer_than_half_usable_samples_are_rejected(self):
+        with self.assertRaises(CalibrationError):
+            self.derive([2400, 2400, 1, 9, 7], [4, 5, 0, 4, 1], [4, 5, 0, 5, 1])
+
+
+class PhoneCalibrationTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.results = Path(self.temporary.name) / 'results'
+        self.tunables = {
+            'threads': 1,
+            'priorityInversion': {
+                'holderWorkIterations': 'fromCalibration',
+                'trials': 3,
+            },
+        }
+
+    def test_missing_phone_calibration_is_none(self):
+        self.assertIsNone(load_phone_calibration(self.results, 'fixture'))
+
+    def test_saved_phone_calibration_is_loaded(self):
+        (self.results / 'fixture').mkdir(parents=True)
+        (self.results / 'fixture/calibration.json').write_text(
+            json.dumps({'attemptID': 'calibration-fixture'})
+        )
+        self.assertEqual(
+            load_phone_calibration(self.results, 'fixture'),
+            {'attemptID': 'calibration-fixture'},
+        )
+
+    def test_from_calibration_is_replaced_in_a_copy(self):
+        calibration = {'priorityInversion': {'holderWorkIterations': 5_000_000}}
+        resolved = resolve_tunables(self.tunables, calibration)
+        self.assertEqual(
+            resolved['priorityInversion']['holderWorkIterations'], 5_000_000
+        )
+        self.assertEqual(resolved['priorityInversion']['trials'], 3)
+        self.assertEqual(
+            self.tunables['priorityInversion']['holderWorkIterations'],
+            'fromCalibration',
+        )
+
+    def test_tunables_without_from_calibration_need_no_calibration(self):
+        tunables = {'threads': 1, 'priorityInversion': {'holderWorkIterations': 7}}
+        self.assertEqual(resolve_tunables(tunables, None), tunables)
+        self.assertEqual(resolve_tunables({'threads': 1}, None), {'threads': 1})
+
+    def test_unresolvable_from_calibration_names_the_phone_file(self):
+        for calibration in (
+            None,
+            {'attemptID': 'calibration-fixture'},
+            {'priorityInversion': {'holderWorkIterations': 0}},
+        ):
+            with (
+                self.subTest(calibration=calibration),
+                self.assertRaisesRegex(CalibrationError, 'calibration.json'),
+            ):
+                resolve_tunables(self.tunables, calibration)

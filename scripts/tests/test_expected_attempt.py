@@ -53,6 +53,16 @@ class ExpectedAttemptTests(unittest.TestCase):
             (ExpectedSamples("referenceLoop", "ticks", True, 6, 200, True),),
         )
         self.assertEqual(single.check, "calibration.samples")
+        holder = expected.blocks[("holderWorkSingleThread", "")]
+        self.assertEqual(
+            (holder.threads, holder.qos, holder.batch_lines, holder.check),
+            (1, "userInteractive", 0, "calibration.samples"),
+        )
+        self.assertEqual(
+            holder.samples,
+            (ExpectedSamples("holderWork", "ticks", True, 1, 200, True),),
+        )
+        self.assertEqual(len(expected.blocks), 5)
 
 
 if __name__ == "__main__":
