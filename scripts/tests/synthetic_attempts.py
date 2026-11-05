@@ -47,6 +47,53 @@ def async_code_request(variant, mechanisms, operations, calls_per_task=3):
     return request
 
 
+def priority_inversion_request():
+    """Two reference mechanisms and both holder priorities, with one warm-up trial."""
+    request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
+    request.update(
+        experiment="priorityInversion",
+        variant="default",
+        mechanisms=["osUnfairLock", "dispatchSemaphore"],
+        operations=["utilityHolder", "backgroundHolder"],
+    )
+    request["tunables"]["threads"] = 1
+    request["tunables"]["priorityInversion"] = {
+        "holderWorkIterations": 1000,
+        "loadQoS": "userInteractive",
+        "loadMilliseconds": 5,
+        "mainDelayMicroseconds": 1000,
+        "pauseMilliseconds": 0,
+        "warmupTrials": 1,
+        "trials": 2,
+    }
+    return request
+
+
+def trial_line(block, number, warmup=False, **replacement):
+    """A valid trial inside the block: the holder holds the lock, the load runs."""
+    start = block["start"]
+    line = {
+        "type": "trial",
+        "block": block["block"],
+        "trial": number,
+        "warmup": warmup,
+        "holderQoS": block["qos"],
+        "loadStart": start + 1,
+        "holderAcquire": start + 2,
+        "mainArrival": start + 3,
+        "holderRelease": start + 4,
+        "mainAcquire": start + 5,
+        "loadStop": start + 6,
+        "holderCPUReadings": [1, 1],
+        "mainCPU": 0,
+        "holderResultCorrect": True,
+        "mainObservedTrial": number,
+        "outcome": "valid",
+    }
+    line.update(replacement)
+    return line
+
+
 def make_attempt_lines(
     request: Dict[str, Any],
     build_id: str,
@@ -75,6 +122,7 @@ def make_attempt_lines(
     lines = [run, start_reference]
     calibration = request["experiment"] == "calibration"
     async_code = request["experiment"] == "asyncCode"
+    priority_inversion = request["experiment"] == "priorityInversion"
 
     # These are the five measurements specified by Calibration, independently of the checker.
     if calibration:
@@ -106,6 +154,18 @@ def make_attempt_lines(
             for operation in request["operations"]
             if mechanism in rows.get(operation, ())
         ]
+    elif priority_inversion:
+        measurements = [
+            (
+                mechanism,
+                operation,
+                1,
+                {"utilityHolder": "utility", "backgroundHolder": "background"}[operation],
+                None,
+            )
+            for mechanism in request["mechanisms"]
+            for operation in request["operations"]
+        ]
     else:
         measurements = [
             (mechanism, operation, tunables["threads"], tunables["qos"], None)
@@ -132,7 +192,21 @@ def make_attempt_lines(
         lines.append(block)
         tick += 10
         for thread in range(threads):
-            if calibration:
+            if priority_inversion:
+                trials = tunables["priorityInversion"]
+                for number in range(trials["warmupTrials"] + trials["trials"]):
+                    trial = trial_line(
+                        block, number, warmup=number < trials["warmupTrials"]
+                    )
+                    # Give every trial a distinct, ordered interval inside the block.
+                    for field in (
+                        "loadStart", "loadStop", "holderAcquire", "holderRelease",
+                        "mainArrival", "mainAcquire",
+                    ):
+                        trial[field] += number * 10
+                    lines.append(trial)
+                    tick += 10
+            elif calibration:
                 count = tunables["repeats"]
                 sample = dict(
                     type="samples",
@@ -204,7 +278,10 @@ def make_attempt_lines(
             dict(
                 name="calibration.samples"
                 if calibration
-                else ("asyncCode." if async_code else "baseComparison.") + operation,
+                else (
+                    "priorityInversion." if priority_inversion
+                    else "asyncCode." if async_code else "baseComparison."
+                ) + operation,
                 block=position,
                 passed=True,
                 detail="Synthetic completed work",

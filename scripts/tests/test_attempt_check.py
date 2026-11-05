@@ -21,37 +21,14 @@ from tests.synthetic_attempts import (
     GOLDEN,
     async_code_request,
     make_attempt_lines,
+    priority_inversion_request,
+    trial_line,
     write_attempt,
 )
 
 GOLDEN_LINES = [json.loads(line) for line in GOLDEN.read_text().splitlines()]
 REQUEST = GOLDEN_LINES[0]["request"]
 BUILD_ID = GOLDEN_LINES[0]["build"]["buildID"]
-
-
-def trial_line(block, number, warmup=False, **replacement):
-    """A valid trial inside the block: the holder holds the lock, the load runs."""
-    start = block["start"]
-    line = {
-        "type": "trial",
-        "block": block["block"],
-        "trial": number,
-        "warmup": warmup,
-        "holderQoS": block["qos"],
-        "loadStart": start + 1,
-        "holderAcquire": start + 2,
-        "mainArrival": start + 3,
-        "holderRelease": start + 4,
-        "mainAcquire": start + 5,
-        "loadStop": start + 6,
-        "holderCPUReadings": [1, 1],
-        "mainCPU": 0,
-        "holderResultCorrect": True,
-        "mainObservedTrial": number,
-        "outcome": "valid",
-    }
-    line.update(replacement)
-    return line
 
 
 def with_trials(lines, count, warmup_trials):
@@ -474,9 +451,98 @@ class AttemptCheckTests(unittest.TestCase):
         lines[0]["request"] = request
         self.assert_invalid(lines, request)
 
+    def test_priority_inversion_attempt_with_both_holders_is_accepted(self):
+        request = priority_inversion_request()
+        lines = self.accepted_lines(request)
+        self.assertEqual(sum(line["type"] == "block" for line in lines), 4)
+        self.assertEqual(sum(line["type"] == "trial" for line in lines), 12)
+
+        # Censored and invalid overlap are recorded observations, not correctness failures.
+        trials = [line for line in lines if line["type"] == "trial"]
+        trials[0].update(loadStop=trials[0]["mainAcquire"] - 1, outcome="censored")
+        trials[1].update(mainArrival=trials[1]["holderAcquire"], outcome="invalid")
+        self.assertTrue(self.verdict(lines, request).accepted)
+
+        request["mechanisms"] = [
+            "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
+            "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
+            "pthreadReadWriteLock", "serialQueue", "barrierQueueSyncWrite",
+            "barrierQueueAsyncWrite", "dispatchSemaphore", "actor", "objcSync",
+        ]
+        self.accepted_lines(request)
+
+    def test_malformed_priority_inversion_attempts_are_invalid(self):
+        request = priority_inversion_request()
+        lines = self.accepted_lines(request)
+        trial_index = next(
+            index for index, line in enumerate(lines) if line["type"] == "trial"
+        )
+        mutations = {
+            "missing trial": lambda copy: copy.pop(trial_index),
+            "outcome": lambda copy: copy[trial_index].update(outcome="censored"),
+            "acquire before release": lambda copy: copy[trial_index].update(
+                mainAcquire=copy[trial_index]["holderRelease"] - 1
+            ),
+            "wrong result": lambda copy: copy[trial_index].update(
+                holderResultCorrect=False
+            ),
+            "holder QoS": lambda copy: copy[trial_index].update(holderQoS="background"),
+            "outside block": lambda copy: copy[trial_index].update(loadStart=1),
+            "warmup": lambda copy: copy[trial_index].update(warmup=False),
+            "wrong check": lambda copy: copy[-1]["checks"][0].update(
+                name="baseComparison.utilityHolder"
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name):
+                broken = deepcopy(lines)
+                mutate(broken)
+                self.assert_invalid(broken, request)
+
+    def test_priority_inversion_rejects_invalid_requests(self):
+        request = priority_inversion_request()
+        lines = make_attempt_lines(request, BUILD_ID)
+        mutations = {
+            "unknown mechanism": (
+                "mechanisms", lambda copy: copy.update(mechanisms=["unknown"])
+            ),
+            "empty mechanisms": (
+                "mechanisms", lambda copy: copy.update(mechanisms=[])
+            ),
+            "duplicate mechanisms": (
+                "mechanisms", lambda copy: copy.update(mechanisms=["nsLock", "nsLock"])
+            ),
+            "unknown operation": (
+                "operations", lambda copy: copy.update(operations=["unknown"])
+            ),
+            "empty operations": (
+                "operations", lambda copy: copy.update(operations=[])
+            ),
+            "duplicate operations": (
+                "operations",
+                lambda copy: copy.update(operations=["utilityHolder", "utilityHolder"]),
+            ),
+            "variant": ("variant", lambda copy: copy.update(variant="unknown")),
+            "threads": (
+                "tunables.threads", lambda copy: copy["tunables"].update(threads=2)
+            ),
+            "missing tunables": (
+                "tunables.priorityInversion",
+                lambda copy: copy["tunables"].pop("priorityInversion"),
+            ),
+        }
+        for name, (field, mutate) in mutations.items():
+            with self.subTest(name):
+                broken_request = deepcopy(request)
+                mutate(broken_request)
+                broken = deepcopy(lines)
+                broken[0]["request"] = broken_request
+                # A malformed request must fail before inspecting its otherwise valid blocks.
+                self.assert_invalid(broken, broken_request, reason="request." + field)
+
 
 class TrialLineTests(unittest.TestCase):
-    """No experiment expects trial lines yet, so the expectation is patched."""
+    """Exercise the shared trial parser alongside batch lines via a patched expectation."""
 
     TRIALS = 3
     WARMUP_TRIALS = 1

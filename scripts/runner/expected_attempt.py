@@ -82,6 +82,66 @@ GROUP_SIZE = 100
 # Operations whose blocks also write the main thread's CPU time at each batch edge.
 _MAIN_THREAD_CPU_OPERATIONS = ("fromMainActor", "toMainActor", "callFromMainActor")
 
+# Experiment 8B: the locks, queues and actor in `ContendedLocks.mechanisms`.
+PRIORITY_INVERSION_MECHANISMS = frozenset({
+    "mutex",
+    "osAllocatedUnfairLock",
+    "osAllocatedUnfairLockAdaptiveSpin",
+    "osUnfairLock",
+    "nsLock",
+    "nsRecursiveLock",
+    "pthreadMutex",
+    "pthreadReadWriteLock",
+    "serialQueue",
+    "barrierQueueSyncWrite",
+    "barrierQueueAsyncWrite",
+    "dispatchSemaphore",
+    "actor",
+    "objcSync",
+})
+
+HOLDER_QOS = {"utilityHolder": "utility", "backgroundHolder": "background"}
+
+
+def _priority_inversion_blocks(
+    request: Dict[str, Any]
+) -> Dict[Tuple[str, str], ExpectedBlock]:
+    """The complete mechanism × holder matrix, with no batch or sample lines."""
+    tunables = request["tunables"]
+    if request["variant"] != "default":
+        raise ValueError("request.variant must be default for priorityInversion")
+    if tunables["threads"] != 1:
+        raise ValueError("request.tunables.threads must be 1 for priorityInversion")
+    trials = tunables.get("priorityInversion")
+    if trials is None:
+        raise ValueError("request.tunables.priorityInversion is required")
+    for field, allowed in (
+        ("mechanisms", PRIORITY_INVERSION_MECHANISMS),
+        ("operations", HOLDER_QOS),
+    ):
+        values = request[field]
+        unique_values = set(values)
+        if not values or len(unique_values) != len(values) or not unique_values <= set(allowed):
+            raise ValueError(
+                "request." + field + " must be nonempty, unique priorityInversion entries"
+            )
+    operations = tunables["operationsPerBatch"]
+    return {
+        (mechanism, operation): ExpectedBlock(
+            mechanism,
+            operation,
+            1,
+            HOLDER_QOS[operation],
+            operations.get(mechanism, operations["default"]),
+            0,
+            (),
+            trials["warmupTrials"] + trials["trials"],
+            "priorityInversion." + operation,
+        )
+        for mechanism in request["mechanisms"]
+        for operation in request["operations"]
+    }
+
 
 def _async_code_blocks(
     request: Dict[str, Any]
@@ -205,6 +265,10 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
             )
     elif request["experiment"] == "asyncCode":
         blocks, warmup, measured = _async_code_blocks(request)
+    elif request["experiment"] == "priorityInversion":
+        blocks = _priority_inversion_blocks(request)
+        warmup = 0
+        measured = 0
     else:
         raise ValueError("request.experiment is not supported by the attempt checker")
     return ExpectedAttempt(
