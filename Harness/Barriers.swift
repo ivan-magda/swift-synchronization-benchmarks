@@ -13,8 +13,10 @@ final class ThreadBarrier: @unchecked Sendable {
     init(parties: Int) {
         precondition(parties > 0)
         self.parties = parties
+
         let mutexResult = pthread_mutex_init(&mutex, nil)
         precondition(mutexResult == 0)
+
         let conditionResult = pthread_cond_init(&condition, nil)
         precondition(conditionResult == 0)
     }
@@ -22,11 +24,14 @@ final class ThreadBarrier: @unchecked Sendable {
     func arriveAndWait() {
         let lockResult = pthread_mutex_lock(&mutex)
         precondition(lockResult == 0)
+
         let arrivedGeneration = generation
         arrivals += 1
+
         if arrivals == parties {
             arrivals = 0
             generation &+= 1
+
             let broadcastResult = pthread_cond_broadcast(&condition)
             precondition(broadcastResult == 0)
         } else {
@@ -35,6 +40,7 @@ final class ThreadBarrier: @unchecked Sendable {
                 precondition(waitResult == 0)
             }
         }
+
         let unlockResult = pthread_mutex_unlock(&mutex)
         precondition(unlockResult == 0)
     }
@@ -42,6 +48,7 @@ final class ThreadBarrier: @unchecked Sendable {
     deinit {
         let conditionResult = pthread_cond_destroy(&condition)
         precondition(conditionResult == 0)
+
         let mutexResult = pthread_mutex_destroy(&mutex)
         precondition(mutexResult == 0)
     }
@@ -62,11 +69,17 @@ final class TaskBarrier: Sendable {
         await withCheckedContinuation { continuation in
             let ready = waiters.withLock { waiters -> [CheckedContinuation<Void, Never>] in
                 waiters.append(continuation)
-                guard waiters.count == parties else { return [] }
+
+                guard waiters.count == parties else {
+                    return []
+                }
+
                 let ready = waiters
                 waiters = []
+
                 return ready
             }
+
             for waiter in ready {
                 waiter.resume()
             }
