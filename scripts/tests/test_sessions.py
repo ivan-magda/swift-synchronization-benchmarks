@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from contextlib import redirect_stdout
 from dataclasses import replace
 from io import StringIO
@@ -165,6 +166,53 @@ class SessionTests(unittest.TestCase):
         provenance = json.loads(copies[0].with_suffix('.provenance.json').read_text())
         self.assertEqual(provenance['source'], 'SyncBench-fixture.ips')
         self.assertIn('sha256', provenance)
+
+    def test_crash_report_published_after_two_polls_is_copied(self):
+        self.plan = replace(self.plan, runs=self.plan.runs[:1])
+        self.devices.crash_results = deque([[], [], [self.devices.crash_source]])
+        summary = self.run_session(['crash'])
+        folder = self.results / PHONE.key / summary.session_id
+        self.assertEqual(len(list((folder / 'crash').rglob('*.ips'))), 1)
+        self.assertEqual(self.clock.sleeps, [10, 5, 5, 2])
+        self.assertEqual(self.devices.crash_timeouts, [30, 25, 20])
+        self.assertTrue(
+            all(bound == self.clock.now() for bound in self.devices.crash_bounds)
+        )
+        self.assertEqual((summary.rejected, summary.stop_reason), (1, None))
+        self.assertEqual(
+            self.state().attempts(self.plan.runs[0].run_id)[0]['status'], 'crashed'
+        )
+
+    def test_absent_crash_report_expires_grace_and_records_reason(self):
+        self.plan = replace(self.plan, runs=self.plan.runs[:1])
+        self.devices.crash_results = deque([[]])
+        summary = self.run_session(['crash'])
+        attempt = self.state().attempts(self.plan.runs[0].run_id)[0]
+        self.assertEqual((attempt['status'], attempt['accepted']), ('crashed', False))
+        self.assertIn(
+            'no matching crash report appeared within 30 seconds', attempt['reasons']
+        )
+        self.assertEqual(self.clock.sleeps, [10, 5, 5, 5, 5, 5, 5, 2])
+        folder = self.results / PHONE.key / summary.session_id
+        self.assertFalse((folder / 'crash').exists())
+        record = json.loads((folder / 'session.log').read_text())
+        self.assertIn(
+            'no matching crash report appeared within 30 seconds', record['reasons']
+        )
+        self.assertTrue(self.caffeine.stopped)
+
+    def test_crash_grace_includes_listing_command_time(self):
+        self.plan = replace(self.plan, runs=self.plan.runs[:1])
+        self.devices.crash_results = deque([[]])
+        self.devices.crash_query_elapsed = 30
+        summary = self.run_session(['crash'])
+        attempt = self.state().attempts(self.plan.runs[0].run_id)[0]
+        self.assertIn(
+            'no matching crash report appeared within 30 seconds', attempt['reasons']
+        )
+        self.assertEqual(self.clock.seconds, 42)
+        self.assertEqual(self.clock.sleeps, [10, 2])
+        self.assertEqual(self.devices.crash_timeouts, [30])
 
     def test_hang_is_terminated_as_timeout_even_with_a_done_file(self):
         self.devices.wait_elapsed = 300

@@ -192,7 +192,32 @@ def _scrub_crash(raw: str, config: LocalConfig, root: Path, context: str = '') -
     return scrub_text(raw)
 
 
-def _copy_crashes(devices, phone, config, results, folder, attempt_id, launched):
+def _copy_crashes(
+    devices,
+    phone,
+    config,
+    results,
+    folder,
+    attempt_id,
+    launched,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+):
+    # iOS publishes crash reports after process exit, sometimes more than 10s later.
+    # Share one grace deadline across listing commands and sleeps.
+    deadline = monotonic() + 30
+    while True:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return 'no matching crash report appeared within 30 seconds'
+        sources = devices.crash_logs(
+            phone.udid, 'SyncBench', newer_than=launched, timeout_seconds=remaining
+        )
+        if sources:
+            break
+        remaining = deadline - monotonic()
+        if remaining > 0:
+            sleep(min(5, remaining))
     private = (
         results.resolve().parent
         / 'build/private/sessions'
@@ -201,9 +226,8 @@ def _copy_crashes(devices, phone, config, results, folder, attempt_id, launched)
         / attempt_id
     )
     public = folder / 'crash' / attempt_id
-    for index, source in enumerate(
-        devices.crash_logs(phone.udid, 'SyncBench', newer_than=launched)
-    ):
+    copied = False
+    for index, source in enumerate(sources):
         private.mkdir(parents=True, exist_ok=True)
         # Device filenames can themselves contain private identities.
         name = f'{index + 1}.ips'
@@ -233,6 +257,8 @@ def _copy_crashes(devices, phone, config, results, folder, attempt_id, launched)
                 'launchedAt': launched.isoformat(),
             },
         )
+        copied = True
+    return None if copied else 'matching crash reports were unavailable when copied'
 
 
 def run_session(
@@ -418,7 +444,7 @@ def run_session(
                                     asdict(verdict),
                                 )
                             else:
-                                _copy_crashes(
+                                crash_issue = _copy_crashes(
                                     devices,
                                     phone,
                                     config,
@@ -426,7 +452,11 @@ def run_session(
                                     folder,
                                     attempt_id,
                                     launched,
+                                    sleep,
+                                    monotonic,
                                 )
+                                if crash_issue:
+                                    verdict.reasons.append(crash_issue)
                     except (DeviceControlError, OSError):
                         stop = 'result or crash copy failed'
                         if verdict.status not in ('timeout', 'deviceFailed', 'crashed'):

@@ -121,6 +121,7 @@ def doctor(
                         launches * run.time_limit_seconds
                         + max(0, launches - 1) * plan.thermal_wait_seconds
                         + (plan.pause_seconds if launches else 0)
+                        + (30 if launches else 0)  # Crash-report publication grace.
                     )
             expiry = datetime.fromisoformat(info['profileExpires'])
             finding(
@@ -128,7 +129,7 @@ def doctor(
                 expiry.tzinfo is not None
                 and expiry > now + timedelta(seconds=required_seconds),
                 'profile must remain valid through pending launches, thermal waits, '
-                'pauses and settle time',
+                'crash-report grace, pauses and settle time',
             )
     except (BuildError, StateError, ValueError, KeyError, TypeError):
         finding('profile', False, 'build profile or pending-run metadata is invalid')

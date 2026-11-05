@@ -148,11 +148,11 @@ class DoctorTests(unittest.TestCase):
             info = {
                 'buildID': 'fixture',
                 'codeHash': 'a' * 64,
-                'profileExpires': (NOW + timedelta(seconds=1000)).isoformat(),
+                'profileExpires': (NOW + timedelta(seconds=1300)).isoformat(),
             }
 
-            # Per pending run: 2 possible launches * 300 + 30 thermal wait + 5 pause.
-            # Two runs plus settle require 1280 seconds; one requires 645.
+            # Per run: 2 launches * 300 + 30 thermal wait + 30 crash grace + 5 pause.
+            # Two runs plus settle require 1340 seconds; one requires 675.
             findings = doctor(
                 CONFIG,
                 PHONE,

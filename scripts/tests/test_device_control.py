@@ -120,8 +120,10 @@ class DeviceControlTests(unittest.TestCase):
     def test_crash_logs_filtered_by_name_and_strict_launch_timestamp(self):
         device = self.device(['crash-logs'] * 4)
         self.assertEqual(
-            device.crash_logs('PRIVATE-UDID', 'Other-0'), ['NAME-Other-0.ips']
+            device.crash_logs('PRIVATE-UDID', 'Other-0', timeout_seconds=2.5),
+            ['NAME-Other-0.ips'],
         )
+        self.assertEqual(self.runner.calls[-1][1], 2.5)
         self.assertEqual(device.crash_logs('PRIVATE-UDID', 'SyncBench'), [])
         boundary = datetime(2026, 11, 5, 5, 0, 46, tzinfo=timezone.utc)
         self.assertEqual(device.crash_logs('PRIVATE-UDID', 'Other', boundary), [])

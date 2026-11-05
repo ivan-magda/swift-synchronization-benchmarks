@@ -48,7 +48,7 @@ class FakeCaffeinate:
 
 
 class FakeDevice:
-    """Consume an outcome per launch; keep copied bytes and process effects observable."""
+    """Script launches and delayed crash listings; expose copied bytes and process effects."""
 
     def __init__(self, folder: Path, outcomes, build_id='fixture-build', clock=None):
         self.folder = folder
@@ -71,6 +71,9 @@ class FakeDevice:
         self.crash_copy_error = False
         self.interrupt_wait = False
         self.crash_source = 'SyncBench-fixture.ips'
+        self.crash_results = None
+        self.crash_timeouts = []
+        self.crash_query_elapsed = 0
 
     def list_devices(self):
         return [
@@ -139,8 +142,14 @@ class FakeDevice:
         shutil.copyfile(source_path, destination)
         return True
 
-    def crash_logs(self, udid, name_contains, newer_than=None):
+    def crash_logs(self, udid, name_contains, newer_than=None, timeout_seconds=60):
         self.crash_bounds.append(newer_than)
+        self.crash_timeouts.append(timeout_seconds)
+        self.clock.seconds += self.crash_query_elapsed
+        if self.crash_results is not None:
+            if len(self.crash_results) > 1:
+                return self.crash_results.popleft()
+            return self.crash_results[0]
         return [self.crash_source]
 
     def copy_crash_log(self, udid, name, destination):

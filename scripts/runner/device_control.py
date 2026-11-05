@@ -327,7 +327,11 @@ class DeviceControl:
         return self._copy(udid, 'appDataContainer', source, destination, bundle_id)
 
     def crash_logs(
-        self, udid: str, name_contains: str, newer_than: Optional[datetime] = None
+        self,
+        udid: str,
+        name_contains: str,
+        newer_than: Optional[datetime] = None,
+        timeout_seconds: float = 60,
     ) -> List[str]:
         """Return matching files, optionally strictly newer than an aware launch time."""
         payload = self._query(
@@ -339,7 +343,8 @@ class DeviceControl:
                 udid,
                 '--domain-type',
                 'systemCrashLogs',
-            ]
+            ],
+            timeout_seconds,
         )
         try:
             if newer_than is not None and newer_than.utcoffset() is None:
