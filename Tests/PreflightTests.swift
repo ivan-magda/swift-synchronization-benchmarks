@@ -8,13 +8,17 @@ import Testing
 func preflightDecision(_ preflightCase: PreflightCase) {
     #expect(
         Preflight.decide(
-            preflightCase.conditions, build: preflightCase.build, request: preflightCase.request
-        ) == preflightCase.expected)
+            preflightCase.conditions,
+            build: preflightCase.build,
+            request: preflightCase.request
+        ) == preflightCase.expected
+    )
 }
 
 // Catches a failed numeric sysctl being accepted as zero, or skipped level indexes.
 @Test func phoneFactsAreConsistent() {
     let facts = PhoneFacts.read()
+
     #expect(facts.cpuCount >= 1)
     #expect(facts.timebaseNumerator > 0)
     #expect(facts.timebaseDenominator > 0)
@@ -24,10 +28,12 @@ func preflightDecision(_ preflightCase: PreflightCase) {
 // Catches a missing main-thread bridge or an incorrectly scaled UIKit snapshot.
 @Test func conditionsCaptureFromRunThread() async throws {
     let conditions = await onBenchmarkThread { Conditions.captureFromRunThread() }
+
     #expect(conditions.ticks > 0)
     #expect((-1...1000).contains(conditions.batteryLevelPermille))
     #expect((0...1000).contains(conditions.screenBrightnessPermille))
     #expect(["active", "inactive", "background"].contains(conditions.applicationState))
+
     let formatter = ISO8601DateFormatter()
     #expect(formatter.date(from: conditions.wallClock) != nil)
     #expect(conditions.wallClock.hasSuffix("Z"))
@@ -38,18 +44,24 @@ func preflightDecision(_ preflightCase: PreflightCase) {
 @Test func thermalMonitorRecordsOnlyWhileStarted() {
     let monitor = ThermalMonitor()
     let center = NotificationCenter.default
+
     center.post(name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
     monitor.start()
     monitor.start()
+
     let before = Clock.now()
     center.post(name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
     let changes = monitor.stop()
+
     #expect(changes.count == 1)
     #expect(changes.allSatisfy { $0.ticks >= before && $0.ticks <= Clock.now() })
     #expect(
-        changes.allSatisfy { ["nominal", "fair", "serious", "critical"].contains($0.thermalState) })
+        changes.allSatisfy { ["nominal", "fair", "serious", "critical"].contains($0.thermalState) }
+    )
+
     center.post(name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
     #expect(monitor.stop().count == 1)
+
     monitor.start()
     #expect(monitor.stop().isEmpty)
 }
@@ -61,20 +73,37 @@ struct PreflightCase: Sendable {
     let expected: PreflightDecision
 
     init(
-        thermalState: String = "nominal", lowPowerMode: Bool = false,
-        batteryState: String = "charging", debuggerAttached: Bool = false,
-        applicationState: String = "active", environment: [String: String] = [:],
-        configuration: String = "Release", smoke: Bool = false,
+        thermalState: String = "nominal",
+        lowPowerMode: Bool = false,
+        batteryState: String = "charging",
+        debuggerAttached: Bool = false,
+        applicationState: String = "active",
+        environment: [String: String] = [:],
+        configuration: String = "Release",
+        smoke: Bool = false,
         expected: PreflightDecision
     ) {
         conditions = Conditions(
-            thermalState: thermalState, lowPowerMode: lowPowerMode, batteryState: batteryState,
-            batteryLevelPermille: 800, screenBrightnessPermille: 500,
-            debuggerAttached: debuggerAttached, applicationState: applicationState,
-            environment: environment, ticks: 1, wallClock: "2026-11-05T00:00:00Z")
+            thermalState: thermalState,
+            lowPowerMode: lowPowerMode,
+            batteryState: batteryState,
+            batteryLevelPermille: 800,
+            screenBrightnessPermille: 500,
+            debuggerAttached: debuggerAttached,
+            applicationState: applicationState,
+            environment: environment,
+            ticks: 1,
+            wallClock: "2026-11-05T00:00:00Z"
+        )
         build = BuildInfo(
-            buildID: "test", commit: "test", dirty: false, target: "ios26", minimumOS: "26.0",
-            configuration: configuration)
+            buildID: "test",
+            commit: "test",
+            dirty: false,
+            target: "ios26",
+            minimumOS: "26.0",
+            configuration: configuration
+        )
+
         var request = RunRequest.golden
         request.smoke = smoke
         self.request = request

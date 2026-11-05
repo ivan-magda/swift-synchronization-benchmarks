@@ -16,6 +16,7 @@ func threadRunsWithRequestedQoS(_ qos: QoS) async {
         thread.join()
         return (observedQoS.withLock { $0 }, ranOnMainThread.withLock { $0 })
     }
+
     #expect(observation.0 == qos.qosClass)
     #expect(observation.1 == false)
 }
@@ -40,6 +41,7 @@ func threadRunsWithRequestedQoS(_ qos: QoS) async {
 // Catches overlapping batch offsets and executor storage that is not visible after join.
 @Test func threadLogPreservesIndependentBatchesAfterJoin() async {
     let log = ThreadLog(batches: 3, readingsPerBatch: 2)
+
     await onBenchmarkThread {
         let writer = BenchmarkThread.start(name: "log-writer", qos: .userInitiated) {
             log.recordTimes(batch: 0, start: 11, end: 17)
@@ -48,6 +50,7 @@ func threadRunsWithRequestedQoS(_ qos: QoS) async {
             log.recordCheckValue(batch: 2, value: 303)
             log.recordCPU(batch: 0, reading: 0, cpu: 4)
             log.recordCPU(batch: 2, reading: 1, cpu: 9)
+
             let executor = BenchmarkThread.start(name: "executor", qos: .utility) {
                 log.executorSlot(batch: 0, reading: 1).store(6)
                 log.executorSlot(batch: 2, reading: 0).store(8)
@@ -56,6 +59,7 @@ func threadRunsWithRequestedQoS(_ qos: QoS) async {
         }
         writer.join()
     }
+
     #expect(log.start(ofBatch: 0) == 11)
     #expect(log.end(ofBatch: 0) == 17)
     #expect(log.checkValue(ofBatch: 0) == 101)
@@ -80,20 +84,25 @@ func threadBarrierReleasesNobodyEarly() async {
         let barrier = ThreadBarrier(parties: 4)
         let slots = (0..<4).map { _ in RoundSlot() }
         let violations = Atomic<Int>(0)
+
         let threads = (0..<4).map { index in
             BenchmarkThread.start(name: "barrier-test", qos: .userInitiated) {
                 for round in 1...1_000 {
                     slots[index].value.store(round, ordering: .relaxed)
                     barrier.arriveAndWait()
+
                     for slot in slots where slot.value.load(ordering: .relaxed) < round {
                         violations.wrappingAdd(1, ordering: .relaxed)
                     }
                 }
             }
         }
-        for thread in threads { thread.join() }
+        for thread in threads {
+            thread.join()
+        }
         return violations.load(ordering: .relaxed)
     }
+
     #expect(violations == 0)
 }
 
@@ -102,6 +111,7 @@ func taskBarrierWorksWithMoreTasksThanCores() async {
     let barrier = TaskBarrier(parties: 12)
     let slots = (0..<12).map { _ in RoundSlot() }
     let violations = Atomic<Int>(0)
+
     await withTaskGroup(of: Void.self) { group in
         for index in 0..<12 {
             group.addTask {
@@ -115,16 +125,19 @@ func taskBarrierWorksWithMoreTasksThanCores() async {
             }
         }
     }
+
     #expect(violations.load(ordering: .relaxed) == 0)
 }
 
 @Test func clockNeverGoesBack() {
     var previous = Clock.now()
+
     for _ in 0..<1_000 {
         let current = Clock.now()
         #expect(current >= previous)
         previous = current
     }
+
     #expect(Clock.timebase.numer > 0)
     #expect(Clock.timebase.denom > 0)
 }
@@ -136,11 +149,13 @@ func taskBarrierWorksWithMoreTasksThanCores() async {
         thread.join()
         return (earlier, ContextSwitches.now())
     }
+
     #expect(readings.1.voluntary >= readings.0.voluntary)
     #expect(readings.1.involuntary >= readings.0.involuntary)
     #expect(readings.1.task >= readings.0.task)
     #expect(
         ContextSwitches(voluntary: 17, involuntary: 11, task: 29)
             - ContextSwitches(voluntary: 3, involuntary: 5, task: 7)
-            == ContextSwitches(voluntary: 14, involuntary: 6, task: 22))
+            == ContextSwitches(voluntary: 14, involuntary: 6, task: 22)
+    )
 }

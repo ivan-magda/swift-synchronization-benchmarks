@@ -16,20 +16,36 @@ func onBenchmarkThread<Result: Sendable>(
 extension RunRequest {
     static var golden: RunRequest {
         RunRequest(
-            schema: 1, runID: "golden.one-thread.1",
-            attemptID: "golden.one-thread.1.attempt1.20261105T000000Z.0000", attempt: 1,
-            experiment: "baseComparison", variant: "oneThread", seed: 7, smoke: true,
-            simulation: nil, mechanisms: ["mutex"], operations: ["increment"],
+            schema: 1,
+            runID: "golden.one-thread.1",
+            attemptID: "golden.one-thread.1.attempt1.20261105T000000Z.0000",
+            attempt: 1,
+            experiment: "baseComparison",
+            variant: "oneThread",
+            seed: 7,
+            smoke: true,
+            simulation: nil,
+            mechanisms: ["mutex"],
+            operations: ["increment"],
             tunables: Tunables(
-                threads: 1, qos: .userInitiated, warmupBatches: 1, measuredBatches: 2,
-                subBatches: 2, operationsPerBatch: ["default": 4], referenceLoopIterations: 10,
-                repeats: nil))
+                threads: 1,
+                qos: .userInitiated,
+                warmupBatches: 1,
+                measuredBatches: 2,
+                subBatches: 2,
+                operationsPerBatch: ["default": 4],
+                referenceLoopIterations: 10,
+                repeats: nil
+            )
+        )
     }
 }
 
 func fixtureURL(_ name: String) -> URL {
-    URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures").appending(
-        path: name)
+    URL(filePath: #filePath)
+        .deletingLastPathComponent()
+        .appending(path: "Fixtures")
+        .appending(path: name)
 }
 
 struct InvalidRequestCase: Sendable {
@@ -62,6 +78,7 @@ struct InvalidRequestCase: Sendable {
                 }
             ),
         ]
+
         return mutations.map { field, mutate in
             var request = RunRequest.golden
             mutate(&request)
@@ -73,65 +90,119 @@ struct InvalidRequestCase: Sendable {
 enum GoldenAttempt {
     static func conditions(ticks: UInt64, wallClock: String) -> Conditions {
         Conditions(
-            thermalState: "nominal", lowPowerMode: false, batteryState: "charging",
-            batteryLevelPermille: 800, screenBrightnessPermille: 500, debuggerAttached: false,
-            applicationState: "active", environment: [:], ticks: ticks, wallClock: wallClock)
+            thermalState: "nominal",
+            lowPowerMode: false,
+            batteryState: "charging",
+            batteryLevelPermille: 800,
+            screenBrightnessPermille: 500,
+            debuggerAttached: false,
+            applicationState: "active",
+            environment: [:],
+            ticks: ticks,
+            wallClock: wallClock
+        )
     }
 
     static func lines() -> ResultLineBuffer {
         let lines = ResultLineBuffer()
         let phone = PhoneFacts(
-            machine: "iPhone99,1", osVersion: "27.0", osBuild: "24A000", cpuCount: 6,
+            machine: "iPhone99,1",
+            osVersion: "27.0",
+            osBuild: "24A000",
+            cpuCount: 6,
             activeCPUCount: 6,
             performanceLevels: [
                 PerformanceLevel(
-                    index: 0, name: "Performance", logicalCPUCount: 2, physicalCPUCount: 2,
-                    l1DataCacheBytes: 131072, l2CacheBytes: 8_388_608, cpusPerL2: 2),
+                    index: 0,
+                    name: "Performance",
+                    logicalCPUCount: 2,
+                    physicalCPUCount: 2,
+                    l1DataCacheBytes: 131072,
+                    l2CacheBytes: 8_388_608,
+                    cpusPerL2: 2
+                ),
                 PerformanceLevel(
-                    index: 1, name: "Efficiency", logicalCPUCount: 4, physicalCPUCount: 4,
-                    l1DataCacheBytes: 65536, l2CacheBytes: 4_194_304, cpusPerL2: 4),
-            ], cacheLineBytes: 128, memoryBytes: 8_589_934_592, timebaseNumerator: 125,
-            timebaseDenominator: 3, mainThreadQoSClass: 33, mutexDefaultPolicy: "firstfit",
-            ulockAdaptiveSpinMicroseconds: nil)
+                    index: 1,
+                    name: "Efficiency",
+                    logicalCPUCount: 4,
+                    physicalCPUCount: 4,
+                    l1DataCacheBytes: 65536,
+                    l2CacheBytes: 4_194_304,
+                    cpusPerL2: 4
+                ),
+            ],
+            cacheLineBytes: 128,
+            memoryBytes: 8_589_934_592,
+            timebaseNumerator: 125,
+            timebaseDenominator: 3,
+            mainThreadQoSClass: 33,
+            mutexDefaultPolicy: "firstfit",
+            ulockAdaptiveSpinMicroseconds: nil
+        )
         let build = BuildInfo(
-            buildID: "0123456789ab-clean-ios26-20261105T000000Z", commit: "0123456789ab",
-            dirty: false, target: "ios26", minimumOS: "26.0", configuration: "Release")
+            buildID: "0123456789ab-clean-ios26-20261105T000000Z",
+            commit: "0123456789ab",
+            dirty: false,
+            target: "ios26",
+            minimumOS: "26.0",
+            configuration: "Release"
+        )
+
         lines.append(
             RunLine(
                 schema: 1, request: .golden, build: build, phone: phone,
-                conditions: conditions(ticks: 100, wallClock: "2026-11-05T00:00:00Z")))
+                conditions: conditions(ticks: 100, wallClock: "2026-11-05T00:00:00Z")
+            )
+        )
         lines.append(
-            ReferenceLine(when: "start", iterations: 10, start: 110, end: 120, cpuReadings: [0, 0]))
+            ReferenceLine(when: "start", iterations: 10, start: 110, end: 120, cpuReadings: [0, 0])
+        )
         lines.append(
             BlockLine(
                 block: 0, mechanism: "mutex", operation: "increment", threads: 1,
                 qos: .userInitiated, operationsPerBatch: 4, start: 130, end: 200,
                 voluntaryContextSwitches: 1, involuntaryContextSwitches: 0, taskContextSwitches: 1,
-                thermalStateAtStart: "nominal", thermalStateAtEnd: "nominal"))
+                thermalStateAtStart: "nominal", thermalStateAtEnd: "nominal"
+            )
+        )
         lines.append(
             BatchLine(
                 block: 0, batch: 0, thread: 0, warmup: true, operations: 4, start: 140, end: 150,
-                cpuReadings: [0, 0, 0], executorCPUReadings: nil))
+                cpuReadings: [0, 0, 0], executorCPUReadings: nil
+            )
+        )
         lines.append(
             BatchLine(
                 block: 0, batch: 1, thread: 0, warmup: false, operations: 4, start: 160, end: 170,
-                cpuReadings: [0, 0, 0], executorCPUReadings: nil))
+                cpuReadings: [0, 0, 0], executorCPUReadings: nil
+            )
+        )
         lines.append(
             BatchLine(
                 block: 0, batch: 2, thread: 0, warmup: false, operations: 4, start: 180, end: 190,
-                cpuReadings: [0, 0, 0], executorCPUReadings: nil))
+                cpuReadings: [0, 0, 0], executorCPUReadings: nil
+            )
+        )
         lines.append(
-            ReferenceLine(when: "end", iterations: 10, start: 210, end: 220, cpuReadings: [0, 0]))
+            ReferenceLine(when: "end", iterations: 10, start: 210, end: 220, cpuReadings: [0, 0])
+        )
         lines.append(
             EndLine(
                 status: "completed", reasonCode: nil, reason: nil,
                 checks: [
                     CheckResult(
                         name: "baseComparison.increment", block: 0, passed: true,
-                        detail: "expected 12, got 12", violations: nil)
-                ], blockLines: 1, warmupBatchLines: 1, measuredBatchLines: 2,
+                        detail: "expected 12, got 12", violations: nil
+                    )
+                ],
+                blockLines: 1,
+                warmupBatchLines: 1,
+                measuredBatchLines: 2,
                 conditions: conditions(ticks: 230, wallClock: "2026-11-05T00:00:01Z"),
-                thermalChanges: []))
+                thermalChanges: []
+            )
+        )
+
         return lines
     }
 }
