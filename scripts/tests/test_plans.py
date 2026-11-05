@@ -232,6 +232,14 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(plan.ios_builds, {"phone-a": "24A1", "phone-b": "24B2"})
         self.assertFalse(plan.traced)
 
+    def test_missing_ios_builds_defaults_to_empty_in_smoke_plans_only(self):
+        document = json.loads(SMOKE_PLAN.read_text())
+        document.pop("iosBuilds")
+        self.assertEqual(self.load_document(document).ios_builds, {})
+        document["smoke"] = False
+        with self.assertRaisesRegex(PlanError, "iosBuilds"):
+            self.load_document(document)
+
     def test_traced_is_copied_into_requests_only_when_true(self):
         document = json.loads(SMOKE_PLAN.read_text())
         untraced = self.load_document(document)

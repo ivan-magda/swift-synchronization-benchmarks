@@ -200,7 +200,7 @@ def load_plan(path: Path) -> Plan:
     smoke = _boolean(document.get("smoke"), "smoke")
     if "iosBuild" in document:
         raise PlanError("iosBuild was replaced by iosBuilds (phone key → iOS build)")
-    ios_builds = _ios_builds(document.get("iosBuilds"), smoke)
+    ios_builds = _ios_builds(document.get("iosBuilds", {}), smoke)
     traced = _boolean(document.get("traced", False), "traced")
     seed = _integer(document.get("seed"), "seed", 0, 2**53 - 1)
     shuffle = _boolean(document.get("shuffle", True), "shuffle")
