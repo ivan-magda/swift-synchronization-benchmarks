@@ -95,6 +95,24 @@ import Testing
         #expect(throws: RequestError.self) { try PriorityInversion(request: request) }
     }
 
+    // The main thread's scheduled sleep must stay below the five-second finish allowance.
+    @Test func mainDelayIsBoundedToOneSecond() throws {
+        var request = RunRequest.priorityInversionSmoke
+        for delay in [0, 1_000_000] {
+            request.tunables.priorityInversion!.mainDelayMicroseconds = delay
+            _ = try PriorityInversion(request: request)
+        }
+        for delay in [1_000_001, 60_000_000] {
+            request.tunables.priorityInversion!.mainDelayMicroseconds = delay
+            do {
+                _ = try PriorityInversion(request: request)
+                Issue.record("A main delay above one second was accepted: \(delay)")
+            } catch {
+                #expect(error.message.contains("priorityInversion.mainDelayMicroseconds"))
+            }
+        }
+    }
+
     // Values accepted by generic validation must still fit the experiment's duration conversions.
     @Test func rejectsUnrepresentableTrialDurations() {
         for field in ["loadMilliseconds", "mainDelayMicroseconds", "pauseMilliseconds"] {

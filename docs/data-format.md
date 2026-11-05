@@ -138,12 +138,12 @@ are `mutex`, `osAllocatedUnfairLock`, `osAllocatedUnfairLockAdaptiveSpin`, `osUn
 Operations are `utilityHolder` and `backgroundHolder`. A block has one thread and reports the
 holder's QoS (`utility` or `background`); the controller pthread runs at `tunables.qos`.
 Requests require nonempty, unique mechanism and operation lists, `tunables.threads` 1,
-and `tunables.priorityInversion`.
+and `tunables.priorityInversion`. `mainDelayMicroseconds` is 0…1,000,000 (at most one
+second), keeping the scheduled main-thread sleep below the five-second finish allowance.
 Duration conversion must fit unsigned 64-bit nanoseconds and ticks: `loadMilliseconds`
-is at most 18,446,744,073,709 and `mainDelayMicroseconds` at most 18,446,744,073,709,551,
-with a smaller limit when required by the recorded clock timebase. `pauseMilliseconds`
-is at most 4,294,967 so its microseconds fit `useconds_t`. A deadline addition that
-overflows the tick clock is reported as a timeout.
+is at most 18,446,744,073,709, with a smaller limit when required by the recorded clock
+timebase. `pauseMilliseconds` is at most 4,294,967 so its microseconds fit `useconds_t`.
+A deadline addition that overflows the tick clock is reported as a timeout.
 
 Blocks emit no `batch` or `samples` lines. Each emits `warmupTrials + trials` `trial` lines,
 indexed from 0; only the first `warmupTrials` have `warmup` true. The controller waits for

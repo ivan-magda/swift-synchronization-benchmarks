@@ -17,6 +17,9 @@ struct PriorityInversion: Experiment {
         guard let tunables = request.tunables.priorityInversion else {
             throw RequestError(message: "priorityInversion tunables are required")
         }
+        guard tunables.mainDelayMicroseconds <= 1_000_000 else {
+            throw RequestError(message: "priorityInversion.mainDelayMicroseconds must be at most 1000000")
+        }
         try TrialDeadline.validateDuration(
             tunables.loadMilliseconds,
             nanosecondsPerUnit: 1_000_000,
