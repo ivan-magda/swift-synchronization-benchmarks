@@ -16,6 +16,7 @@ final class MainSideRecord: Sendable {
         acquireTick.store(0, ordering: .relaxed)
         cpuNumber.store(-1, ordering: .relaxed)
         observedTrial.store(-1, ordering: .relaxed)
+
         while done.wait(timeout: .now()) == .success {}
     }
 
@@ -34,10 +35,21 @@ final class MainSideRecord: Sendable {
         done.wait(timeout: TrialDeadline.dispatchTime(until: deadline)) == .success
     }
 
-    var arrival: UInt64 { arrivalTick.load(ordering: .relaxed) }
-    var acquire: UInt64 { acquireTick.load(ordering: .relaxed) }
-    var cpu: Int { cpuNumber.load(ordering: .relaxed) }
-    var observed: Int { observedTrial.load(ordering: .relaxed) }
+    var arrival: UInt64 {
+        arrivalTick.load(ordering: .relaxed)
+    }
+
+    var acquire: UInt64 {
+        acquireTick.load(ordering: .relaxed)
+    }
+
+    var cpu: Int {
+        cpuNumber.load(ordering: .relaxed)
+    }
+
+    var observed: Int {
+        observedTrial.load(ordering: .relaxed)
+    }
 }
 
 struct TrialRunner: Sendable {
@@ -70,6 +82,7 @@ struct TrialRunner: Sendable {
     /// Runs on the controller pthread. After a timeout no next trial is started or record reset.
     func runTrials(block: Int) -> (trials: [TrialLine], timedOut: Bool) {
         precondition(pthread_main_np() == 0)
+
         let loadTicks = TrialDeadline.ticks(
             nanoseconds: UInt64(tunables.loadMilliseconds) * 1_000_000
         )
@@ -87,6 +100,7 @@ struct TrialRunner: Sendable {
             timestamps.reset()
             mainSide.reset()
             holder.start(trial: trial)
+
             let (acquireDeadline, acquireOverflow) = Clock.now().addingReportingOverflow(
                 acquireTimeoutTicks
             )
@@ -96,15 +110,22 @@ struct TrialRunner: Sendable {
 
             let loadStart = Clock.now()
             let (loadStop, loadOverflow) = loadStart.addingReportingOverflow(loadTicks)
-            guard !loadOverflow else { return (trials, true) }
+            guard !loadOverflow else {
+                return (trials, true)
+            }
+
             loadThreads.start(until: loadStop)
 
             let (arrivalTarget, arrivalOverflow) = timestamps.acquire.addingReportingOverflow(
                 mainDelayTicks
             )
-            guard !arrivalOverflow else { return (trials, true) }
+            guard !arrivalOverflow else {
+                return (trials, true)
+            }
+
             let lock = lock
             let mainSide = mainSide
+
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     mach_wait_until(arrivalTarget)
@@ -153,8 +174,10 @@ struct TrialRunner: Sendable {
                     loadStop: loadStop
                 )
             ))
+
             usleep(useconds_t(tunables.pauseMilliseconds * 1_000))
         }
+
         return (trials, false)
     }
 }
