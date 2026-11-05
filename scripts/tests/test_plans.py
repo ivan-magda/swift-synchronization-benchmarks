@@ -29,6 +29,21 @@ class PlanTests(unittest.TestCase):
             path.write_text(json.dumps(document), encoding="utf-8")
             return load_plan(path)
 
+    def test_every_plan_in_plans_loads(self):
+        paths = sorted(PLANS.glob("*.json"))
+        # A glob alone would pass before the phase 2 plans exist.
+        self.assertTrue(
+            {
+                "acceptance-async-code.json",
+                "acceptance-priority-inversion.json",
+                "traced-async-code.json",
+                "traced-priority-inversion.json",
+            }.issubset({path.name for path in paths})
+        )
+        for path in paths:
+            with self.subTest(plan=path.name):
+                load_plan(path)
+
     def test_run_id_and_seed(self):
         run_id = make_run_id("smoke-base-comparison", "one-thread", 1)
         self.assertEqual(run_id, "smoke-base-comparison.one-thread.1")

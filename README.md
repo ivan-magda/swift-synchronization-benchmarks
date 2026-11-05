@@ -3,7 +3,9 @@
 This repository contains an iOS harness for comparing Swift synchronization mechanisms on real iPhones.
 It records raw samples and run conditions so the measurements can be checked and reproduced.
 
-Phase 1 implements calibration and the base comparison on physical iPhones.
+The harness implements calibration, the base comparison, async code (experiment 7),
+and priority inversion (experiment 8B). Phase 1 checked calibration and the base
+comparison on physical iPhones.
 See [device acceptance](docs/phase-1-acceptance.md) and
 [optimized-code checks](docs/build-checks/2026-11-phase-1.md) for the tested scope.
 
@@ -45,6 +47,30 @@ target; `doctor` requires that artifact to exist. The acceptance plans cover
 1, 2, 6, and 12 threads. The smaller `smoke-base-comparison*.json` plans cover
 1 and 2 threads. All these plans have `smoke: true`; their samples are for
 functional checks.
+
+For async code and priority inversion, build `ios26`, then run the new plans:
+
+```bash
+python3 scripts/bench.py run --phone iphone11 --plan plans/acceptance-async-code.json
+python3 scripts/bench.py calibrate --phone iphone11
+python3 scripts/bench.py run --phone iphone11 --plan plans/acceptance-priority-inversion.json
+python3 scripts/bench.py run --phone iphone11 --plan plans/traced-async-code.json
+python3 scripts/bench.py run --phone iphone11 --plan plans/traced-priority-inversion.json
+```
+
+Run `calibrate` for the configured phone before any plan that uses
+`"holderWorkIterations": "fromCalibration"`, including both priority-inversion
+plans. The runner reads the holder work size from `results/<phone>/calibration.json`
+and stops before installation if it is missing. The four new plans have
+`smoke: true`; their tunables are acceptance guesses until the pilot sets the
+measurement values.
+
+Plans with `"traced": true` record System Trace of all processes around each
+attempt. They write `.trace` files under
+`results/<phone>/<session>/traces/`. These files contain device names and
+identifiers: keep them private and never share or commit them. Use traced runs
+to inspect thread switches and priorities; keep their samples apart from timed
+measurement data.
 
 The runner saves each launch, resumes pending runs by plan, phone, code hash,
 and build eligibility (`clean` or `dev`), and uses `caffeinate` during the session.

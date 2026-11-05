@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "name": "acceptance-priority-inversion",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "default",
+      "experiment": "priorityInversion",
+      "variant": "default",
+      "repeats": 1,
+      "timeLimitSeconds": 900,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "actor",
+        "objcSync"
+      ],
+      "operations": [
+        "utilityHolder",
+        "backgroundHolder"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInteractive",
+        "warmupBatches": 0,
+        "measuredBatches": 1,
+        "subBatches": 1,
+        "operationsPerBatch": {
+          "default": 1
+        },
+        "referenceLoopIterations": 1000000,
+        "priorityInversion": {
+          "holderWorkIterations": "fromCalibration",
+          "loadQoS": "userInitiated",
+          "loadMilliseconds": 300,
+          "mainDelayMicroseconds": 1000,
+          "pauseMilliseconds": 50,
+          "warmupTrials": 1,
+          "trials": 10
+        }
+      }
+    }
+  ]
+}

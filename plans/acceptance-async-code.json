@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "name": "acceptance-async-code",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "caller-paths",
+      "experiment": "asyncCode",
+      "variant": "callerPaths",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "actor",
+        "mainActor",
+        "mutex",
+        "osAllocatedUnfairLock",
+        "nsLock"
+      ],
+      "operations": [
+        "onActor",
+        "fromBackgroundTask",
+        "fromManyTasks",
+        "fromMainActor",
+        "toMainActor"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000,
+          "mainActor": 400
+        },
+        "referenceLoopIterations": 1000000,
+        "asyncCode": {
+          "callsPerTask": 200,
+          "warmupCallsPerTask": 20
+        }
+      }
+    },
+    {
+      "name": "batching",
+      "experiment": "asyncCode",
+      "variant": "batching",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "actor",
+        "mutex"
+      ],
+      "operations": [
+        "oneAwaitPerGroup",
+        "awaitPerOperation",
+        "oneLockPerGroup"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "actor": 2000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "isolation-settings",
+      "experiment": "asyncCode",
+      "variant": "isolationSettings",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "templateDefaults",
+        "swift6Language",
+        "concurrentAttribute"
+      ],
+      "operations": [
+        "callFromMainActor"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 2,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 400
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}

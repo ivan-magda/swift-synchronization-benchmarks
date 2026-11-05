@@ -22,7 +22,7 @@ The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `v
 
 `samples`: `type` (`samples`), optional `block`, optional `thread`, `metric`, `unit`, `values`, optional `cpuAtStart` and `cpuAtEnd` (each as long as `values`). Values are raw unsigned 64-bit samples.
 
-`trial` (experiment 8B): `type` (`trial`), `block`, `trial` (starting at 0, warm-up trials first), `warmup`, `holderQoS`, the ticks `loadStart`, `loadStop`, `holderAcquire`, `holderRelease`, `mainArrival`, `mainAcquire`, `holderCPUReadings` (CPU numbers on the holder side at acquire and at release), `mainCPU` (CPU number of the main thread after it got the lock), `holderResultCorrect`, `mainObservedTrial` (the value the main thread read under the lock; the holder writes the trial index), `outcome` (`valid`, `censored`, `invalid`).
+`trial` (experiment 8B): `type` (`trial`), `block`, `trial` (starting at 0, warm-up trials first), `warmup`, `holderQoS` (`utility` for `utilityHolder`, `background` for `backgroundHolder`, matching the block's `qos`), the ticks `loadStart`, `loadStop`, `holderAcquire`, `holderRelease`, `mainArrival`, `mainAcquire`, `holderCPUReadings` (CPU numbers on the holder side at acquire and at release), `mainCPU` (CPU number of the main thread after it got the lock), `holderResultCorrect`, `mainObservedTrial` (the value the main thread read under the lock; the holder writes the trial index), `outcome` (`valid`, `censored`, `invalid`).
 
 A trial is `valid` when the main thread arrived while the holder held the lock (`holderAcquire < mainArrival < holderRelease`) and before the load stopped (`mainArrival < loadStop`), and got the lock no later than the load stop (`mainAcquire <= loadStop`). It is `censored` when the main thread arrived the same way but got the lock only after the load stopped (`mainAcquire > loadStop`): the wait is kept and reported apart, never as a measured wait. Every other trial is `invalid`: it is kept and counted, but its wait is never used.
 
@@ -53,11 +53,13 @@ with its block position; there is no separate run-level calibration check.
 `bench.py calibrate` writes `results/<phone>/calibration.json` from the accepted
 attempt: `attemptID`, `phone` (the run line's phone facts), `coreMap`
 (`performance`, `efficiency`, `medianTicksByCPU`) and `priorityInversion`. The
-holder work size uses integers only: it keeps the `holderWork` samples whose
+holder work calculation keeps the `holderWork` samples whose
 `cpuAtStart` equals `cpuAtEnd` and is a performance CPU of the core map (at least
-half of all samples, or calibration fails), takes their median ticks, and scales
-the measured iterations to 5 ms
-(`5_000_000 × timebaseDenominator // timebaseNumerator` ticks).
+half of all samples, or calibration fails), and takes `int(median(usableTicks))`.
+It computes the 5 ms target as
+`targetTicks = 5_000_000 × timebaseDenominator // timebaseNumerator`, then sets
+`holderWorkIterations = round(targetTicks × iterationsMeasured / medianTicks)`.
+The final division uses Python floating-point arithmetic and `round` returns an integer.
 `priorityInversion` holds `holderWorkIterations`, `targetMilliseconds` (5),
 `iterationsMeasured`, `medianTicks` and `samplesUsed`. A plan's
 `"holderWorkIterations": "fromCalibration"` is replaced with this integer before
@@ -93,7 +95,10 @@ Every block uses QoS `tunables.qos` and `operationsPerBatch` for its mechanism.
   `executorCPUReadings`, except `onActor`, whose loop already runs on the actor.
 - `fromManyTasks`: 50 tasks (`threads` 50) and no `batch` lines. Each task makes
   `asyncCode.warmupCallsPerTask` untimed calls, waits once for the others, then times
-  `asyncCode.callsPerTask` single calls. The block writes one `samples` line per task:
+  `asyncCode.callsPerTask` single calls. In the actor row, tasks wait a second time
+  after timing so task 0 reads the final counter only after all timed calls finish.
+  Lock rows read the final counter after all tasks have joined. The block writes
+  one `samples` line per task:
   `thread` (the task index, 0…49), metric `callTime`, unit `ticks`, `callsPerTask` values,
   no CPU readings.
 - `fromMainActor` and `toMainActor` also write two `samples` lines without `thread`:
@@ -125,9 +130,12 @@ the main thread equals that number for `templateDefaults` and 0 for the other tw
 (0 and 2 thread switches per call). The detail names both numbers, for example
 `calls 1200/1200; on main thread 1200, expected 1200`.
 
-The attempt checker's `ExpectedAttempt.check_per_block` is the experiment prefix
-`baseComparison` (followed by `.<operation>`) or the fixed calibration check name
-`calibration.samples`. `run_checks` is empty for both experiments.
+The attempt checker stores the required name in each `ExpectedBlock.check`:
+`baseComparison.<operation>`, `asyncCode.<operation>`,
+`priorityInversion.<operation>`, or the fixed calibration name `calibration.samples`.
+`ExpectedAttempt.blocks` maps each (mechanism, operation) pair to its expected work,
+including batch, samples and trial line counts. `ExpectedAttempt.run_checks` is
+empty for all four implemented experiments.
 
 ### Priority inversion (experiment 8B)
 
@@ -138,8 +146,9 @@ are `mutex`, `osAllocatedUnfairLock`, `osAllocatedUnfairLockAdaptiveSpin`, `osUn
 Operations are `utilityHolder` and `backgroundHolder`. A block has one thread and reports the
 holder's QoS (`utility` or `background`); the controller pthread runs at `tunables.qos`.
 Requests require nonempty, unique mechanism and operation lists, `tunables.threads` 1,
-and `tunables.priorityInversion`. `mainDelayMicroseconds` is 0…1,000,000 (at most one
-second), keeping the scheduled main-thread sleep below the five-second finish allowance.
+and `tunables.priorityInversion`. `mainDelayMicroseconds` is 0…1,000,000 inclusive
+(at most one second), keeping the scheduled main-thread sleep below the five-second
+finish allowance.
 Duration conversion must fit unsigned 64-bit nanoseconds and ticks: `loadMilliseconds`
 is at most 18,446,744,073,709, with a smaller limit when required by the recorded clock
 timebase. `pauseMilliseconds` is at most 4,294,967 so its microseconds fit `useconds_t`.

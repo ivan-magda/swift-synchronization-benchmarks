@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "name": "traced-async-code",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "traced": true,
+  "runs": [
+    {
+      "name": "isolation-settings",
+      "experiment": "asyncCode",
+      "variant": "isolationSettings",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "templateDefaults",
+        "swift6Language",
+        "concurrentAttribute"
+      ],
+      "operations": [
+        "callFromMainActor"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 1,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 200
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}
