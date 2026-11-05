@@ -22,9 +22,13 @@ enum SharedIntegers {
         case .mutex:
             return visitor.visitSynchronous(ProtectedInteger(MutexProtection(initialValue)))
         case .osAllocatedUnfairLock:
-            return visitor.visitSynchronous(ProtectedInteger(AllocatedUnfairLockProtection(initialValue)))
+            return visitor.visitSynchronous(
+                ProtectedInteger(AllocatedUnfairLockProtection(initialValue))
+            )
         case .osAllocatedUnfairLockAdaptiveSpin:
-            return visitor.visitSynchronous(ProtectedInteger(AdaptiveSpinUnfairLockProtection(initialValue)))
+            return visitor.visitSynchronous(
+                ProtectedInteger(AdaptiveSpinUnfairLockProtection(initialValue))
+            )
         case .osUnfairLock:
             return visitor.visitSynchronous(ProtectedInteger(UnfairLockProtection(initialValue)))
         case .nsLock:
@@ -34,13 +38,19 @@ enum SharedIntegers {
         case .pthreadMutex:
             return visitor.visitSynchronous(ProtectedInteger(PthreadMutexProtection(initialValue)))
         case .pthreadReadWriteLock:
-            return visitor.visitSynchronous(ProtectedInteger(PthreadReadWriteLockProtection(initialValue)))
+            return visitor.visitSynchronous(
+                ProtectedInteger(PthreadReadWriteLockProtection(initialValue))
+            )
         case .serialQueue:
             return visitor.visitSynchronous(ProtectedInteger(SerialQueueProtection(initialValue)))
         case .barrierQueueSyncWrite:
-            return visitor.visitSynchronous(ProtectedInteger(BarrierQueueSyncWriteProtection(initialValue)))
+            return visitor.visitSynchronous(
+                ProtectedInteger(BarrierQueueSyncWriteProtection(initialValue))
+            )
         case .barrierQueueAsyncWrite:
-            return visitor.visitSynchronous(ProtectedInteger(BarrierQueueAsyncWriteProtection(initialValue)))
+            return visitor.visitSynchronous(
+                ProtectedInteger(BarrierQueueAsyncWriteProtection(initialValue))
+            )
         case .dispatchSemaphore:
             return visitor.visitSynchronous(ProtectedInteger(SemaphoreProtection(initialValue)))
         case .objcSync:

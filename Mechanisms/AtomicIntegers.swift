@@ -14,11 +14,17 @@ final class AtomicInteger: SharedInteger {
     }
 
     func write(_ value: Int) {
-        self.value.store(value, ordering: .releasing)
+        self.value.store(
+            value,
+            ordering: .releasing
+        )
     }
 
     func increment() {
-        value.wrappingAdd(1, ordering: .acquiringAndReleasing)
+        value.wrappingAdd(
+            1,
+            ordering: .acquiringAndReleasing
+        )
     }
 }
 
@@ -35,11 +41,17 @@ final class RelaxedAtomicInteger: SharedInteger {
     }
 
     func write(_ value: Int) {
-        self.value.store(value, ordering: .relaxed)
+        self.value.store(
+            value,
+            ordering: .relaxed
+        )
     }
 
     func increment() {
-        value.wrappingAdd(1, ordering: .relaxed)
+        value.wrappingAdd(
+            1,
+            ordering: .relaxed
+        )
     }
 }
 
@@ -56,7 +68,10 @@ struct ManagedAtomicInteger: SharedInteger {
     }
 
     func write(_ value: Int) {
-        self.value.store(value, ordering: .releasing)
+        self.value.store(
+            value,
+            ordering: .releasing
+        )
     }
 
     func increment() {
@@ -77,7 +92,10 @@ struct RelaxedManagedAtomicInteger: SharedInteger {
     }
 
     func write(_ value: Int) {
-        self.value.store(value, ordering: .relaxed)
+        self.value.store(
+            value,
+            ordering: .relaxed
+        )
     }
 
     func increment() {

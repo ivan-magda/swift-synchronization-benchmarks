@@ -10,6 +10,9 @@ final class AdaptiveSpinUnfairLockProtection<State: Sendable>: StateProtection {
     func withExclusiveAccess<Result: Sendable>(
         _ body: @Sendable (inout State) -> Result
     ) -> Result {
-        state.withLock(flags: .adaptiveSpin, body)
+        state.withLock(
+            flags: .adaptiveSpin,
+            body
+        )
     }
 }

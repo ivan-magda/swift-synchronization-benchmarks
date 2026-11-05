@@ -3,7 +3,10 @@ import Dispatch
 /// State is accessed only on the concurrent queue, with every mutation in a barrier.
 /// Submitted writes retain the owner until their access to state has finished.
 final class BarrierQueueAsyncWriteProtection<State: Sendable>: StateProtection, @unchecked Sendable {
-    private let queue = DispatchQueue(label: "SyncBench.concurrent", attributes: .concurrent)
+    private let queue = DispatchQueue(
+        label: "SyncBench.concurrent",
+        attributes: .concurrent
+    )
     private var state: State
 
     init(_ initialState: State) {

@@ -13,7 +13,9 @@ final class SemaphoreProtection<State: Sendable>: StateProtection, @unchecked Se
         _ body: @Sendable (inout State) -> Result
     ) -> Result {
         semaphore.wait()
-        defer { semaphore.signal() }
+        defer {
+            semaphore.signal()
+        }
         return body(&state)
     }
 }

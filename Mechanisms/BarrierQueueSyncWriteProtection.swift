@@ -2,7 +2,10 @@ import Dispatch
 
 /// Reads run on the concurrent queue; barrier access excludes all other access.
 final class BarrierQueueSyncWriteProtection<State: Sendable>: StateProtection, @unchecked Sendable {
-    private let queue = DispatchQueue(label: "SyncBench.concurrent", attributes: .concurrent)
+    private let queue = DispatchQueue(
+        label: "SyncBench.concurrent",
+        attributes: .concurrent
+    )
     private var state: State
 
     init(_ initialState: State) {

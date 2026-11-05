@@ -13,7 +13,9 @@ final class NSLockProtection<State: Sendable>: StateProtection, @unchecked Senda
         _ body: @Sendable (inout State) -> Result
     ) -> Result {
         lock.lock()
-        defer { lock.unlock() }
+        defer {
+            lock.unlock()
+        }
         return body(&state)
     }
 }

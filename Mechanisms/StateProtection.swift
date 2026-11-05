@@ -47,7 +47,9 @@ extension StateProtection {
         }
     }
 
-    func waitForPendingWrites() {}
+    func waitForPendingWrites() {
+    }
 
-    func recordExecutorCPU(into slot: CPUReadingSlot) {}
+    func recordExecutorCPU(into slot: CPUReadingSlot) {
+    }
 }

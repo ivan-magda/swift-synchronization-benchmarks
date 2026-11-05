@@ -11,9 +11,11 @@ protocol SharedInteger: Sendable {
 }
 
 extension SharedInteger {
-    func waitForPendingWrites() {}
+    func waitForPendingWrites() {
+    }
 
-    func recordExecutorCPU(into slot: CPUReadingSlot) {}
+    func recordExecutorCPU(into slot: CPUReadingSlot) {
+    }
 
     func finalValue() -> Int {
         waitForPendingWrites()
@@ -42,7 +44,9 @@ struct ProtectedInteger<Protection: StateProtection>: SharedInteger where Protec
     }
 
     func read() -> Int {
-        protection.withSharedAccess { $0 }
+        protection.withSharedAccess {
+            $0
+        }
     }
 
     func write(_ value: Int) {

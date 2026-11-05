@@ -13,7 +13,9 @@ final class NSRecursiveLockProtection<State: Sendable>: StateProtection, @unchec
         _ body: @Sendable (inout State) -> Result
     ) -> Result {
         lock.lock()
-        defer { lock.unlock() }
+        defer {
+            lock.unlock()
+        }
         return body(&state)
     }
 }

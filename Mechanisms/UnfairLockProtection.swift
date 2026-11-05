@@ -15,7 +15,9 @@ final class UnfairLockProtection<State: Sendable>: StateProtection, @unchecked S
         _ body: @Sendable (inout State) -> Result
     ) -> Result {
         os_unfair_lock_lock(lock)
-        defer { os_unfair_lock_unlock(lock) }
+        defer {
+            os_unfair_lock_unlock(lock)
+        }
         return body(&state)
     }
 
