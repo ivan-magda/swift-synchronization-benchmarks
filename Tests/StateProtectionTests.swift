@@ -54,20 +54,18 @@ func readersOverlap(_ mechanism: MechanismID) async {
 
 @Test func asyncBarrierKeepsOrder() async {
     let observation = await onBenchmarkThread {
-        let protection = BarrierQueueAsyncWriteProtection<Int>(0)
+        let protection = BarrierQueueAsyncWriteInteger(0)
         let log = ThreadLog(batches: 1, readingsPerBatch: 1)
 
         for newValue in 0..<1_000 {
-            protection.write(newValue) { value, newValue in
-                value = newValue
-            }
+            protection.write(newValue)
         }
 
         protection.recordExecutorCPU(into: log.executorSlot(batch: 0, reading: 0))
         protection.waitForPendingWrites()
         // Observe completion before a synchronous read could drain the queue itself.
         let readings = log.executorCPUReadings(ofBatch: 0)
-        return (protection.withSharedAccess { $0 }, readings)
+        return (protection.read(), readings)
     }
 
     #expect(observation.0 == 999)

@@ -42,14 +42,14 @@ enum SharedIntegers {
                 ProtectedInteger(PthreadReadWriteLockProtection(initialValue))
             )
         case .serialQueue:
-            return visitor.visitSynchronous(ProtectedInteger(SerialQueueProtection(initialValue)))
+            return visitor.visitSynchronous(SerialQueueInteger(initialValue))
         case .barrierQueueSyncWrite:
             return visitor.visitSynchronous(
-                ProtectedInteger(BarrierQueueSyncWriteProtection(initialValue))
+                BarrierQueueSyncWriteInteger(initialValue)
             )
         case .barrierQueueAsyncWrite:
             return visitor.visitSynchronous(
-                ProtectedInteger(BarrierQueueAsyncWriteProtection(initialValue))
+                BarrierQueueAsyncWriteInteger(initialValue)
             )
         case .dispatchSemaphore:
             return visitor.visitSynchronous(ProtectedInteger(SemaphoreProtection(initialValue)))
