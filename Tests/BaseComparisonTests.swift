@@ -188,7 +188,11 @@ import Testing
             #expect(records.count == 3 * threads)
             #expect(records.allSatisfy { $0["operations"] as? Int == operations })
 
-            if mechanism == "actor" || mechanism == "mainActor" || mechanism == "barrierQueueAsyncWrite" {
+            let operation = try #require(block["operation"] as? String)
+            if mechanism == "barrierQueueAsyncWrite" && operation == "read" {
+                // Synchronous queue reads must not submit timed executor barriers.
+                #expect(records.allSatisfy { $0["executorCPUReadings"] == nil })
+            } else if mechanism == "actor" || mechanism == "mainActor" || mechanism == "barrierQueueAsyncWrite" {
                 #expect(records.allSatisfy { ($0["executorCPUReadings"] as? [Int])?.count == 5 })
             }
         }

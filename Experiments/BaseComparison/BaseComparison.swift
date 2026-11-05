@@ -116,8 +116,11 @@ private struct BaseComparisonVisitor: SharedIntegerVisitor {
                 layout: block.layout,
                 barrier: barrier,
                 log: log,
-                recordExecutorCPU: { integer.recordExecutorCPU(into: $0) },
-                waitForPendingWrites: { integer.waitForPendingWrites() },
+                // Reads execute synchronously on the caller; queue probes/drains would
+                // inject synthetic barriers into their timing. Final correctness still
+                // uses finalValue() after every worker's timed work has finished.
+                recordExecutorCPU: operation == .read ? { _ in } : { integer.recordExecutorCPU(into: $0) },
+                waitForPendingWrites: operation == .read ? {} : { integer.waitForPendingWrites() },
                 runOperations: { batch, subBatch, count in
                     switch operation {
                     case .read:

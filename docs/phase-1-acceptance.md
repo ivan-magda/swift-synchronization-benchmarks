@@ -9,7 +9,13 @@ and terminated the simulated hang at its 60-second limit.
 These are functional smoke checks. The plans mark their samples `smoke: true`;
 the iOS 26 base and calibration sessions also carry `dev: true` because the user
 was formatting repository files during acceptance. They do not establish
-performance rankings or replace the pilot.
+performance rankings or replace the pilot. The original async-write queue read
+batches also included synthetic instrumentation barriers; those historical files
+are functional smoke evidence, not unbiased read timing. The correction removes
+executor probes and pending-write drains from synchronous read timing, retains
+them for mutations, and keeps actor executor sampling. Its behavior is verified
+locally in Simulator and an unsigned Release build; no new device timing
+validation is claimed.
 
 A final read-only recount found all 18 original completed smoke attempts started with
 `applicationState: "inactive"`; 12 also ended inactive and six ended active.
