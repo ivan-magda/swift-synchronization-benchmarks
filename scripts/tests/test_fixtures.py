@@ -12,15 +12,31 @@ class FixturePrivacyTests(unittest.TestCase):
             if not path.is_file():
                 continue
             text = path.read_text()
-            self.assertNotRegex(text, r'(?i)ivan|/Users/|/home/|[0-9a-f]{8}-[0-9a-f]{16}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|[0-9a-f]{40}')
+            self.assertNotRegex(
+                text,
+                r'(?i)ivan|/Users/|/home/|[0-9a-f]{8}-[0-9a-f]{16}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|[0-9a-f]{40}',
+            )
             if path.suffix == '.json':
                 def inspect(value):
                     if isinstance(value, dict):
                         for key, item in value.items():
-                            if key.lower() in ('udid', 'identifier', 'deviceidentifier', 'serialnumber', 'ecid', 'name', 'potentialhostnames', 'arguments'):
-                                self.assertRegex(str(item), r'^(?:UDID-|DEVICE-|SERIAL-|ECID-|NAME-|HOST-|ARG-)')
+                            if key.lower() in (
+                                'udid',
+                                'identifier',
+                                'deviceidentifier',
+                                'serialnumber',
+                                'ecid',
+                                'name',
+                                'potentialhostnames',
+                                'arguments',
+                            ):
+                                self.assertRegex(
+                                    str(item),
+                                    r'^(?:UDID-|DEVICE-|SERIAL-|ECID-|NAME-|HOST-|ARG-)',
+                                )
                             inspect(item)
                     elif isinstance(value, list):
                         for item in value:
                             inspect(item)
+
                 inspect(json.loads(text))

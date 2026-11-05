@@ -21,7 +21,9 @@ from runner.sessions import SessionError, run_session, status_report
 
 
 def main(arguments: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Run iPhone synchronization benchmarks")
+    parser = argparse.ArgumentParser(
+        description="Run iPhone synchronization benchmarks"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     doctor = commands.add_parser("doctor")
@@ -53,55 +55,98 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         try:
             config = load_local_config(REPOSITORY / "local.json")
             results = REPOSITORY / "results"
+
             if arguments.command == "status":
                 plan = load_plan(arguments.plan)
                 for phone_key in config.phones:
                     print(status_report(plan, phone_key, results))
                 return 0
+
             if arguments.phone not in config.phones:
                 raise ConfigError("phone key is not configured")
+
             phone = config.phones[arguments.phone]
             now = datetime.now(timezone.utc)
 
             if arguments.command == "build":
-                info = build_app(arguments.target, config, phone, results, run_command, now)
+                info = build_app(
+                    arguments.target, config, phone, results, run_command, now
+                )
                 print(json.dumps(info, sort_keys=True))
                 return 0
 
-            path = REPOSITORY / "plans/calibration.json" if arguments.command == "calibrate" else arguments.plan
+            path = (
+                REPOSITORY / "plans/calibration.json"
+                if arguments.command == "calibrate"
+                else arguments.plan
+            )
             plan = load_plan(path) if path is not None else None
-            devices = DeviceControl(run_command, REPOSITORY / "build" / "private" / "devices")
+            devices = DeviceControl(
+                run_command, REPOSITORY / "build" / "private" / "devices"
+            )
+
             if arguments.command in ("run", "calibrate"):
                 info = latest_build(results, plan.build_target)
                 if info is None:
                     raise BuildError("build the plan target before starting a session")
                 summary = run_session(plan, phone, config, results, devices, info)
                 print(json.dumps(asdict(summary), sort_keys=True))
-                state = RunState.load_or_create(state_path(results, plan, phone.key, info["codeHash"]), plan)
-                accepted = [attempt for run in plan.runs for attempt in state.attempts(run.run_id)
-                            if attempt["accepted"]]
+                state = RunState.load_or_create(
+                    state_path(results, plan, phone.key, info["codeHash"]), plan
+                )
+                accepted = [
+                    attempt
+                    for run in plan.runs
+                    for attempt in state.attempts(run.run_id)
+                    if attempt["accepted"]
+                ]
                 if arguments.command == "calibrate" and accepted:
                     attempt = accepted[-1]
-                    files = [name for name in attempt.get("files", []) if name.endswith(".jsonl")]
+                    files = [
+                        name
+                        for name in attempt.get("files", [])
+                        if name.endswith(".jsonl")
+                    ]
                     if len(files) != 1:
-                        raise CalibrationError("accepted calibration must identify one result file")
+                        raise CalibrationError(
+                            "accepted calibration must identify one result file"
+                        )
                     result = (results / files[0]).resolve()
                     if not result.is_relative_to(results.resolve()):
-                        raise CalibrationError("accepted calibration file must be inside results")
+                        raise CalibrationError(
+                            "accepted calibration file must be inside results"
+                        )
                     core_map = derive_core_map(result)
                     with result.open(encoding="utf-8") as source:
                         facts = json.loads(source.readline())["phone"]
-                    calibration = dict(coreMap=core_map, attemptID=attempt["attemptID"], phone=facts)
+                    calibration = dict(
+                        coreMap=core_map, attemptID=attempt["attemptID"], phone=facts
+                    )
                     (results / phone.key / "calibration.json").write_text(
-                        json.dumps(calibration, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-                return 0 if len(accepted) == len(plan.runs) and summary.stop_reason is None else 1
+                        json.dumps(calibration, sort_keys=True, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                return (
+                    0
+                    if len(accepted) == len(plan.runs) and summary.stop_reason is None
+                    else 1
+                )
+
             findings = inspect_environment(
                 config, phone, plan, results, run_command, devices, now
             )
             print(json.dumps([asdict(item) for item in findings], sort_keys=True))
             return 0 if all(item.ok for item in findings) else 1
-        except (BuildError, CalibrationError, ConfigError, DeviceControlError, PlanError,
-                SessionError, StateError, OSError) as error:
+        except (
+            BuildError,
+            CalibrationError,
+            ConfigError,
+            DeviceControlError,
+            PlanError,
+            SessionError,
+            StateError,
+            OSError,
+        ) as error:
             # OSError can include private absolute paths; never print it verbatim.
             message = (
                 "local artifact could not be read or written"

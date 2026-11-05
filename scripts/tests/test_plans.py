@@ -9,8 +9,13 @@ import tempfile
 import unittest
 
 from runner.plans import (
-    PlanError, encode_request, load_plan, make_attempt_id, make_request,
-    make_run_id, make_run_seed,
+    PlanError,
+    encode_request,
+    load_plan,
+    make_attempt_id,
+    make_request,
+    make_run_id,
+    make_run_seed,
 )
 
 PLANS = Path(__file__).resolve().parents[2] / "plans"
@@ -29,7 +34,9 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(run_id, "smoke-base-comparison.one-thread.1")
         self.assertEqual(make_run_seed(20261105, run_id), 184828474630059)
         self.assertEqual(
-            make_attempt_id(run_id, 1, datetime(2026, 11, 5, tzinfo=timezone.utc), "abcd"),
+            make_attempt_id(
+                run_id, 1, datetime(2026, 11, 5, tzinfo=timezone.utc), "abcd"
+            ),
             "smoke-base-comparison.one-thread.1.attempt1.20261105T000000Z.abcd",
         )
 
@@ -39,13 +46,27 @@ class PlanTests(unittest.TestCase):
             run.run_id, 1, datetime(2026, 11, 5, tzinfo=timezone.utc), "abcd"
         )
         request = make_request(run, attempt_id, attempt=1)
-        self.assertEqual(set(request), {
-            "schema", "runID", "attemptID", "attempt", "experiment", "variant",
-            "seed", "smoke", "mechanisms", "operations", "tunables",
-        })
+        self.assertEqual(
+            set(request),
+            {
+                "schema",
+                "runID",
+                "attemptID",
+                "attempt",
+                "experiment",
+                "variant",
+                "seed",
+                "smoke",
+                "mechanisms",
+                "operations",
+                "tunables",
+            },
+        )
         encoded = base64.b64decode(encode_request(request)).decode("utf-8")
         self.assertEqual(json.loads(encoded), request)
-        self.assertEqual(encoded, json.dumps(request, sort_keys=True, separators=(",", ":")))
+        self.assertEqual(
+            encoded, json.dumps(request, sort_keys=True, separators=(",", ":"))
+        )
         request["tunables"]["threads"] = 64
         self.assertNotEqual(run.tunables["threads"], 64)
 
@@ -55,16 +76,22 @@ class PlanTests(unittest.TestCase):
                 plan = load_plan(PLANS / name)
                 self.assertEqual(plan.runs, load_plan(PLANS / name).runs)
                 self.assertEqual(len(plan.runs), 2)
-                self.assertEqual({run.variant for run in plan.runs}, {"oneThread", "twoThreads"})
+                self.assertEqual(
+                    {run.variant for run in plan.runs}, {"oneThread", "twoThreads"}
+                )
         document = json.loads(SMOKE_PLAN.read_text())
         document["seed"] = 0
         document["runs"] = document["runs"][:1]
         document["runs"][0]["repeats"] = 3
+
         # Random(0) shuffles positions 1, 2, 3 into 1, 3, 2 on both supported Pythons.
         self.assertEqual(
             [run.run_id for run in self.load_document(document).runs],
-            ["smoke-base-comparison.one-thread.1", "smoke-base-comparison.one-thread.3",
-             "smoke-base-comparison.one-thread.2"],
+            [
+                "smoke-base-comparison.one-thread.1",
+                "smoke-base-comparison.one-thread.3",
+                "smoke-base-comparison.one-thread.2",
+            ],
         )
 
     def test_unshuffled_plan_keeps_file_order_and_simulation(self):
@@ -79,19 +106,37 @@ class PlanTests(unittest.TestCase):
         )
 
     def test_acceptance_plans_cover_all_four_thread_counts(self):
-        for name in ("acceptance-base-comparison.json", "acceptance-base-comparison-ios18.json"):
+        for name in (
+            "acceptance-base-comparison.json",
+            "acceptance-base-comparison-ios18.json",
+        ):
             plan = load_plan(PLANS / name)
             self.assertTrue(plan.smoke)
-            self.assertEqual({run.variant: run.tunables["threads"] for run in plan.runs}, {
-                "oneThread": 1, "twoThreads": 2, "sixThreads": 6, "twelveThreads": 12,
-            })
+            self.assertEqual(
+                {run.variant: run.tunables["threads"] for run in plan.runs},
+                {
+                    "oneThread": 1,
+                    "twoThreads": 2,
+                    "sixThreads": 6,
+                    "twelveThreads": 12,
+                },
+            )
             for run in plan.runs:
                 if plan.build_target == "ios18":
-                    self.assertEqual(set(run.mechanisms), {
-                        "mutex", "atomic", "atomicRelaxed", "managedAtomic", "managedAtomicRelaxed",
-                    })
+                    self.assertEqual(
+                        set(run.mechanisms),
+                        {
+                            "mutex",
+                            "atomic",
+                            "atomicRelaxed",
+                            "managedAtomic",
+                            "managedAtomicRelaxed",
+                        },
+                    )
                 else:
-                    self.assertEqual(len(run.mechanisms), 20 if run.variant == "oneThread" else 19)
+                    self.assertEqual(
+                        len(run.mechanisms), 20 if run.variant == "oneThread" else 19
+                    )
                     self.assertEqual(
                         "unsynchronized" in run.mechanisms, run.variant == "oneThread"
                     )
@@ -102,7 +147,12 @@ class PlanTests(unittest.TestCase):
         request = make_request(plan.runs[0], "calibration-attempt", 1)
         self.assertEqual(request["tunables"]["repeats"], 200)
         self.assertEqual(
-            (request["experiment"], request["variant"], request["mechanisms"], request["operations"]),
+            (
+                request["experiment"],
+                request["variant"],
+                request["mechanisms"],
+                request["operations"],
+            ),
             ("calibration", "default", [], []),
         )
 
@@ -114,7 +164,10 @@ class PlanTests(unittest.TestCase):
         plan = self.load_document(document)
         self.assertEqual(
             [run.run_id for run in plan.runs],
-            ["smoke-base-comparison.one-thread.1", "smoke-base-comparison.one-thread.2"],
+            [
+                "smoke-base-comparison.one-thread.1",
+                "smoke-base-comparison.one-thread.2",
+            ],
         )
         self.assertNotEqual(plan.runs[0].seed, plan.runs[1].seed)
 
@@ -124,18 +177,30 @@ class PlanTests(unittest.TestCase):
             ("buildTarget", lambda value: value.pop("buildTarget")),
             ("buildTarget", lambda value: value.update(buildTarget="ios17")),
             ("repeats", lambda value: value["runs"][0].update(repeats=0)),
-            ("name", lambda value: value["runs"][1].update(name=value["runs"][0]["name"])),
-            ("simulation", lambda value: (
-                value.update(smoke=False, iosBuild="24A1"),
-                value["runs"][0].update(simulation="crash"),
-            )),
+            (
+                "name",
+                lambda value: value["runs"][1].update(name=value["runs"][0]["name"]),
+            ),
+            (
+                "simulation",
+                lambda value: (
+                    value.update(smoke=False, iosBuild="24A1"),
+                    value["runs"][0].update(simulation="crash"),
+                ),
+            ),
             ("iosBuild", lambda value: value.update(smoke=False)),
             ("schema", lambda value: value.update(schema=True)),
-            ("seed", lambda value: value.update(seed=2 ** 53)),
-            ("threads", lambda value: value["runs"][0]["tunables"].update(threads=65)),
-            ("operationsPerBatch", lambda value: value["runs"][0]["tunables"].update(
-                operationsPerBatch={"default": 5}
-            )),
+            ("seed", lambda value: value.update(seed=2**53)),
+            (
+                "threads",
+                lambda value: value["runs"][0]["tunables"].update(threads=65),
+            ),
+            (
+                "operationsPerBatch",
+                lambda value: value["runs"][0]["tunables"].update(
+                    operationsPerBatch={"default": 5}
+                ),
+            ),
             ("qos", lambda value: value["runs"][0]["tunables"].update(qos="urgent")),
             ("maxAttempts", lambda value: value.update(maxAttempts=0)),
             ("smoke", lambda value: value.update(smoke="yes")),

@@ -1,4 +1,5 @@
 """Resumable sessions with bounded device waits and a durable record per launch."""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -41,18 +42,25 @@ def utc_now() -> datetime:
 
 
 def _caffeinate(arguments: Sequence[str]):
-    return subprocess.Popen(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return subprocess.Popen(
+        arguments, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
 
 def _write_json(path: Path, document: Any) -> None:
-    path.write_text(json.dumps(document, sort_keys=True, indent=2, allow_nan=False) + '\n', encoding='utf-8')
+    path.write_text(
+        json.dumps(document, sort_keys=True, indent=2, allow_nan=False) + '\n',
+        encoding='utf-8',
+    )
 
 
 def _await_exit(devices, phone, bundle_id, pid, seconds, sleep, monotonic) -> bool:
     # Await and polling share one deadline, including time consumed by a failed await.
     deadline = monotonic() + seconds
     try:
-        exited, _ = devices.await_termination(phone.udid, pid, max(0.001, deadline - monotonic()))
+        exited, _ = devices.await_termination(
+            phone.udid, pid, max(0.001, deadline - monotonic())
+        )
         if monotonic() >= deadline:
             return False
         if exited:
@@ -62,7 +70,9 @@ def _await_exit(devices, phone, bundle_id, pid, seconds, sleep, monotonic) -> bo
     while monotonic() < deadline:
         remaining = deadline - monotonic()
         try:
-            pids = devices.running_pids(phone.udid, bundle_id, timeout_seconds=remaining)
+            pids = devices.running_pids(
+                phone.udid, bundle_id, timeout_seconds=remaining
+            )
         except DeviceControlError:
             if monotonic() >= deadline:
                 return False
@@ -76,10 +86,29 @@ def _await_exit(devices, phone, bundle_id, pid, seconds, sleep, monotonic) -> bo
 # Identity fields present in modern IPS and legacy crash reports. Keep diagnostic frames,
 # symbols, offsets and hardware facts; retain the original only under ignored build/private.
 _IDENTITY_KEYS = {
-    'incident', 'incidentid', 'incidentidentifier', 'crashreporterkey', 'deviceidentifier',
-    'deviceid', 'devicename', 'udid', 'serialnumber', 'ecid', 'teamid', 'teamidentifier',
-    'signingid', 'signingidentifier', 'bundleid', 'bundleidentifier', 'cfbundleidentifier',
-    'coalitionname', 'userid', 'anonymousuuid', 'hostname', 'username', 'appleid',
+    'incident',
+    'incidentid',
+    'incidentidentifier',
+    'crashreporterkey',
+    'deviceidentifier',
+    'deviceid',
+    'devicename',
+    'udid',
+    'serialnumber',
+    'ecid',
+    'teamid',
+    'teamidentifier',
+    'signingid',
+    'signingidentifier',
+    'bundleid',
+    'bundleidentifier',
+    'cfbundleidentifier',
+    'coalitionname',
+    'userid',
+    'anonymousuuid',
+    'hostname',
+    'username',
+    'appleid',
 }
 
 
@@ -104,7 +133,11 @@ def _scrub_crash(raw: str, config: LocalConfig, root: Path, context: str = '') -
     def collect(value):
         if isinstance(value, dict):
             for key, item in value.items():
-                if _identity_key(key) and isinstance(item, (str, int)) and not isinstance(item, bool):
+                if (
+                    _identity_key(key)
+                    and isinstance(item, (str, int))
+                    and not isinstance(item, bool)
+                ):
                     private_values.add(str(item))
                 collect(item)
         elif isinstance(value, list):
@@ -132,29 +165,45 @@ def _scrub_crash(raw: str, config: LocalConfig, root: Path, context: str = '') -
 
     def scrub(value):
         if isinstance(value, dict):
-            return {key: '<redacted>' if _identity_key(key) else scrub(item)
-                    for key, item in value.items()}
+            return {
+                key: '<redacted>' if _identity_key(key) else scrub(item)
+                for key, item in value.items()
+            }
         if isinstance(value, list):
             return [scrub(item) for item in value]
         return scrub_text(value) if isinstance(value, str) else value
 
     if documents:
-        return ''.join(json.dumps(scrub(document), sort_keys=True, indent=2) + '\n'
-                       for document in documents)
+        return ''.join(
+            json.dumps(scrub(document), sort_keys=True, indent=2) + '\n'
+            for document in documents
+        )
     # Legacy text reports have the same identities as labelled header lines.
     for line in raw.splitlines():
         label, separator, value = line.partition(':')
         if separator and _identity_key(label.strip()):
             private_values.add(value.strip())
-    raw = re.sub(r'(?im)^((?:Incident Identifier|CrashReporter Key|Device Name|Identifier|'
-                 r'Team Identifier|User ID|Anonymous UUID|Serial Number)\s*:).*$', r'\1 <redacted>', raw)
+    raw = re.sub(
+        r'(?im)^((?:Incident Identifier|CrashReporter Key|Device Name|Identifier|'
+        r'Team Identifier|User ID|Anonymous UUID|Serial Number)\s*:).*$',
+        r'\1 <redacted>',
+        raw,
+    )
     return scrub_text(raw)
 
 
 def _copy_crashes(devices, phone, config, results, folder, attempt_id, launched):
-    private = results.resolve().parent / 'build/private/sessions' / folder.name / 'crash' / attempt_id
+    private = (
+        results.resolve().parent
+        / 'build/private/sessions'
+        / folder.name
+        / 'crash'
+        / attempt_id
+    )
     public = folder / 'crash' / attempt_id
-    for index, source in enumerate(devices.crash_logs(phone.udid, 'SyncBench', newer_than=launched)):
+    for index, source in enumerate(
+        devices.crash_logs(phone.udid, 'SyncBench', newer_than=launched)
+    ):
         private.mkdir(parents=True, exist_ok=True)
         # Device filenames can themselves contain private identities.
         name = f'{index + 1}.ips'
@@ -162,30 +211,52 @@ def _copy_crashes(devices, phone, config, results, folder, attempt_id, launched)
         if not devices.copy_crash_log(phone.udid, source, original):
             continue
         raw = original.read_bytes()
-        scrubbed = _scrub_crash(raw.decode('utf-8', errors='replace'), config, results.resolve().parent)
+        scrubbed = _scrub_crash(
+            raw.decode('utf-8', errors='replace'), config, results.resolve().parent
+        )
         public.mkdir(parents=True, exist_ok=True)
         (public / name).write_text(scrubbed, encoding='utf-8')
-        source_name = _scrub_crash(Path(source).name, config, results.resolve().parent,
-                                   context=raw.decode('utf-8', errors='replace')).strip()
-        _write_json((public / name).with_suffix('.provenance.json'), {
-            'attemptID': attempt_id, 'source': source_name, 'sha256': hashlib.sha256(raw).hexdigest(),
-            'scrubbedSHA256': hashlib.sha256(scrubbed.encode('utf-8')).hexdigest(),
-            'scrubbed': True, 'launchedAt': launched.isoformat(),
-        })
+        source_name = _scrub_crash(
+            Path(source).name,
+            config,
+            results.resolve().parent,
+            context=raw.decode('utf-8', errors='replace'),
+        ).strip()
+        _write_json(
+            (public / name).with_suffix('.provenance.json'),
+            {
+                'attemptID': attempt_id,
+                'source': source_name,
+                'sha256': hashlib.sha256(raw).hexdigest(),
+                'scrubbedSHA256': hashlib.sha256(scrubbed.encode('utf-8')).hexdigest(),
+                'scrubbed': True,
+                'launchedAt': launched.isoformat(),
+            },
+        )
 
 
 def run_session(
-    plan: Plan, phone: Phone, config: LocalConfig, results: Path,
-    devices: DeviceControl, build_info: Dict[str, Any],
+    plan: Plan,
+    phone: Phone,
+    config: LocalConfig,
+    results: Path,
+    devices: DeviceControl,
+    build_info: Dict[str, Any],
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], datetime] = utc_now,
     log: Callable[[str], None] = print,
-    *, inspect_environment=doctor, command=run_command, caffeinate=_caffeinate,
+    *,
+    inspect_environment=doctor,
+    command=run_command,
+    caffeinate=_caffeinate,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> SessionSummary:
-    findings = inspect_environment(config, phone, plan, results, command, devices, now(),
-                                   build_info=build_info)
-    failed = [finding.name + ': ' + finding.detail for finding in findings if not finding.ok]
+    findings = inspect_environment(
+        config, phone, plan, results, command, devices, now(), build_info=build_info
+    )
+    failed = [
+        finding.name + ': ' + finding.detail for finding in findings if not finding.ok
+    ]
     if failed:
         raise SessionError('doctor failed: ' + '; '.join(failed))
     if build_info.get('target') != plan.build_target:
@@ -198,17 +269,30 @@ def run_session(
         if relative_app.is_absolute() or not app.is_dir():
             raise ValueError()
     except (KeyError, TypeError, ValueError):
-        raise SessionError('build app must be an existing repository-relative path') from None
-    state = RunState.load_or_create(state_path(results, plan, phone.key, build_info['codeHash']), plan)
+        raise SessionError(
+            'build app must be an existing repository-relative path'
+        ) from None
+    state = RunState.load_or_create(
+        state_path(results, plan, phone.key, build_info['codeHash']), plan
+    )
     started = now().astimezone(timezone.utc)
-    session_id = started.strftime('%Y%m%dT%H%M%SZ') + '.' + plan.name + '.' + uuid4().hex[:8]
+    session_id = (
+        started.strftime('%Y%m%dT%H%M%SZ') + '.' + plan.name + '.' + uuid4().hex[:8]
+    )
     folder = results / phone.key / session_id
     folder.mkdir(parents=True)
     summary = SessionSummary(session_id, 0, 0, 0, None)
-    metadata = dict(phone=phone.key, model=phone.model, osBuild=None,
-                    buildID=build_info['buildID'], codeHash=build_info['codeHash'],
-                    dev=bool(build_info.get('dirty')), plan=plan.name,
-                    planSHA256=plan.sha256, start=started.isoformat())
+    metadata = dict(
+        phone=phone.key,
+        model=phone.model,
+        osBuild=None,
+        buildID=build_info['buildID'],
+        codeHash=build_info['codeHash'],
+        dev=bool(build_info.get('dirty')),
+        plan=plan.name,
+        planSHA256=plan.sha256,
+        start=started.isoformat(),
+    )
     _write_json(folder / 'session.json', metadata)
     (folder / 'session.log').touch()
     caffeine = None
@@ -229,11 +313,14 @@ def run_session(
             return summary
         sleep(plan.settle_seconds)
         failures = 0
+
         for run in state.pending_runs():
             while True:
                 attempts = state.attempts(run.run_id)
-                thermal_count = sum(a.get('status') == 'refused' and a.get('reasonCode') == 'thermal'
-                                    for a in attempts)
+                thermal_count = sum(
+                    a.get('status') == 'refused' and a.get('reasonCode') == 'thermal'
+                    for a in attempts
+                )
                 if thermal_count > plan.max_thermal_retries:
                     summary.stop_reason = 'thermal'
                     break
@@ -242,30 +329,52 @@ def run_session(
                     break
                 attempt_number = len(attempts) + 1
                 launched = now().astimezone(timezone.utc)
-                attempt_id = make_attempt_id(run.run_id, attempt_number, launched, uuid4().hex[:8])
+                attempt_id = make_attempt_id(
+                    run.run_id, attempt_number, launched, uuid4().hex[:8]
+                )
                 request = make_request(run, attempt_id, attempt_number)
                 verdict = AttemptVerdict('launchFailed', False, None, [])
                 stop = None
                 pid = None
                 try:
-                    pid = devices.launch(phone.udid, config.bundle_id,
-                                         ['--bench-request', encode_request(request)])
+                    pid = devices.launch(
+                        phone.udid,
+                        config.bundle_id,
+                        ['--bench-request', encode_request(request)],
+                    )
                 except (DeviceControlError, OSError):
                     stop = 'launch failed'
                     verdict.reasons.append(stop)
+
                 if pid is not None:
                     try:
-                        exited = _await_exit(devices, phone, config.bundle_id, pid,
-                                             run.time_limit_seconds, sleep, monotonic)
+                        exited = _await_exit(
+                            devices,
+                            phone,
+                            config.bundle_id,
+                            pid,
+                            run.time_limit_seconds,
+                            sleep,
+                            monotonic,
+                        )
                         if not exited:
-                            verdict = AttemptVerdict('timeout', False, None, ['run time limit exceeded'])
+                            verdict = AttemptVerdict(
+                                'timeout', False, None, ['run time limit exceeded']
+                            )
                             devices.terminate(phone.udid, pid)
                         else:
-                            verdict = AttemptVerdict('crashed', False, None, ['app exited without a done marker'])
+                            verdict = AttemptVerdict(
+                                'crashed',
+                                False,
+                                None,
+                                ['app exited without a done marker'],
+                            )
                     except (DeviceControlError, OSError):
                         stop = 'device wait or termination failed'
                         if verdict.status != 'timeout':
-                            verdict = AttemptVerdict('deviceFailed', False, None, [stop])
+                            verdict = AttemptVerdict(
+                                'deviceFailed', False, None, [stop]
+                            )
                             try:
                                 devices.terminate(phone.udid, pid)
                             except DeviceControlError:
@@ -286,15 +395,38 @@ def run_session(
                             raise KeyboardInterrupt()
                         result = folder / (attempt_id + '.jsonl')
                         marker = folder / (attempt_id + '.done')
-                        devices.copy_from_app(phone.udid, config.bundle_id, 'Documents/runs/' + result.name, result)
-                        has_marker = devices.copy_from_app(phone.udid, config.bundle_id, 'Documents/runs/' + marker.name, marker)
+                        devices.copy_from_app(
+                            phone.udid,
+                            config.bundle_id,
+                            'Documents/runs/' + result.name,
+                            result,
+                        )
+                        has_marker = devices.copy_from_app(
+                            phone.udid,
+                            config.bundle_id,
+                            'Documents/runs/' + marker.name,
+                            marker,
+                        )
                         files_copied = True
                         if verdict.status not in ('timeout', 'deviceFailed'):
                             if has_marker:
-                                verdict = check_attempt(result, marker, request, build_info['buildID'])
-                                _write_json(folder / (attempt_id + '.check.json'), asdict(verdict))
+                                verdict = check_attempt(
+                                    result, marker, request, build_info['buildID']
+                                )
+                                _write_json(
+                                    folder / (attempt_id + '.check.json'),
+                                    asdict(verdict),
+                                )
                             else:
-                                _copy_crashes(devices, phone, config, results, folder, attempt_id, launched)
+                                _copy_crashes(
+                                    devices,
+                                    phone,
+                                    config,
+                                    results,
+                                    folder,
+                                    attempt_id,
+                                    launched,
+                                )
                     except (DeviceControlError, OSError):
                         stop = 'result or crash copy failed'
                         if verdict.status not in ('timeout', 'deviceFailed', 'crashed'):
@@ -308,11 +440,20 @@ def run_session(
                         stop = 'interrupted'
                         if verdict.status != 'timeout':
                             verdict = AttemptVerdict('interrupted', False, None, [stop])
-                record = dict(time=now().astimezone(timezone.utc).isoformat(), runID=run.run_id,
-                              attemptID=attempt_id, attempt=attempt_number, status=verdict.status,
-                              accepted=verdict.accepted, reasons=verdict.reasons,
-                              sessionID=session_id, files=[path.relative_to(results).as_posix()
-                                                         for path in sorted(folder.glob(attempt_id + '.*'))])
+                record = dict(
+                    time=now().astimezone(timezone.utc).isoformat(),
+                    runID=run.run_id,
+                    attemptID=attempt_id,
+                    attempt=attempt_number,
+                    status=verdict.status,
+                    accepted=verdict.accepted,
+                    reasons=verdict.reasons,
+                    sessionID=session_id,
+                    files=[
+                        path.relative_to(results).as_posix()
+                        for path in sorted(folder.glob(attempt_id + '.*'))
+                    ],
+                )
                 if verdict.reason_code is not None:
                     record['reasonCode'] = verdict.reason_code
                 state.record_attempt(run.run_id, record)
@@ -368,13 +509,20 @@ def run_session(
 def status_report(plan: Plan, phone_key: str, results: Path) -> str:
     info = latest_build(results, plan.build_target)
     if info is None:
-        return f'{phone_key}: accepted 0, rejected 0, refused 0, pending {len(plan.runs)}, exhausted 0 (no build)'
-    state = RunState.load_or_create(state_path(results, plan, phone_key, info['codeHash']), plan)
+        return (
+            f'{phone_key}: accepted 0, rejected 0, refused 0, '
+            f'pending {len(plan.runs)}, exhausted 0 (no build)'
+        )
+    state = RunState.load_or_create(
+        state_path(results, plan, phone_key, info['codeHash']), plan
+    )
     attempts = [attempt for run in plan.runs for attempt in state.attempts(run.run_id)]
     accepted = sum(attempt['accepted'] for attempt in attempts)
     refused = sum(attempt.get('status') == 'refused' for attempt in attempts)
     rejected = len(attempts) - accepted - refused
     pending = len(state.pending_runs())
     exhausted = len(plan.runs) - accepted - pending
-    return (f'{phone_key}: accepted {accepted}, rejected {rejected}, refused {refused}, '
-            f'pending {pending}, exhausted {exhausted}')
+    return (
+        f'{phone_key}: accepted {accepted}, rejected {rejected}, refused {refused}, '
+        f'pending {pending}, exhausted {exhausted}'
+    )

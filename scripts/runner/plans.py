@@ -55,8 +55,14 @@ def _identifier(value: Any, key: str) -> str:
     return value
 
 
-def _integer(value: Any, key: str, minimum: int = 0, maximum: Optional[int] = None) -> int:
-    if type(value) is not int or value < minimum or (maximum is not None and value > maximum):
+def _integer(
+    value: Any, key: str, minimum: int = 0, maximum: Optional[int] = None
+) -> int:
+    if (
+        type(value) is not int
+        or value < minimum
+        or (maximum is not None and value > maximum)
+    ):
         raise PlanError(key + " must be an integer in the allowed range")
     return value
 
@@ -81,13 +87,19 @@ def _tunables(value: Any) -> Dict[str, Any]:
         raise PlanError("tunables must be an object")
     _integer(value.get("threads"), "tunables.threads", 1, 64)
     if value.get("qos") not in (
-        "userInteractive", "userInitiated", "default", "utility", "background"
+        "userInteractive",
+        "userInitiated",
+        "default",
+        "utility",
+        "background",
     ):
         raise PlanError("tunables.qos is invalid")
     _integer(value.get("warmupBatches"), "tunables.warmupBatches")
     _integer(value.get("measuredBatches"), "tunables.measuredBatches", 1)
     sub_batches = _integer(value.get("subBatches"), "tunables.subBatches", 1)
-    _integer(value.get("referenceLoopIterations"), "tunables.referenceLoopIterations", 1)
+    _integer(
+        value.get("referenceLoopIterations"), "tunables.referenceLoopIterations", 1
+    )
     operations = value.get("operationsPerBatch")
     if not isinstance(operations, dict) or "default" not in operations:
         raise PlanError("tunables.operationsPerBatch requires default")
@@ -95,7 +107,9 @@ def _tunables(value: Any) -> Dict[str, Any]:
         _identifier(key, "tunables.operationsPerBatch")
         _integer(count, "tunables.operationsPerBatch", sub_batches)
         if count % sub_batches:
-            raise PlanError("tunables.operationsPerBatch must be a multiple of subBatches")
+            raise PlanError(
+                "tunables.operationsPerBatch must be a multiple of subBatches"
+            )
     if "repeats" in value:
         _integer(value["repeats"], "tunables.repeats", 1)
     return deepcopy(value)
@@ -109,9 +123,11 @@ def make_run_id(plan_name: str, entry_name: str, repeat: int) -> str:
 
 
 def make_run_seed(plan_seed: int, run_id: str) -> int:
-    _integer(plan_seed, "seed", 0, 2 ** 53 - 1)
+    _integer(plan_seed, "seed", 0, 2**53 - 1)
     _identifier(run_id, "runID")
-    return int(hashlib.sha256(f"{plan_seed}:{run_id}".encode("utf-8")).hexdigest()[:13], 16)
+    return int(
+        hashlib.sha256(f"{plan_seed}:{run_id}".encode("utf-8")).hexdigest()[:13], 16
+    )
 
 
 def make_attempt_id(run_id: str, attempt: int, now: datetime, suffix: str) -> str:
@@ -143,12 +159,16 @@ def load_plan(path: Path) -> Plan:
         _identifier(ios_build, "iosBuild")
     elif not smoke:
         raise PlanError("iosBuild is required outside smoke plans")
-    seed = _integer(document.get("seed"), "seed", 0, 2 ** 53 - 1)
+    seed = _integer(document.get("seed"), "seed", 0, 2**53 - 1)
     shuffle = _boolean(document.get("shuffle", True), "shuffle")
     settle = _integer(document.get("settleSeconds"), "settleSeconds")
     pause = _integer(document.get("pauseSeconds"), "pauseSeconds")
-    thermal_wait = _integer(document.get("thermalWaitSeconds", 300), "thermalWaitSeconds")
-    thermal_retries = _integer(document.get("maxThermalRetries", 3), "maxThermalRetries")
+    thermal_wait = _integer(
+        document.get("thermalWaitSeconds", 300), "thermalWaitSeconds"
+    )
+    thermal_retries = _integer(
+        document.get("maxThermalRetries", 3), "maxThermalRetries"
+    )
     max_attempts = _integer(document.get("maxAttempts", 3), "maxAttempts", 1)
     entries = document.get("runs")
     if not isinstance(entries, list) or not entries:
@@ -165,24 +185,47 @@ def load_plan(path: Path) -> Plan:
         experiment = _identifier(entry.get("experiment"), "runs.experiment")
         variant = _identifier(entry.get("variant"), "runs.variant")
         repeats = _integer(entry.get("repeats"), "runs.repeats", 1)
-        time_limit = _integer(entry.get("timeLimitSeconds"), "runs.timeLimitSeconds", 1)
+        time_limit = _integer(
+            entry.get("timeLimitSeconds"), "runs.timeLimitSeconds", 1
+        )
         simulation = entry.get("simulation")
         if "simulation" in entry and (not smoke or simulation not in ("crash", "hang")):
             raise PlanError("runs.simulation requires smoke and crash or hang")
         mechanisms = _strings(entry.get("mechanisms"), "runs.mechanisms")
         operations = _strings(entry.get("operations"), "runs.operations")
         tunables = _tunables(entry.get("tunables"))
+
         for repeat in range(1, repeats + 1):
             run_id = make_run_id(name, entry_name, repeat)
-            runs.append(PlannedRun(
-                run_id, experiment, variant, make_run_seed(seed, run_id), smoke,
-                simulation, mechanisms, operations, deepcopy(tunables), time_limit,
-            ))
+            runs.append(
+                PlannedRun(
+                    run_id,
+                    experiment,
+                    variant,
+                    make_run_seed(seed, run_id),
+                    smoke,
+                    simulation,
+                    mechanisms,
+                    operations,
+                    deepcopy(tunables),
+                    time_limit,
+                )
+            )
     if shuffle:
         random.Random(seed).shuffle(runs)
     return Plan(
-        name, build_target, smoke, ios_build, seed, shuffle, settle, pause,
-        thermal_wait, thermal_retries, max_attempts, tuple(runs),
+        name,
+        build_target,
+        smoke,
+        ios_build,
+        seed,
+        shuffle,
+        settle,
+        pause,
+        thermal_wait,
+        thermal_retries,
+        max_attempts,
+        tuple(runs),
         hashlib.sha256(raw).hexdigest(),
     )
 
@@ -191,10 +234,17 @@ def make_request(run: PlannedRun, attempt_id: str, attempt: int) -> Dict[str, An
     _identifier(attempt_id, "attemptID")
     _integer(attempt, "attempt", 1)
     request = {
-        "schema": 1, "runID": run.run_id, "attemptID": attempt_id, "attempt": attempt,
-        "experiment": run.experiment, "variant": run.variant, "seed": run.seed,
-        "smoke": run.smoke, "mechanisms": list(run.mechanisms),
-        "operations": list(run.operations), "tunables": deepcopy(run.tunables),
+        "schema": 1,
+        "runID": run.run_id,
+        "attemptID": attempt_id,
+        "attempt": attempt,
+        "experiment": run.experiment,
+        "variant": run.variant,
+        "seed": run.seed,
+        "smoke": run.smoke,
+        "mechanisms": list(run.mechanisms),
+        "operations": list(run.operations),
+        "tunables": deepcopy(run.tunables),
     }
     if run.simulation is not None:
         request["simulation"] = run.simulation
@@ -202,5 +252,7 @@ def make_request(run: PlannedRun, attempt_id: str, attempt: int) -> Dict[str, An
 
 
 def encode_request(request: Dict[str, Any]) -> str:
-    encoded = json.dumps(request, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    encoded = json.dumps(
+        request, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
     return base64.b64encode(encoded.encode("utf-8")).decode("ascii")

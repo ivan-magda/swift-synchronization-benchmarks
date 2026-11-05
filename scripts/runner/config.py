@@ -43,6 +43,7 @@ def load_local_config(path: Path) -> LocalConfig:
         raise ConfigError("local config must be valid JSON") from None
     if not isinstance(document, dict):
         raise ConfigError("local config must be an object")
+
     team_id = _text(document, "teamID")
     bundle_id = _text(document, "bundleID")
     entries = document.get("phones")
@@ -54,5 +55,9 @@ def load_local_config(path: Path) -> LocalConfig:
             raise ConfigError("phones key must be a safe identifier")
         if not isinstance(entry, dict):
             raise ConfigError("phones entry must be an object")
-        phones[key] = Phone(key, _text(entry, "udid", "phones."), _text(entry, "model", "phones."))
+        phones[key] = Phone(
+            key,
+            _text(entry, "udid", "phones."),
+            _text(entry, "model", "phones."),
+        )
     return LocalConfig(team_id, bundle_id, phones)

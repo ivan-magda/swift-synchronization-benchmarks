@@ -25,17 +25,26 @@ class ExpectedAttempt:
 def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt:
     tunables = request["tunables"]
     if request["experiment"] == "baseComparison":
-        blocks = frozenset((mechanism, operation)
-                           for mechanism in request["mechanisms"]
-                           for operation in request["operations"])
+        blocks = frozenset(
+            (mechanism, operation)
+            for mechanism in request["mechanisms"]
+            for operation in request["operations"]
+        )
         threads = tunables["threads"]
         warmup = tunables["warmupBatches"]
         measured = tunables["measuredBatches"]
         samples = None
         check = "baseComparison"
     elif request["experiment"] == "calibration":
-        blocks = frozenset((mechanism, "") for mechanism in (
-            "clockSingleThread", "clockAllCPUs", "cpuSpeedUserInteractive", "cpuSpeedBackground"))
+        blocks = frozenset(
+            (mechanism, "")
+            for mechanism in (
+                "clockSingleThread",
+                "clockAllCPUs",
+                "cpuSpeedUserInteractive",
+                "cpuSpeedBackground",
+            )
+        )
         threads = cpu_count
         warmup = 0
         measured = 0
@@ -45,7 +54,15 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
         raise ValueError("request.experiment is not supported by the attempt checker")
     operations = tunables["operationsPerBatch"]
     return ExpectedAttempt(
-        blocks, threads, warmup, measured, samples,
-        {mechanism: operations.get(mechanism, operations["default"])
-         for mechanism, _ in blocks}, check, frozenset(),
+        blocks,
+        threads,
+        warmup,
+        measured,
+        samples,
+        {
+            mechanism: operations.get(mechanism, operations["default"])
+            for mechanism, _ in blocks
+        },
+        check,
+        frozenset(),
     )

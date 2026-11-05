@@ -24,7 +24,11 @@ def state_path(results: Path, plan: Plan, phone_key: str, code_hash: str) -> Pat
     for key, value in (("plan hash", plan.sha256), ("code hash", code_hash)):
         if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
             raise StateError(key + " must be a SHA-256 hash")
-    return results / "state" / f"{plan.name}--{phone_key}--{plan.sha256[:8]}--{code_hash[:8]}.json"
+    return (
+        results
+        / "state"
+        / f"{plan.name}--{phone_key}--{plan.sha256[:8]}--{code_hash[:8]}.json"
+    )
 
 
 class RunState:
@@ -51,7 +55,10 @@ class RunState:
             or document["schema"] != 1
         ):
             raise StateError("state schema must be 1")
-        if document.get("planName") != plan.name or document.get("planSHA256") != plan.sha256:
+        if (
+            document.get("planName") != plan.name
+            or document.get("planSHA256") != plan.sha256
+        ):
             raise StateError("state planName and planSHA256 must match the plan")
         runs = document.get("runs")
         if not isinstance(runs, dict) or set(runs) != {run.run_id for run in plan.runs}:
@@ -102,16 +109,22 @@ class RunState:
 
     def save(self) -> None:
         document = {
-            "schema": 1, "planName": self.plan.name,
-            "planSHA256": self.plan.sha256, "runs": self._runs,
+            "schema": 1,
+            "planName": self.plan.name,
+            "planSHA256": self.plan.sha256,
+            "runs": self._runs,
         }
         encoded = json.dumps(document, sort_keys=True, indent=2, allow_nan=False) + "\n"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = None
         try:
             with tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", dir=self.path.parent,
-                prefix=self.path.name + ".", suffix=".tmp", delete=False,
+                mode="w",
+                encoding="utf-8",
+                dir=self.path.parent,
+                prefix=self.path.name + ".",
+                suffix=".tmp",
+                delete=False,
             ) as output:
                 temporary = Path(output.name)
                 output.write(encoded)

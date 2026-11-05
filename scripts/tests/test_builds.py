@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime, timezone
+from pathlib import Path
 
-from runner.builds import (build, code_hash, latest_build, make_build_id,
-                           profile_expiry, xcodebuild_arguments)
+from runner.builds import (
+    build,
+    code_hash,
+    latest_build,
+    make_build_id,
+    profile_expiry,
+    xcodebuild_arguments,
+)
 from runner.config import LocalConfig, Phone
 from runner.processes import ProcessResult
 
@@ -34,12 +40,24 @@ class BuildRunner:
         elif '--show-sdk-version' in arguments:
             output = '27.1\n'
         elif '-showBuildSettings' in arguments:
-            output = json.dumps([{'target': 'SyncBench', 'buildSettings': {
-                'SWIFT_VERSION': '6.0', 'SWIFT_OPTIMIZATION_LEVEL': '-O',
-                'DEVELOPMENT_TEAM': CONFIG.team_id,
-                'PRODUCT_BUNDLE_IDENTIFIER': CONFIG.bundle_id}}])
+            output = json.dumps(
+                [
+                    {
+                        'target': 'SyncBench',
+                        'buildSettings': {
+                            'SWIFT_VERSION': '6.0',
+                            'SWIFT_OPTIMIZATION_LEVEL': '-O',
+                            'DEVELOPMENT_TEAM': CONFIG.team_id,
+                            'PRODUCT_BUNDLE_IDENTIFIER': CONFIG.bundle_id,
+                        },
+                    }
+                ]
+            )
         elif arguments[0] == 'xcodebuild' and arguments[-1] == 'build':
-            product = Path(arguments[arguments.index('-derivedDataPath') + 1]) / 'Build/Products/Release-iphoneos/SyncBench.app'
+            product = (
+                Path(arguments[arguments.index('-derivedDataPath') + 1])
+                / 'Build/Products/Release-iphoneos/SyncBench.app'
+            )
             product.mkdir(parents=True, exist_ok=True)
             (product / 'SyncBench').write_bytes(b'codeSIGNATURE')
             (product / 'embedded.mobileprovision').write_bytes(b'profile')
@@ -55,14 +73,24 @@ class BuildsTests(unittest.TestCase):
     # These cover persisted metadata, signature-independent identity, and build settings:
     # separate contracts need more than the usual three tests.
     def test_build_id_format(self):
-        self.assertEqual(make_build_id('0123456789abcdef', False, 'ios26', NOW),
-                         '0123456789ab-clean-ios26-20261105T000000Z')
+        self.assertEqual(
+            make_build_id('0123456789abcdef', False, 'ios26', NOW),
+            '0123456789ab-clean-ios26-20261105T000000Z',
+        )
 
     def test_ios18_arguments(self):
-        arguments = xcodebuild_arguments('ios18', CONFIG, PHONE, 'build-id', 'abc', True, Path('build/ios18'))
-        for setting in ('IPHONEOS_DEPLOYMENT_TARGET=18.0', 'BENCH_BUILD_ID=build-id',
-                        'BENCH_GIT_COMMIT=abc', 'BENCH_GIT_DIRTY=YES', 'BENCH_BUILD_TARGET=ios18',
-                        'DEVELOPMENT_TEAM=TEAM-PRIVATE', 'PRODUCT_BUNDLE_IDENTIFIER=dev.private.fixture'):
+        arguments = xcodebuild_arguments(
+            'ios18', CONFIG, PHONE, 'build-id', 'abc', True, Path('build/ios18')
+        )
+        for setting in (
+            'IPHONEOS_DEPLOYMENT_TARGET=18.0',
+            'BENCH_BUILD_ID=build-id',
+            'BENCH_GIT_COMMIT=abc',
+            'BENCH_GIT_DIRTY=YES',
+            'BENCH_BUILD_TARGET=ios18',
+            'DEVELOPMENT_TEAM=TEAM-PRIVATE',
+            'PRODUCT_BUNDLE_IDENTIFIER=dev.private.fixture',
+        ):
             self.assertIn(setting, arguments)
         self.assertIn('-allowProvisioningDeviceRegistration', arguments)
         self.assertEqual(arguments[-1], 'build')
@@ -73,26 +101,37 @@ class BuildsTests(unittest.TestCase):
             info = build('ios26', CONFIG, PHONE, results, BuildRunner(), NOW)
             stored = results / 'builds' / info['buildID'] / 'build-info.json'
             document = stored.read_text()
+
             for private in (CONFIG.team_id, CONFIG.bundle_id, PHONE.udid, temporary):
                 self.assertNotIn(private, document)
+
             self.assertFalse(Path(info['app']).is_absolute())
             self.assertTrue(info['app'].startswith('build/artifacts/'))
             self.assertFalse(any(results.rglob('*.app')))
-            self.assertEqual((results.parent / info['app'] / 'SyncBench').read_bytes(),
-                             b'codeSIGNATURE')
-            self.assertEqual(info['codeHash'], '5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b')
+            self.assertEqual(
+                (results.parent / info['app'] / 'SyncBench').read_bytes(),
+                b'codeSIGNATURE',
+            )
+            self.assertEqual(
+                info['codeHash'],
+                '5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b',
+            )
             self.assertEqual(info['settings']['SWIFT_VERSION'], '6.0')
             self.assertEqual(latest_build(results, 'ios26'), info)
             self.assertIsNone(latest_build(results, 'ios18'))
 
     def test_profile_expiry_is_read(self):
-        self.assertEqual(profile_expiry(Path('app'), BuildRunner()),
-                         datetime(2026, 11, 12, tzinfo=timezone.utc))
+        self.assertEqual(
+            profile_expiry(Path('app'), BuildRunner()),
+            datetime(2026, 11, 12, tzinfo=timezone.utc),
+        )
 
     def test_code_hash_ignores_the_signature_without_mutating_executable(self):
         with tempfile.TemporaryDirectory() as temporary:
             executable = Path(temporary) / 'SyncBench'
             executable.write_bytes(b'codeSIGNATURE')
-            self.assertEqual(code_hash(executable, BuildRunner()),
-                             '5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b')
+            self.assertEqual(
+                code_hash(executable, BuildRunner()),
+                '5694d08a2e53ffcae0c3103e5ad6f6076abd960eb1f8a56577040bc1028f702b',
+            )
             self.assertEqual(executable.read_bytes(), b'codeSIGNATURE')

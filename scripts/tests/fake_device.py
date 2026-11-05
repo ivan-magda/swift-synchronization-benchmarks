@@ -1,15 +1,17 @@
 """Scripted device boundary; real request expansion, result files and checks stay intact."""
+
 from __future__ import annotations
 
 import base64
+import json
+import shutil
 from collections import deque
 from datetime import datetime, timezone
-import json
 from pathlib import Path
-import shutil
 from typing import List
 
 from runner.device_control import DeviceControlError, DeviceInfo
+
 from tests.synthetic_attempts import make_attempt_lines, write_attempt
 
 
@@ -47,6 +49,7 @@ class FakeCaffeinate:
 
 class FakeDevice:
     """Consume an outcome per launch; keep copied bytes and process effects observable."""
+
     def __init__(self, folder: Path, outcomes, build_id='fixture-build', clock=None):
         self.folder = folder
         folder.mkdir(parents=True, exist_ok=True)
@@ -70,7 +73,11 @@ class FakeDevice:
         self.crash_source = 'SyncBench-fixture.ips'
 
     def list_devices(self):
-        return [DeviceInfo('FICTIONAL-DEVICE', 'iPhoneFixture', '26.0', 'FIXTURE-BUILD', True, True)]
+        return [
+            DeviceInfo(
+                'FICTIONAL-DEVICE', 'iPhoneFixture', '26.0', 'FIXTURE-BUILD', True, True
+            )
+        ]
 
     def is_unlocked(self, udid):
         if self.outcomes and self.outcomes[0] == 'locked':
@@ -87,12 +94,18 @@ class FakeDevice:
         self.current = self.outcomes.popleft() if self.outcomes else 'complete'
         if self.current == 'launch-failed':
             raise DeviceControlError('private launch failure')
-        request = json.loads(base64.b64decode(app_arguments[app_arguments.index('--bench-request') + 1]))
+
+        request = json.loads(
+            base64.b64decode(app_arguments[app_arguments.index('--bench-request') + 1])
+        )
         self.requests.append(request)
+
         if self.current not in ('crash', 'hang'):
             status = 'refused' if self.current.startswith('refuse-') else 'completed'
             reason = self.current.split('-', 1)[1] if status == 'refused' else None
-            write_attempt(self.folder, make_attempt_lines(request, self.build_id, status, reason))
+            write_attempt(
+                self.folder, make_attempt_lines(request, self.build_id, status, reason)
+            )
         return 321
 
     def await_termination(self, udid, pid, timeout_seconds):
@@ -133,11 +146,17 @@ class FakeDevice:
     def copy_crash_log(self, udid, name, destination):
         if self.crash_copy_error:
             raise DeviceControlError('private crash copy failure')
-        destination.write_text(json.dumps({
-            'procName': 'SyncBench', 'incident_id': 'FICTIONAL-INCIDENT',
-            'deviceIdentifier': 'FICTIONAL-DEVICE', 'crashReporterKey': 'FICTIONAL-REPORTER',
-            'bundleInfo': {'CFBundleIdentifier': 'example.fixture.bench'},
-            'procPath': '/private/var/containers/FICTIONAL-DEVICE/SyncBench.app/SyncBench',
-            'frames': [{'symbol': 'benchmark', 'imageOffset': 123}],
-        }))
+        destination.write_text(
+            json.dumps(
+                {
+                    'procName': 'SyncBench',
+                    'incident_id': 'FICTIONAL-INCIDENT',
+                    'deviceIdentifier': 'FICTIONAL-DEVICE',
+                    'crashReporterKey': 'FICTIONAL-REPORTER',
+                    'bundleInfo': {'CFBundleIdentifier': 'example.fixture.bench'},
+                    'procPath': '/private/var/containers/FICTIONAL-DEVICE/SyncBench.app/SyncBench',
+                    'frames': [{'symbol': 'benchmark', 'imageOffset': 123}],
+                }
+            )
+        )
         return True

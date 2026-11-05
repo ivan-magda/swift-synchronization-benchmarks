@@ -16,14 +16,26 @@ class ProcessResult:
 CommandRunner = Callable[[Sequence[str], Optional[float]], ProcessResult]
 
 
-def run_command(arguments: Sequence[str], timeout_seconds: Optional[float] = None) -> ProcessResult:
+def run_command(
+    arguments: Sequence[str], timeout_seconds: Optional[float] = None
+) -> ProcessResult:
     command = list(map(str, arguments))
     try:
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout_seconds)
-        return ProcessResult(command, completed.returncode, completed.stdout, completed.stderr)
+        completed = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout_seconds
+        )
+        return ProcessResult(
+            command, completed.returncode, completed.stdout, completed.stderr
+        )
     except subprocess.TimeoutExpired as error:
+
         def text(value):
-            return value.decode('utf-8', errors='replace') if isinstance(value, bytes) else value or ''
+            return (
+                value.decode('utf-8', errors='replace')
+                if isinstance(value, bytes)
+                else value or ''
+            )
+
         return ProcessResult(command, 124, text(error.stdout), text(error.stderr))
     except OSError:
         # Do not expose arguments or host paths through an exception.
