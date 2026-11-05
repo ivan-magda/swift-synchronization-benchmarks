@@ -64,6 +64,49 @@ the measured iterations to 5 ms
 launch; the session records `calibrationAttemptID` in `session.json`, and stops
 before installation when the file or its `priorityInversion` is missing.
 
+### Async code (experiment 7)
+
+The variant picks a table of operations; each operation lists the mechanisms measured with it
+(`AsyncCode.rows` in Swift):
+
+| Variant | Operation | Mechanisms |
+|---|---|---|
+| `callerPaths` | `onActor` | `actor` |
+| `callerPaths` | `fromBackgroundTask` | `actor`, `mutex`, `osAllocatedUnfairLock`, `nsLock` |
+| `callerPaths` | `fromManyTasks` | `actor`, `mutex`, `osAllocatedUnfairLock`, `nsLock` |
+| `callerPaths` | `fromMainActor` | `actor`, `mutex`, `osAllocatedUnfairLock`, `nsLock` |
+| `callerPaths` | `toMainActor` | `mainActor` |
+| `batching` | `oneAwaitPerGroup`, `awaitPerOperation` | `actor` |
+| `batching` | `oneLockPerGroup` | `mutex` |
+| `isolationSettings` | `callFromMainActor` | `templateDefaults`, `swift6Language`, `concurrentAttribute` |
+
+The blocks are the requested (operation, mechanism) pairs that the table allows. A request
+is rejected when the variant is not in the table, when `tunables.threads` is not 1, when
+`mechanisms` or `operations` is empty or repeats a value, when a requested mechanism or
+operation is in no allowed pair, or when `fromManyTasks` is requested without `asyncCode`.
+Every block uses QoS `tunables.qos` and `operationsPerBatch` for its mechanism. The app
+runs `callerPaths` now; `batching` and `isolationSettings` are added with experiments 7B
+and 7C.
+
+`callerPaths` blocks:
+- `onActor`, `fromBackgroundTask`, `fromMainActor`, `toMainActor`: one task (`threads` 1)
+  and the usual `batch` lines. The `actor` and `mainActor` rows carry
+  `executorCPUReadings`, except `onActor`, whose loop already runs on the actor.
+- `fromManyTasks`: 50 tasks (`threads` 50) and no `batch` lines. Each task makes
+  `asyncCode.warmupCallsPerTask` untimed calls, waits once for the others, then times
+  `asyncCode.callsPerTask` single calls. The block writes one `samples` line per task:
+  `thread` (the task index, 0…49), metric `callTime`, unit `ticks`, `callsPerTask` values,
+  no CPU readings.
+- `fromMainActor` and `toMainActor` also write two `samples` lines without `thread`:
+  metrics `mainThreadCPUAtBatchStart` and `mainThreadCPUAtBatchEnd`, unit `microseconds`,
+  one value per batch, warm-up batches first (`warmupBatches + measuredBatches` values).
+  A value is the main thread's user plus system CPU time, read just before the batch's start
+  tick or just after its end tick.
+
+Each block has one check, `asyncCode.<operation>`, with its block position: the counter's
+final value equals `threads × (warmupBatches + measuredBatches) × operationsPerBatch`, or
+`50 × (warmupCallsPerTask + callsPerTask)` for `fromManyTasks`.
+
 The attempt checker's `ExpectedAttempt.check_per_block` is the experiment prefix
 `baseComparison` (followed by `.<operation>`) or the fixed calibration check name
 `calibration.samples`. `run_checks` is empty for both experiments.
