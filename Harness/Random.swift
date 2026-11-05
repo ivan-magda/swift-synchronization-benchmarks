@@ -17,11 +17,16 @@ struct SplitMix64: RandomNumberGenerator {
 
 /// Fisher–Yates, using one generator value for each position from the end.
 func seededShuffle<Element>(_ items: [Element], seed: UInt64) -> [Element] {
-    guard items.count > 1 else { return items }
+    guard items.count > 1 else {
+      return items
+    }
+
     var shuffled = items
     var generator = SplitMix64(seed: seed)
+
     for index in stride(from: shuffled.count - 1, through: 1, by: -1) {
         shuffled.swapAt(index, Int(generator.next() % UInt64(index + 1)))
     }
+
     return shuffled
 }
