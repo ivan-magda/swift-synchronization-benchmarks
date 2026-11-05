@@ -35,30 +35,42 @@ struct DoneMarker: Codable, Equatable, Sendable {
 
 enum ResultWriter {
     /// Publish the result atomically before publishing its completion marker.
-    static func write(_ lines: ResultLineBuffer, attemptID: String, to directory: URL) throws
-        -> DoneMarker
-    {
+    static func write(
+        _ lines: ResultLineBuffer,
+        attemptID: String,
+        to directory: URL
+    ) throws -> DoneMarker {
         guard RunRequest.isValidIdentifier(attemptID) else {
             throw RequestError(message: "attemptID cannot be used as a result filename")
         }
+
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
         let filename = attemptID + ".jsonl"
         let markerURL = directory.appending(path: attemptID + ".done")
+
         // A retry with the same ID must never leave an older completion marker
         // describing a new file if publication is interrupted.
         if FileManager.default.fileExists(atPath: markerURL.path) {
             try FileManager.default.removeItem(at: markerURL)
         }
+
         try lines.data.write(to: directory.appending(path: filename), options: .atomic)
+
+        let checksum = SHA256.hash(data: lines.data)
+            .map { String(format: "%02x", $0) }
+            .joined()
         let marker = DoneMarker(
             attemptID: attemptID,
             file: filename,
             bytes: lines.data.count,
-            sha256: SHA256.hash(data: lines.data).map { String(format: "%02x", $0) }.joined()
+            sha256: checksum
         )
+
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         try encoder.encode(marker).write(to: markerURL, options: .atomic)
+
         return marker
     }
 }
