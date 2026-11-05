@@ -11,16 +11,15 @@ the iOS 26 base and calibration sessions also carry `dev: true` because the user
 was formatting repository files during acceptance. They do not establish
 performance rankings or replace the pilot.
 
-A final read-only recount found all 18 completed attempts started with
+A final read-only recount found all 18 original completed smoke attempts started with
 `applicationState: "inactive"`; 12 also ended inactive and six ended active.
 Smoke bypasses the hard preflight conditions, so these accepted files establish
 smoke correctness and runner integration only. They do not establish a working
 non-smoke launch lifecycle. The corrected app waits for actual application and
 foreground-scene activation plus two active display callbacks before consuming
 the request, and resets that delay on interrupted activation. Simulator lifecycle
-ordering tests cover this correction. A supplemental physical non-smoke run
-verified it on iphone11, as recorded below. Corrected lifecycle acceptance on
-iphone15 remains pending.
+ordering tests cover this correction. Supplemental physical non-smoke runs
+verified startup on both phones, as recorded below.
 
 ## Corrected lifecycle supplement
 
@@ -28,29 +27,41 @@ After the user unlocked iphone11, I built the corrected app from clean HEAD
 `a0bdaff3066fd0df0b0650114e07a27f1784a449`, which includes the activation-gate
 fix `3429bbe`. The installed build was
 `a0bdaff3066f-clean-ios26-20261105T064732Z`.
-Session `20261105T064745Z.final-lifecycle-iphone11.9a69a53f` accepted its one
-non-smoke attempt with no rejection, refusal, or stop reason.
+The provisioning profile covers both configured phones, so I reused that same
+signed app after the user unlocked iphone15. Each session accepted its one
+non-smoke attempt with no rejection, refusal, or stop reason:
 
-The private plan pins the observed iOS build `23G71`, sets `smoke: false`,
+| Phone | Pinned iOS build | Session ID |
+| --- | --- | --- |
+| iphone11 | `23G71` | `20261105T064745Z.final-lifecycle-iphone11.9a69a53f` |
+| iphone15 | `23G90` | `20261105T065156Z.final-lifecycle-iphone15.617534d3` |
+
+Each private plan pins its observed iOS build, sets `smoke: false`,
 and runs Mutex read/write/increment on one thread, with one warm-up and two
 measured batches of 10,000 operations per block. It keeps the normal strict
-preflight and a 60-second launch/run limit. Its SHA-256 is
-`22fdaf97913a40e8f200dca948a23d0dd567e2a9e4a7669e3d83aac93cc285bf`.
+preflight and a 60-second launch/run limit. The plan SHA-256 values are:
 
-The result records `applicationState: "active"` at both start and end,
-nominal thermal state, Low Power Mode off, battery full, no debugger, and an
-empty watched environment. It has three passing block checks, three warm-up
-batch lines, and six measured batch lines. The session has `dev: false`.
-An independent `bench.py check`, using a request reconstructed from the plan
-and the expected build ID, accepted the file and marker with exit status 0.
-No preflight condition or phone setting changed for this check.
+- iphone11: `22fdaf97913a40e8f200dca948a23d0dd567e2a9e4a7669e3d83aac93cc285bf`.
+- iphone15: `8bf0629cf69ae033762de983d0ff5ae2351064250b0461be221f668303f71677`.
+
+Both results record `applicationState: "active"` at start and end,
+nominal thermal state, Low Power Mode off, no debugger, and an empty watched
+environment. The battery was full on iphone11 and charging on iphone15.
+Each result has three passing block checks, three warm-up batch lines, and six
+measured batch lines. Both sessions have `dev: false`. Independent
+`bench.py check` invocations, using requests reconstructed from the plans and
+the expected build ID, accepted both file/marker pairs with exit status 0.
+No preflight condition or phone setting changed for these checks.
+
+The first iphone15 invocation stopped in doctor because its live unlock check
+failed, before installation or launch. After the user unlocked it again and
+kept the screen on, the immediate retry produced the accepted session above.
 
 Two builds from the same clean source have the same exact stripped-executable
 hash; the [build-check supplement](build-checks/2026-11-phase-1.md#corrected-app-build-supplement)
-records that evidence. This short run verifies startup and strict preflight on
-iphone11. The earlier smoke files remain intact; iphone15's corrected lifecycle,
-the full final-binary matrix, and matched-OS performance measurements remain
-outside this supplement.
+records that evidence. These short runs verify startup and strict preflight on
+both phones. The earlier smoke files remain intact; the full final-binary matrix
+and matched-OS performance measurements remain outside this supplement.
 
 ## Environment and provenance
 
@@ -88,7 +99,7 @@ have the exact executable hash recorded in the
 pair proves iOS 26 hash stability for that prior source snapshot without binary
 normalization. The later lifecycle correction changes the app; that earlier
 hash evidence applies to the earlier binary. The supplement records a new signed
-build pair and a physical check of the corrected binary on iphone11. Concurrent
+build pair and physical checks of the corrected binary on both phones. Concurrent
 formatting changed earlier snapshots; I did not use those pairs as proof.
 
 The base and calibration sessions used the then-current runner. The crash
