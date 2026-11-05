@@ -47,6 +47,29 @@ class FakeCaffeinate:
         return 0
 
 
+class FakeRecorder:
+    """Control trace startup delay/failure and expose resource lifecycle ordering."""
+
+    def __init__(self, events, clock, start_elapsed=0, start_error=None):
+        self.events = events
+        self.clock = clock
+        self.start_elapsed = start_elapsed
+        self.start_error = start_error
+        self.started = None
+        self.stopped = False
+
+    def start(self, udid, output, time_limit_seconds):
+        self.events.append('trace start')
+        self.started = (udid, output, time_limit_seconds)
+        self.clock.seconds += self.start_elapsed
+        if self.start_error is not None:
+            raise self.start_error
+
+    def stop(self):
+        self.events.append('trace stop')
+        self.stopped = True
+
+
 class FakeDevice:
     """Script launches and delayed crash listings; expose copied bytes and process effects."""
 
@@ -57,6 +80,7 @@ class FakeDevice:
         self.build_id = build_id
         self.clock = clock or FakeClock()
         self.requests = []
+        self.events = []
         self.terminated = []
         self.installed = []
         self.copies = []
@@ -98,6 +122,7 @@ class FakeDevice:
         self.installed.append(app)
 
     def launch(self, udid, bundle_id, app_arguments, timeout_seconds=60):
+        self.events.append('launch')
         self.launch_timeouts.append(timeout_seconds)
         self.clock.seconds += self.launch_elapsed
         self.current = self.outcomes.popleft() if self.outcomes else 'complete'
@@ -120,6 +145,7 @@ class FakeDevice:
         return 321
 
     def await_termination(self, udid, pid, timeout_seconds):
+        self.events.append('await exit')
         self.wait_timeouts.append(timeout_seconds)
         self.clock.seconds += self.wait_elapsed
         if self.interrupt_wait:
@@ -137,11 +163,13 @@ class FakeDevice:
         return [321] if self.current == 'hang' else []
 
     def terminate(self, udid, pid):
+        self.events.append('terminate')
         self.terminated.append(pid)
         if self.terminate_error:
             raise DeviceControlError('private terminate failure')
 
     def copy_from_app(self, udid, bundle_id, source, destination):
+        self.events.append('copy')
         self.copies.append(source)
         if self.copy_error:
             raise DeviceControlError('private copy failure')

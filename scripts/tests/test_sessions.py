@@ -5,18 +5,21 @@ from contextlib import redirect_stdout
 from dataclasses import replace
 from io import StringIO
 import json
+import signal
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 from runner.config import LocalConfig, Phone
 from runner.doctor import DoctorFinding
 from runner.plans import load_plan
 from runner.run_state import RunState, state_path
 from runner.sessions import SessionError, run_session, status_report
+from runner.trace_recorder import TraceRecorder
 
-from tests.fake_device import FakeCaffeinate, FakeClock, FakeDevice
+from tests.fake_device import FakeCaffeinate, FakeClock, FakeDevice, FakeRecorder
 
 PLANS = Path(__file__).resolve().parents[2] / 'plans'
 PHONE = Phone('fixture', 'FICTIONAL-DEVICE', 'iPhoneFixture')
@@ -116,6 +119,124 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(
             {r['variant'] for r in self.devices.requests}, {'oneThread', 'twoThreads'}
         )
+
+    def traced_run(self):
+        self.plan = replace(
+            self.plan,
+            traced=True,
+            runs=(replace(self.plan.runs[0], traced=True),),
+        )
+
+    def test_trace_covers_launch_and_exit_before_copy_and_records_relative_path(self):
+        self.traced_run()
+        recorder = FakeRecorder(self.devices.events, self.clock, start_elapsed=45)
+        summary = self.run_session(['complete'], recorder_factory=lambda: recorder)
+        self.assertEqual(summary.accepted, 1)
+        self.assertEqual(
+            self.devices.events,
+            ['trace start', 'launch', 'await exit', 'trace stop', 'copy', 'copy'],
+        )
+        attempt = self.state().attempts(self.plan.runs[0].run_id)[0]
+        trace_file = 'traces/' + attempt['attemptID'] + '.trace'
+        folder = self.results / PHONE.key / summary.session_id
+        self.assertEqual(recorder.started, (PHONE.udid, folder / trace_file, 360))
+        self.assertTrue((folder / 'traces').is_dir())
+        self.assertTrue(attempt['traced'])
+        self.assertEqual(attempt['traceFile'], trace_file)
+        self.assertEqual(json.loads((folder / 'session.log').read_text()), attempt)
+        self.assertTrue(self.devices.requests[0]['traced'])
+        # A slow trace startup must not consume any of the app's 300-second budget.
+        self.assertEqual(self.devices.launch_timeouts, [300])
+        self.assertEqual(self.devices.wait_timeouts, [300])
+
+    def test_trace_stops_after_timeout_termination_and_before_copy(self):
+        self.traced_run()
+        recorder = FakeRecorder(self.devices.events, self.clock)
+        summary = self.run_session(['hang'], recorder_factory=lambda: recorder)
+        self.assertEqual((summary.accepted, summary.rejected), (0, 1))
+        self.assertEqual(
+            self.devices.events,
+            [
+                'trace start', 'launch', 'await exit', 'terminate',
+                'trace stop', 'copy', 'copy',
+            ],
+        )
+        self.assertEqual(
+            self.state().attempts(self.plan.runs[0].run_id)[0]['status'], 'timeout'
+        )
+
+    def test_trace_start_failure_cleans_up_and_never_launches(self):
+        self.traced_run()
+        recorder = FakeRecorder(
+            self.devices.events,
+            self.clock,
+            start_error=SessionError('System Trace did not start within 60 seconds'),
+        )
+        with self.assertRaisesRegex(SessionError, 'System Trace did not start'):
+            self.run_session(['complete'], recorder_factory=lambda: recorder)
+        self.assertEqual(self.devices.events, ['trace start', 'trace stop'])
+        self.assertTrue(self.caffeine.stopped)
+        self.assertEqual(self.state().attempts(self.plan.runs[0].run_id), [])
+        metadata_path = next(self.results.glob('fixture/*/session.json'))
+        metadata = json.loads(metadata_path.read_text())
+        self.assertEqual(metadata['summary']['stop_reason'], 'System Trace failed')
+
+    def test_untraced_runs_create_no_recorder_or_trace_metadata(self):
+        def unexpected_recorder():
+            self.fail('untraced attempt created a recorder')
+
+        summary = self.run_session(
+            ['complete', 'complete'], recorder_factory=unexpected_recorder
+        )
+        self.assertEqual(summary.accepted, 2)
+        folder = self.results / PHONE.key / summary.session_id
+        self.assertFalse((folder / 'traces').exists())
+        for run in self.plan.runs:
+            attempt = self.state().attempts(run.run_id)[0]
+            self.assertNotIn('traced', attempt)
+            self.assertNotIn('traceFile', attempt)
+
+    def test_trace_stops_on_launch_failure_and_interrupted_wait(self):
+        self.traced_run()
+        for outcome, interrupted, expected_events, status in [
+            (
+                'launch-failed', False,
+                ['trace start', 'launch', 'trace stop'], 'launchFailed',
+            ),
+            (
+                'hang', True,
+                ['trace start', 'launch', 'await exit', 'terminate', 'trace stop'],
+                'interrupted',
+            ),
+        ]:
+            with self.subTest(outcome=outcome):
+                self.devices.events.clear()
+                self.devices.interrupt_wait = interrupted
+                recorder = FakeRecorder(self.devices.events, self.clock)
+                summary = self.run_session([outcome], recorder_factory=lambda: recorder)
+                self.assertEqual(self.devices.events, expected_events)
+                self.assertEqual(summary.rejected, 1)
+                attempt = self.state().attempts(self.plan.runs[0].run_id)[-1]
+                self.assertEqual(attempt['status'], status)
+
+    def test_thermal_retry_uses_a_new_recorder_and_trace_path_per_attempt(self):
+        self.traced_run()
+        recorders = []
+
+        def new_recorder():
+            recorder = FakeRecorder(self.devices.events, self.clock)
+            recorders.append(recorder)
+            return recorder
+
+        summary = self.run_session(
+            ['refuse-thermal', 'complete'], recorder_factory=new_recorder
+        )
+        self.assertEqual((summary.refused, summary.accepted), (1, 1))
+        self.assertEqual(len(recorders), 2)
+        self.assertTrue(all(recorder.stopped for recorder in recorders))
+        self.assertNotEqual(recorders[0].started[1], recorders[1].started[1])
+        attempts = self.state().attempts(self.plan.runs[0].run_id)
+        self.assertEqual([item['traced'] for item in attempts], [True, True])
 
     def test_thermal_refusal_retries_with_a_new_attempt_id(self):
         summary = self.run_session(['refuse-thermal', 'complete', 'complete'])
@@ -669,3 +790,128 @@ class SessionTests(unittest.TestCase):
             report = status_report(self.plan, PHONE.key, self.results)
         self.assertIn('accepted 0', report)
         self.assertIn('pending 2', report)
+
+
+class TraceRecorderTests(unittest.TestCase):
+    # Separate startup, graceful shutdown, forced shutdown and partial-start cleanup
+    # cases guard independent process interleavings rather than duplicating wiring.
+    def setUp(self):
+        self.listener = Mock(returncode=0)
+        self.listener.poll.return_value = 0
+        self.listener.wait.return_value = 0
+        self.process = Mock()
+        self.process.poll.return_value = None
+        self.process.wait.return_value = 0
+        self.spawn = Mock(side_effect=[self.listener, self.process])
+        self.effects = Mock()
+        self.effects.attach_mock(self.spawn, 'spawn')
+        self.effects.attach_mock(self.listener, 'listener')
+        self.effects.attach_mock(self.process, 'process')
+        self.recorder = TraceRecorder(popen=self.spawn)
+
+    def test_start_listens_before_recording_and_waits_for_ready_before_returning(self):
+        self.recorder.start(
+            'FICTIONAL-DEVICE', Path('results/fixture/attempt.trace'), 360
+        )
+        notification = self.spawn.call_args_list[0].args[0][2]
+        self.assertRegex(notification, r'^dev\.syncbench\.trace\.[0-9a-f]{8}$')
+        self.assertEqual(self.effects.mock_calls[:3], [
+            call.spawn(['notifyutil', '-1', notification]),
+            call.spawn([
+                'xcrun', 'xctrace', 'record', '--template', 'System Trace',
+                '--device', 'FICTIONAL-DEVICE', '--all-processes',
+                '--time-limit', '360s', '--output', 'results/fixture/attempt.trace',
+                '--notify-tracing-started', notification, '--no-prompt',
+            ]),
+            call.listener.wait(timeout=60),
+        ])
+        self.recorder.stop()
+        self.assertEqual(self.effects.mock_calls[3:], [
+            call.process.poll(), call.process.send_signal(signal.SIGINT),
+            call.process.wait(timeout=300), call.listener.poll(),
+        ])
+
+    def test_stop_kills_and_reaps_recorder_only_after_grace_period_expires(self):
+        self.process.wait.side_effect = [subprocess.TimeoutExpired('xctrace', 300), 0]
+        self.recorder.start('FICTIONAL-DEVICE', Path('results/attempt.trace'), 360)
+        self.effects.reset_mock()
+        self.recorder.stop()
+        self.assertEqual(self.effects.mock_calls, [
+            call.process.poll(), call.process.send_signal(signal.SIGINT),
+            call.process.wait(timeout=300), call.process.kill(),
+            call.process.wait(timeout=5), call.listener.poll(),
+        ])
+
+    def test_missing_start_notification_stops_both_processes_before_raising(self):
+        self.listener.poll.return_value = None
+        self.listener.wait.side_effect = [
+            subprocess.TimeoutExpired('notifyutil', 60), 0,
+        ]
+        with self.assertRaisesRegex(
+            SessionError, 'System Trace did not start within 60 seconds'
+        ):
+            self.recorder.start('FICTIONAL-DEVICE', Path('results/attempt.trace'), 360)
+        self.process.send_signal.assert_called_once_with(signal.SIGINT)
+        self.process.wait.assert_called_once_with(timeout=300)
+        self.listener.terminate.assert_called_once_with()
+        self.assertEqual(
+            self.listener.wait.call_args_list, [call(timeout=60), call(timeout=5)]
+        )
+
+    def test_partial_start_and_failed_listener_clean_up_before_raising(self):
+        for failure in ('spawn', 'notification'):
+            with self.subTest(failure=failure):
+                self.setUp()
+                if failure == 'spawn':
+                    self.spawn.side_effect = [self.listener, OSError('private path')]
+                    self.listener.poll.return_value = None
+                else:
+                    self.listener.returncode = 1
+                with self.assertRaises(SessionError):
+                    self.recorder.start(
+                        'FICTIONAL-DEVICE', Path('results/attempt.trace'), 360
+                    )
+                if failure == 'spawn':
+                    self.listener.terminate.assert_called_once_with()
+                    self.process.send_signal.assert_not_called()
+                else:
+                    self.process.send_signal.assert_called_once_with(signal.SIGINT)
+
+    def test_interrupted_flush_still_reaps_recorder_and_stubborn_listener(self):
+        self.process.wait.side_effect = [KeyboardInterrupt(), 0]
+        self.listener.poll.return_value = None
+        self.listener.wait.side_effect = [
+            0, subprocess.TimeoutExpired('notifyutil', 5), 0,
+        ]
+        self.recorder.start('FICTIONAL-DEVICE', Path('results/attempt.trace'), 360)
+        self.effects.reset_mock()
+        with self.assertRaises(KeyboardInterrupt):
+            self.recorder.stop()
+        self.assertEqual(self.effects.mock_calls, [
+            call.process.poll(), call.process.send_signal(signal.SIGINT),
+            call.process.wait(timeout=300), call.process.kill(),
+            call.process.wait(timeout=5), call.listener.poll(),
+            call.listener.terminate(), call.listener.wait(timeout=5),
+            call.listener.kill(), call.listener.wait(timeout=5),
+        ])
+        self.effects.reset_mock()
+        self.recorder.stop()
+        self.assertEqual(self.effects.mock_calls, [])
+
+    def test_already_exited_recorder_is_not_interrupted(self):
+        self.recorder.start('FICTIONAL-DEVICE', Path('results/attempt.trace'), 360)
+        self.process.poll.return_value = 0
+        self.recorder.stop()
+        self.process.send_signal.assert_not_called()
+        self.process.kill.assert_not_called()
+
+    def test_interrupted_listener_cleanup_still_kills_and_reaps_listener(self):
+        self.listener.poll.return_value = None
+        self.listener.wait.side_effect = [0, KeyboardInterrupt(), 0]
+        self.recorder.start('FICTIONAL-DEVICE', Path('results/attempt.trace'), 360)
+        with self.assertRaises(KeyboardInterrupt):
+            self.recorder.stop()
+        self.listener.kill.assert_called_once_with()
+        self.assertEqual(self.listener.wait.call_args_list, [
+            call(timeout=60), call(timeout=5), call(timeout=5),
+        ])

@@ -26,10 +26,7 @@ from runner.doctor import doctor
 from runner.plans import Plan, encode_request, make_attempt_id, make_request
 from runner.processes import run_command
 from runner.run_state import RunState, state_path
-
-
-class SessionError(ValueError):
-    """Preflight prevented a session from starting."""
+from runner.trace_recorder import SessionError, TraceRecorder
 
 
 @dataclass
@@ -136,6 +133,7 @@ def run_session(
     command=run_command,
     caffeinate=_caffeinate,
     monotonic: Callable[[], float] = time.monotonic,
+    recorder_factory: Callable[[], TraceRecorder] = TraceRecorder,
 ) -> SessionSummary:
     findings = inspect_environment(
         config, phone, plan, results, command, devices, now(), build_info=build_info
@@ -239,74 +237,93 @@ def run_session(
                 verdict = AttemptVerdict('launchFailed', False, None, [])
                 stop = None
                 pid = None
-                deadline = monotonic() + run.time_limit_seconds
+                recorder = None
+                trace_file = None
                 try:
-                    pid = devices.launch(
-                        phone.udid,
-                        config.bundle_id,
-                        ['--bench-request', encode_request(request)],
-                        timeout_seconds=max(0.001, deadline - monotonic()),
-                    )
-                except (DeviceControlError, OSError):
-                    stop = 'launch failed'
-                    verdict.reasons.append(stop)
-                    if monotonic() >= deadline:
-                        verdict = AttemptVerdict(
-                            'timeout', False, None, ['run time limit exceeded']
+                    if run.traced:
+                        trace_file = Path('traces') / (attempt_id + '.trace')
+                        (folder / trace_file).parent.mkdir(exist_ok=True)
+                        recorder = recorder_factory()
+                        recorder.start(
+                            phone.udid,
+                            folder / trace_file,
+                            run.time_limit_seconds + 60,
                         )
-                        # A timed-out CLI response may have started the app without
-                        # returning its PID. Discover it only for bounded cleanup.
-                        try:
-                            for running_pid in devices.running_pids(
-                                phone.udid, config.bundle_id, timeout_seconds=5
-                            ):
-                                devices.terminate(phone.udid, running_pid)
-                        except (DeviceControlError, OSError):
-                            verdict.reasons.append('timeout cleanup failed')
-
-                if pid is not None:
+                    deadline = monotonic() + run.time_limit_seconds
                     try:
-                        exited = _await_exit(
-                            devices,
-                            phone,
+                        pid = devices.launch(
+                            phone.udid,
                             config.bundle_id,
-                            pid,
-                            deadline,
-                            sleep,
-                            monotonic,
+                            ['--bench-request', encode_request(request)],
+                            timeout_seconds=max(0.001, deadline - monotonic()),
                         )
-                        if not exited:
+                    except (DeviceControlError, OSError):
+                        stop = 'launch failed'
+                        verdict.reasons.append(stop)
+                        if monotonic() >= deadline:
                             verdict = AttemptVerdict(
                                 'timeout', False, None, ['run time limit exceeded']
                             )
-                            devices.terminate(phone.udid, pid)
-                        else:
-                            verdict = AttemptVerdict(
-                                'crashed',
-                                False,
-                                None,
-                                ['app exited without a done marker'],
+                            # A timed-out CLI response may have started the app without
+                            # returning its PID. Discover it only for bounded cleanup.
+                            try:
+                                for running_pid in devices.running_pids(
+                                    phone.udid, config.bundle_id, timeout_seconds=5
+                                ):
+                                    devices.terminate(phone.udid, running_pid)
+                            except (DeviceControlError, OSError):
+                                verdict.reasons.append('timeout cleanup failed')
+
+                    if pid is not None:
+                        try:
+                            exited = _await_exit(
+                                devices,
+                                phone,
+                                config.bundle_id,
+                                pid,
+                                deadline,
+                                sleep,
+                                monotonic,
                             )
-                    except (DeviceControlError, OSError):
-                        stop = 'device wait or termination failed'
-                        if verdict.status != 'timeout':
-                            verdict = AttemptVerdict(
-                                'deviceFailed', False, None, [stop]
-                            )
+                            if not exited:
+                                verdict = AttemptVerdict(
+                                    'timeout', False, None, ['run time limit exceeded']
+                                )
+                                devices.terminate(phone.udid, pid)
+                            else:
+                                verdict = AttemptVerdict(
+                                    'crashed',
+                                    False,
+                                    None,
+                                    ['app exited without a done marker'],
+                                )
+                        except (DeviceControlError, OSError):
+                            stop = 'device wait or termination failed'
+                            if verdict.status != 'timeout':
+                                verdict = AttemptVerdict(
+                                    'deviceFailed', False, None, [stop]
+                                )
+                                try:
+                                    devices.terminate(phone.udid, pid)
+                                except DeviceControlError:
+                                    pass
+                            else:
+                                verdict.reasons.append(stop)
+                        except KeyboardInterrupt:
+                            stop = 'interrupted'
+                            if verdict.status != 'timeout':
+                                verdict = AttemptVerdict(
+                                    'interrupted', False, None, [stop]
+                                )
                             try:
                                 devices.terminate(phone.udid, pid)
-                            except DeviceControlError:
+                            except (DeviceControlError, OSError):
                                 pass
-                        else:
-                            verdict.reasons.append(stop)
-                    except KeyboardInterrupt:
-                        stop = 'interrupted'
-                        if verdict.status != 'timeout':
-                            verdict = AttemptVerdict('interrupted', False, None, [stop])
-                        try:
-                            devices.terminate(phone.udid, pid)
-                        except (DeviceControlError, OSError):
-                            pass
+                finally:
+                    if recorder is not None:
+                        recorder.stop()
+
+                if pid is not None:
                     files_copied = False
                     try:
                         if stop == 'interrupted':
@@ -380,6 +397,9 @@ def run_session(
                         for path in sorted(folder.glob(attempt_id + '.*'))
                     ],
                 )
+                if run.traced:
+                    record['traced'] = True
+                    record['traceFile'] = trace_file.as_posix()
                 if verdict.reason_code is not None:
                     record['reasonCode'] = verdict.reason_code
                 state.record_attempt(run.run_id, record)
@@ -416,6 +436,9 @@ def run_session(
                 break
             if summary.stop_reason:
                 break
+    except SessionError:
+        summary.stop_reason = 'System Trace failed'
+        raise
     except (DeviceControlError, OSError):
         summary.stop_reason = 'session device or local operation failed'
     except BaseException:
