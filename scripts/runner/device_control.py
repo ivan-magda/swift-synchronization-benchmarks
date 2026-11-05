@@ -143,7 +143,7 @@ class DeviceControl:
         except (ValueError, KeyError, TypeError, AttributeError):
             raise DeviceControlError(self._failure_message) from None
 
-    def await_termination(self, udid: str, pid: int, timeout_seconds: int) -> Tuple[bool, Optional[int]]:
+    def await_termination(self, udid: str, pid: int, timeout_seconds: float) -> Tuple[bool, Optional[int]]:
         """Respect the caller deadline, including below devicectl's five-second minimum."""
         if timeout_seconds <= 0:
             raise DeviceControlError('devicectl awaitTermination requires a positive timeout')
@@ -169,13 +169,13 @@ class DeviceControl:
         except (ValueError, KeyError, TypeError):
             raise DeviceControlError(self._failure_message) from None
 
-    def running_pids(self, udid: str, bundle_id: str) -> List[int]:
+    def running_pids(self, udid: str, bundle_id: str, timeout_seconds: float = 60) -> List[int]:
         """Use the bundle path learned by this instance's install or launch.
 
         The process listing contains executable URLs, without bundle identifiers.
         Unknown bundles fail rather than guessing by the executable's basename.
         """
-        payload = self._query(['device', 'info', 'processes', '--device', udid])
+        payload = self._query(['device', 'info', 'processes', '--device', udid], timeout_seconds)
         try:
             processes = payload['runningProcesses']
             if not isinstance(processes, list):

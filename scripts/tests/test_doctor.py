@@ -78,6 +78,31 @@ class DoctorTests(unittest.TestCase):
                 self.assertFalse(findings[name].ok, name)
             self.assertTrue(findings['available'].ok)
 
+    def test_profile_budget_covers_retries_waits_pauses_and_only_pending_runs(self):
+        plan = replace(load_plan(Path('plans/smoke-base-comparison.json')),
+                       max_attempts=2, max_thermal_retries=1, thermal_wait_seconds=30,
+                       settle_seconds=10, pause_seconds=5)
+        class Devices:
+            def list_devices(self):
+                return [DeviceInfo(PHONE.udid, 'iPhone', '26.0', 'FIXTURE', True, True)]
+            def is_unlocked(self, udid):
+                return True
+        from runner.run_state import RunState, state_path
+        with tempfile.TemporaryDirectory() as temporary:
+            results = Path(temporary) / 'results'
+            info = {'buildID': 'fixture', 'codeHash': 'a' * 64,
+                    'profileExpires': (NOW + timedelta(seconds=1000)).isoformat()}
+            # Per pending run: 2 possible launches * 300 + 30 thermal wait + 5 pause.
+            # Two runs plus settle require 1280 seconds; one requires 645.
+            findings = doctor(CONFIG, PHONE, plan, results, BuildRunner(), Devices(), NOW,
+                              build_info=info)
+            self.assertFalse(next(item for item in findings if item.name == 'profile').ok)
+            state = RunState.load_or_create(state_path(results, plan, PHONE.key, info['codeHash']), plan)
+            state.record_attempt(plan.runs[0].run_id, {'accepted': True})
+            findings = doctor(CONFIG, PHONE, plan, results, BuildRunner(), Devices(), NOW,
+                              build_info=info)
+            self.assertTrue(next(item for item in findings if item.name == 'profile').ok)
+
     def test_run_command_handles_failure_missing_command_and_timeout(self):
         import sys
         result = run_command([sys.executable, '-c', 'import sys;print("message");sys.exit(3)'])

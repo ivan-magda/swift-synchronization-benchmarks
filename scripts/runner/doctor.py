@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from runner.builds import BuildError, FROZEN_SWIFT, FROZEN_XCODE, latest_build
 from runner.config import LocalConfig, Phone
@@ -22,7 +22,8 @@ class DoctorFinding:
 
 
 def doctor(config: LocalConfig, phone: Phone, plan: Optional[Plan], results: Path,
-           run_command: CommandRunner, devices: DeviceControl, now: datetime) -> List[DoctorFinding]:
+           run_command: CommandRunner, devices: DeviceControl, now: datetime,
+           *, build_info: Optional[Dict[str, Any]] = None) -> List[DoctorFinding]:
     findings = []
 
     def finding(name, ok, detail):
@@ -58,19 +59,30 @@ def doctor(config: LocalConfig, phone: Phone, plan: Optional[Plan], results: Pat
         finding('unlocked', False, str(error))
     target = plan.build_target if plan else 'ios26'
     try:
-        info = latest_build(results, target)
+        info = build_info if build_info is not None else latest_build(results, target)
         finding('build', info is not None, 'local build for ' + target + ' must exist')
         if info is not None:
             pending = plan.runs if plan else ()
             if plan is not None:
-                state = state_path(results, plan, phone.key, info['codeHash'])
-                pending = RunState.load_or_create(state, plan).pending_runs()
-            required_seconds = sum(run.time_limit_seconds for run in pending)
+                path = state_path(results, plan, phone.key, info['codeHash'])
+                state = RunState.load_or_create(path, plan)
+                pending = state.pending_runs()
+            required_seconds = 0
             if plan is not None:
-                required_seconds += plan.settle_seconds
+                required_seconds = plan.settle_seconds
+                for run in pending:
+                    attempts = state.attempts(run.run_id)
+                    thermal = sum(attempt.get('status') == 'refused'
+                                  and attempt.get('reasonCode') == 'thermal' for attempt in attempts)
+                    launches = max(0, plan.max_thermal_retries + 1 - thermal)
+                    # A normal outcome advances to the next run; only thermal refusals
+                    # retry within this session. Previously exhausted runs are excluded.
+                    required_seconds += (launches * run.time_limit_seconds
+                                         + max(0, launches - 1) * plan.thermal_wait_seconds
+                                         + (plan.pause_seconds if launches else 0))
             expiry = datetime.fromisoformat(info['profileExpires'])
             finding('profile', expiry.tzinfo is not None and expiry > now + timedelta(seconds=required_seconds),
-                    'profile must remain valid through pending run limits and settle time')
+                    'profile must remain valid through pending launches, thermal waits, pauses and settle time')
     except (BuildError, StateError, ValueError, KeyError, TypeError):
         finding('profile', False, 'build profile or pending-run metadata is invalid')
     return findings
