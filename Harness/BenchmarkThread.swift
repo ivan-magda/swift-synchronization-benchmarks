@@ -50,10 +50,12 @@ final class BenchmarkThread: @unchecked Sendable {
         var attributes = pthread_attr_t()
         let initializeResult = pthread_attr_init(&attributes)
         precondition(initializeResult == 0)
+
         defer {
             let destroyResult = pthread_attr_destroy(&attributes)
             precondition(destroyResult == 0)
         }
+
         let qosResult = pthread_attr_set_qos_class_np(&attributes, qos.qosClass, 0)
         precondition(qosResult == 0)
 
@@ -63,21 +65,28 @@ final class BenchmarkThread: @unchecked Sendable {
             let entry = Unmanaged<Entry>.fromOpaque(pointer).takeRetainedValue()
             let nameResult = pthread_setname_np(entry.name)
             precondition(nameResult == 0)
+
             entry.body()
             return nil
         }, entry.toOpaque())
+
         guard result == 0, let thread else {
             entry.release()
             preconditionFailure("Cannot create benchmark thread: \(result)")
         }
+
         return BenchmarkThread(handle: thread)
     }
 
     /// Call from a dedicated thread, never from the main thread or a task executor.
     func join() {
         handle.withLock { handle in
-            guard let current = handle.thread else { return }
+            guard let current = handle.thread else {
+                return
+            }
+
             precondition(pthread_equal(current, pthread_self()) == 0)
+
             let result = pthread_join(current, nil)
             precondition(result == 0)
             handle.thread = nil
