@@ -139,6 +139,43 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.devices.terminated, [321])
         self.assertTrue(self.caffeine.stopped)
 
+    def test_marker_without_result_keeps_local_paths_out_of_public_diagnostics(self):
+        self.plan = replace(self.plan, runs=self.plan.runs[:1])
+        copy_file = self.devices.copy_from_app
+
+        # The marker is published locally while its result copy is absent.
+        def missing_result(udid, bundle_id, source, destination):
+            if source.endswith('.jsonl'):
+                return False
+            return copy_file(udid, bundle_id, source, destination)
+
+        with patch.object(self.devices, 'copy_from_app', side_effect=missing_result):
+            summary = self.run_session(['complete'])
+        self.assertEqual((summary.accepted, summary.rejected), (0, 1))
+        attempt = self.state().attempts(self.plan.runs[0].run_id)[0]
+        self.assertEqual(attempt['status'], 'invalid')
+        folder = self.results / PHONE.key / summary.session_id
+        paths = [folder / (attempt['attemptID'] + '.check.json'),
+                 self.state().path, folder / 'session.log']
+        for path in paths:
+            with self.subTest(artifact=path.name):
+                text = path.read_text()
+                self.assertNotIn(str(self.root), text)
+                self.assertNotIn(str(self.root.resolve()), text)
+        self.assertEqual(attempt['reasons'], ['attempt files could not be read'])
+
+    def test_interrupt_during_timeout_termination_preserves_timeout_verdict(self):
+        with patch.object(self.devices, 'terminate', side_effect=[KeyboardInterrupt(), None]):
+            summary = self.run_session(['hang'])
+        self.assertEqual((summary.rejected, summary.stop_reason), (1, 'interrupted'))
+        attempt = self.state().attempts(self.plan.runs[0].run_id)[0]
+        self.assertEqual((attempt['status'], attempt['accepted']), ('timeout', False))
+        folder = self.results / PHONE.key / summary.session_id
+        record = json.loads((folder / 'session.log').read_text())
+        self.assertEqual(record['status'], 'timeout')
+        self.assertTrue(self.caffeine.stopped)
+        self.assertIn('end', self.metadata(summary))
+
     def test_crash_copy_failure_keeps_the_proven_crash_status(self):
         self.devices.crash_copy_error = True
         summary = self.run_session(['crash'])

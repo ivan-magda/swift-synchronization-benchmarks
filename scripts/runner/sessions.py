@@ -274,7 +274,8 @@ def run_session(
                             verdict.reasons.append(stop)
                     except KeyboardInterrupt:
                         stop = 'interrupted'
-                        verdict = AttemptVerdict('interrupted', False, None, [stop])
+                        if verdict.status != 'timeout':
+                            verdict = AttemptVerdict('interrupted', False, None, [stop])
                         try:
                             devices.terminate(phone.udid, pid)
                         except (DeviceControlError, OSError):

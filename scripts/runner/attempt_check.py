@@ -375,5 +375,8 @@ def check_attempt(result_file: Path, done_file: Optional[Path], request: Dict[st
             _check_conditions(run["conditions"])
             _check_conditions(end["conditions"])
         return AttemptVerdict("completed", True, None, [])
-    except (OSError, ValueError, UnicodeError, KeyError) as error:
+    except OSError:
+        # Filesystem exceptions include absolute host paths; verdicts become public.
+        return AttemptVerdict("invalid", False, None, ["attempt files could not be read"])
+    except (ValueError, UnicodeError, KeyError) as error:
         return AttemptVerdict("invalid", False, None, [str(error)])
