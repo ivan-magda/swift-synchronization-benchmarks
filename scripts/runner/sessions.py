@@ -115,7 +115,9 @@ def _copy_crashes(
     for source in sources:
         if devices.copy_crash_log(phone.udid, source, destination / Path(source).name):
             copied = True
-    return None if copied else 'matching crash reports were unavailable when copied'
+    return (
+        None if copied else 'matching crash reports were unavailable when copied'
+    )
 
 
 def run_session(
@@ -376,7 +378,9 @@ def run_session(
                                     verdict.reasons.append(crash_issue)
                     except (DeviceControlError, OSError):
                         stop = 'result or crash copy failed'
-                        if verdict.status not in ('timeout', 'deviceFailed', 'crashed'):
+                        if verdict.status not in (
+                            'timeout', 'deviceFailed', 'crashed'
+                        ):
                             verdict = AttemptVerdict('copyFailed', False, None, [stop])
                         elif verdict.status == 'crashed' and not files_copied:
                             # A failed file query cannot prove an absent publication marker.
@@ -478,7 +482,8 @@ def status_report(plan: Plan, phone_key: str, results: Path) -> str:
             f'pending {len(plan.runs)}, exhausted 0 (no build)'
         )
     state = RunState.load_or_create(
-        state_path(results, plan, phone_key, info['codeHash'], dirty=info['dirty']), plan
+        state_path(results, plan, phone_key, info['codeHash'], dirty=info['dirty']),
+        plan,
     )
     attempts = [attempt for run in plan.runs for attempt in state.attempts(run.run_id)]
     accepted = sum(attempt['accepted'] for attempt in attempts)

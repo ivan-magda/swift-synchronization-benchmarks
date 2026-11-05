@@ -70,8 +70,12 @@ struct TrialRunner: Sendable {
     /// Runs on the controller pthread. After a timeout no next trial is started or record reset.
     func runTrials(block: Int) -> (trials: [TrialLine], timedOut: Bool) {
         precondition(pthread_main_np() == 0)
-        let loadTicks = TrialDeadline.ticks(nanoseconds: UInt64(tunables.loadMilliseconds) * 1_000_000)
-        let mainDelayTicks = TrialDeadline.ticks(nanoseconds: UInt64(tunables.mainDelayMicroseconds) * 1_000)
+        let loadTicks = TrialDeadline.ticks(
+            nanoseconds: UInt64(tunables.loadMilliseconds) * 1_000_000
+        )
+        let mainDelayTicks = TrialDeadline.ticks(
+            nanoseconds: UInt64(tunables.mainDelayMicroseconds) * 1_000
+        )
         let finishAllowanceTicks = TrialDeadline.ticks(nanoseconds: 5_000_000_000)
         let totalTrials = tunables.warmupTrials + tunables.trials
         var trials: [TrialLine] = []
@@ -83,7 +87,9 @@ struct TrialRunner: Sendable {
             timestamps.reset()
             mainSide.reset()
             holder.start(trial: trial)
-            let (acquireDeadline, acquireOverflow) = Clock.now().addingReportingOverflow(acquireTimeoutTicks)
+            let (acquireDeadline, acquireOverflow) = Clock.now().addingReportingOverflow(
+                acquireTimeoutTicks
+            )
             guard !acquireOverflow, timestamps.waitAcquired(until: acquireDeadline) else {
                 return (trials, true)
             }
@@ -93,7 +99,9 @@ struct TrialRunner: Sendable {
             guard !loadOverflow else { return (trials, true) }
             loadThreads.start(until: loadStop)
 
-            let (arrivalTarget, arrivalOverflow) = timestamps.acquire.addingReportingOverflow(mainDelayTicks)
+            let (arrivalTarget, arrivalOverflow) = timestamps.acquire.addingReportingOverflow(
+                mainDelayTicks
+            )
             guard !arrivalOverflow else { return (trials, true) }
             let lock = lock
             let mainSide = mainSide

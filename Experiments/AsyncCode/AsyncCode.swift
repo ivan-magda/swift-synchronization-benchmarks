@@ -41,11 +41,13 @@ struct AsyncCode: Experiment {
             throw RequestError(message: "threads must be 1 for asyncCode")
         }
 
-        guard !request.mechanisms.isEmpty, Set(request.mechanisms).count == request.mechanisms.count else {
+        guard !request.mechanisms.isEmpty,
+              Set(request.mechanisms).count == request.mechanisms.count else {
             throw RequestError(message: "mechanisms must be nonempty and unique")
         }
 
-        guard !request.operations.isEmpty, Set(request.operations).count == request.operations.count else {
+        guard !request.operations.isEmpty,
+              Set(request.operations).count == request.operations.count else {
             throw RequestError(message: "operations must be nonempty and unique")
         }
 
@@ -94,7 +96,9 @@ struct AsyncCode: Experiment {
                 asyncCode.callsPerTask
             )
             let (_, totalOverflow) = calls.multipliedReportingOverflow(by: Self.manyTasks)
-            let (samples, samplesOverflow) = asyncCode.callsPerTask.multipliedReportingOverflow(by: Self.manyTasks)
+            let (samples, samplesOverflow) = asyncCode.callsPerTask.multipliedReportingOverflow(
+                by: Self.manyTasks
+            )
             let (_, bytesOverflow) = samples.multipliedReportingOverflow(by: MemoryLayout<UInt64>.stride)
 
             guard !callsOverflow, !totalOverflow, !samplesOverflow, !bytesOverflow else {

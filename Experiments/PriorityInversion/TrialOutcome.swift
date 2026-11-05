@@ -9,7 +9,8 @@ extension TrialOutcome {
         mainAcquire: UInt64,
         loadStop: UInt64
     ) -> TrialOutcome {
-        let arrivedDuringHold = holderAcquire < mainArrival && mainArrival < holderRelease
+        let arrivedDuringHold = holderAcquire < mainArrival
+            && mainArrival < holderRelease
         guard arrivedDuringHold, mainArrival < loadStop else {
             return .invalid
         }

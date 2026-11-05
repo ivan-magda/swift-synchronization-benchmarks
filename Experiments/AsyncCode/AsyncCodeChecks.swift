@@ -1,6 +1,11 @@
 enum AsyncCodeChecks {
     /// The counter must end at the number of increments the block made.
-    static func checkCount(operation: String, finalValue: Int, expected: Int, block: Int) -> CheckResult {
+    static func checkCount(
+        operation: String,
+        finalValue: Int,
+        expected: Int,
+        block: Int
+    ) -> CheckResult {
         CheckResult(
             name: "asyncCode.\(operation)",
             block: block,

@@ -172,17 +172,27 @@ struct RunRequest: Codable, Equatable, Sendable {
                 atLeast: 1,
                 "priorityInversion.holderWorkIterations"
             )
-            try Self.require(priorityInversion.loadMilliseconds, atLeast: 1, "priorityInversion.loadMilliseconds")
+            try Self.require(
+                priorityInversion.loadMilliseconds,
+                atLeast: 1,
+                "priorityInversion.loadMilliseconds"
+            )
             try Self.require(
                 priorityInversion.mainDelayMicroseconds,
                 atLeast: 0,
                 "priorityInversion.mainDelayMicroseconds"
             )
-            try Self.require(priorityInversion.pauseMilliseconds, atLeast: 0, "priorityInversion.pauseMilliseconds")
+            try Self.require(
+                priorityInversion.pauseMilliseconds,
+                atLeast: 0,
+                "priorityInversion.pauseMilliseconds"
+            )
             try Self.require(priorityInversion.warmupTrials, atLeast: 0, "priorityInversion.warmupTrials")
             try Self.require(priorityInversion.trials, atLeast: 1, "priorityInversion.trials")
 
-            let (_, overflow) = priorityInversion.warmupTrials.addingReportingOverflow(priorityInversion.trials)
+            let (_, overflow) = priorityInversion.warmupTrials.addingReportingOverflow(
+                priorityInversion.trials
+            )
             guard !overflow else {
                 throw RequestError(message: "priorityInversion.warmupTrials + priorityInversion.trials overflows")
             }

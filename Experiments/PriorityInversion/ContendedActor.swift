@@ -11,7 +11,11 @@ final class ContendedActorLock: ContendedLock {
     func hold(trial: Int, work: HolderWork, timestamps: HolderTimestamps) {
         let state = state
         Task.detached(priority: holderPriority) {
-            await state.hold(trial: trial, work: work, timestamps: timestamps)
+            await state.hold(
+                trial: trial,
+                work: work,
+                timestamps: timestamps
+            )
         }
     }
 

@@ -9,6 +9,7 @@ enum IsolationSettings {
         resetProbe(mechanism: mechanism)
 
         let mainThreadCPU = MainThreadCPURecorder(batches: block.layout.totalBatches)
+
         _ = block.runInTasks { _, barrier, log in
             await timeOnMainActor(
                 mechanism: mechanism,
@@ -18,10 +19,14 @@ enum IsolationSettings {
                 mainThreadCPU: mainThreadCPU
             )
         }
+
         mainThreadCPU.appendLines(to: block)
 
         let counts = probeCounts(mechanism: mechanism)
-        let operations = AsyncCodeChecks.expectedCount(threads: block.description.threads, layout: block.layout)
+        let operations = AsyncCodeChecks.expectedCount(
+            threads: block.description.threads,
+            layout: block.layout
+        )
         return [AsyncCodeChecks.checkMainThreadCalls(
             operation: block.description.operation,
             calls: counts.calls,

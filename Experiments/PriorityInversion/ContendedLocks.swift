@@ -40,7 +40,8 @@ enum ContendedLocks {
         case .barrierQueueAsyncWrite: ContendedBarrierQueueAsyncWrite()
         case .dispatchSemaphore: ContendedSemaphore()
         case .actor: ContendedActorLock(holderPriority: holderQoS.taskPriority)
-        default: preconditionFailure("Experiment 8B has no row for \(mechanism)")
+        default:
+            preconditionFailure("Experiment 8B has no row for \(mechanism)")
         }
     }
 }

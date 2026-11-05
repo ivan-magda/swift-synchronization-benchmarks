@@ -81,8 +81,10 @@ final class HolderTimestamps: Sendable {
 
     /// At acquire, at release.
     var cpuReadings: [Int] {
-        let atAcquire = acquired.load(ordering: .acquiring) ? acquireCPU.load(ordering: .relaxed) : -1
-        let atRelease = released.load(ordering: .acquiring) ? releaseCPU.load(ordering: .relaxed) : -1
+        let atAcquire = acquired.load(ordering: .acquiring)
+            ? acquireCPU.load(ordering: .relaxed) : -1
+        let atRelease = released.load(ordering: .acquiring)
+            ? releaseCPU.load(ordering: .relaxed) : -1
 
         return [atAcquire, atRelease]
     }
@@ -103,7 +105,9 @@ final class HolderTimestamps: Sendable {
                 return false
             }
 
-            _ = signal.wait(timeout: .now() + .nanoseconds(nanoseconds(ticks: deadline - now)))
+            _ = signal.wait(
+                timeout: .now() + .nanoseconds(nanoseconds(ticks: deadline - now))
+            )
         }
 
         return true

@@ -199,7 +199,9 @@ def load_plan(path: Path) -> Plan:
         raise PlanError("buildTarget must be ios26 or ios18")
     smoke = _boolean(document.get("smoke"), "smoke")
     if "iosBuild" in document:
-        raise PlanError("iosBuild was replaced by iosBuilds (phone key → iOS build)")
+        raise PlanError(
+            "iosBuild was replaced by iosBuilds (phone key → iOS build)"
+        )
     ios_builds = _ios_builds(document.get("iosBuilds", {}), smoke)
     traced = _boolean(document.get("traced", False), "traced")
     seed = _integer(document.get("seed"), "seed", 0, 2**53 - 1)
@@ -232,7 +234,9 @@ def load_plan(path: Path) -> Plan:
             entry.get("timeLimitSeconds"), "runs.timeLimitSeconds", 1
         )
         simulation = entry.get("simulation")
-        if "simulation" in entry and (not smoke or simulation not in ("crash", "hang")):
+        if "simulation" in entry and (
+            not smoke or simulation not in ("crash", "hang")
+        ):
             raise PlanError("runs.simulation requires smoke and crash or hang")
         mechanisms = _strings(entry.get("mechanisms"), "runs.mechanisms")
         operations = _strings(entry.get("operations"), "runs.operations")

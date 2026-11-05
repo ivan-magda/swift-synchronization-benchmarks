@@ -128,7 +128,10 @@ final class BlockContext: @unchecked Sendable {
 
         for trial in trials {
             precondition(trial.block == position, "A trial line belongs to its own block")
-            precondition(lastAppendedTrial.map { trial.trial > $0 } ?? true, "Trial lines are ordered by trial")
+            precondition(
+                lastAppendedTrial.map { trial.trial > $0 } ?? true,
+                "Trial lines are ordered by trial"
+            )
             lastAppendedTrial = trial.trial
             lines.append(trial)
         }

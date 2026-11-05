@@ -25,7 +25,10 @@ final class ContendedSerialQueue: ContendedLock, @unchecked Sendable {
 
 /// `value` is accessed only on the concurrent queue; the holder writes in a synchronous barrier.
 final class ContendedBarrierQueueSyncWrite: ContendedLock, @unchecked Sendable {
-    private let queue = DispatchQueue(label: "SyncBench.contended.barrierSyncWrite", attributes: .concurrent)
+    private let queue = DispatchQueue(
+        label: "SyncBench.contended.barrierSyncWrite",
+        attributes: .concurrent
+    )
     private var value = -1
 
     func hold(trial: Int, work: HolderWork, timestamps: HolderTimestamps) {
@@ -49,7 +52,10 @@ final class ContendedBarrierQueueSyncWrite: ContendedLock, @unchecked Sendable {
 /// `value` is accessed only on the concurrent queue; the holder submits its write as an async barrier
 /// and returns. The block retains the owner until its access to `value` has finished.
 final class ContendedBarrierQueueAsyncWrite: ContendedLock, @unchecked Sendable {
-    private let queue = DispatchQueue(label: "SyncBench.contended.barrierAsyncWrite", attributes: .concurrent)
+    private let queue = DispatchQueue(
+        label: "SyncBench.contended.barrierAsyncWrite",
+        attributes: .concurrent
+    )
     private var value = -1
 
     func hold(trial: Int, work: HolderWork, timestamps: HolderTimestamps) {

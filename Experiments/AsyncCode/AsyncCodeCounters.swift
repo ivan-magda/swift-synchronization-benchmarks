@@ -18,7 +18,11 @@ actor CounterActor {
     }
 
     /// Path "onActor": runs the batch loop on this actor; one operation is `await incrementAsync()`.
-    func runBatchesOnActor(layout: BatchLayout, barrier: TaskBarrier, log: ThreadLog) async {
+    func runBatchesOnActor(
+        layout: BatchLayout,
+        barrier: TaskBarrier,
+        log: ThreadLog
+    ) async {
         await BatchTimer.timeBatchesOnCallerIsolation(
             layout: layout,
             barrier: barrier,
@@ -107,6 +111,7 @@ final class NSLockCounter: LockCounter, @unchecked Sendable {
         defer {
             lock.unlock()
         }
+
         return value
     }
 }

@@ -69,7 +69,11 @@ ASYNC_CODE_ROWS: Dict[str, Dict[str, List[str]]] = {
         "oneLockPerGroup": ["mutex"],
     },
     "isolationSettings": {
-        "callFromMainActor": ["templateDefaults", "swift6Language", "concurrentAttribute"],
+        "callFromMainActor": [
+            "templateDefaults",
+            "swift6Language",
+            "concurrentAttribute",
+        ],
     },
 }
 
@@ -121,7 +125,11 @@ def _priority_inversion_blocks(
     ):
         values = request[field]
         unique_values = set(values)
-        if not values or len(unique_values) != len(values) or not unique_values <= set(allowed):
+        if (
+            not values
+            or len(unique_values) != len(values)
+            or not unique_values <= set(allowed)
+        ):
             raise ValueError(
                 "request." + field + " must be nonempty, unique priorityInversion entries"
             )
@@ -182,7 +190,9 @@ def _async_code_blocks(
                 )
             elif operation in _MAIN_THREAD_CPU_OPERATIONS:
                 samples = tuple(
-                    ExpectedSamples(metric, "microseconds", False, 1, warmup + measured, False)
+                    ExpectedSamples(
+                        metric, "microseconds", False, 1, warmup + measured, False
+                    )
                     for metric in (
                         "mainThreadCPUAtBatchStart",
                         "mainThreadCPUAtBatchEnd",

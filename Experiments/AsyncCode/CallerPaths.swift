@@ -76,6 +76,7 @@ enum CallerPaths {
 
     private static func onActor(_ block: BlockContext, counter: CounterActor) -> Int {
         let finalValue = Mutex(0)
+
         _ = block.runInTasks { _, barrier, log in
             await counter.runBatchesOnActor(layout: block.layout, barrier: barrier, log: log)
 
@@ -90,6 +91,7 @@ enum CallerPaths {
 
     private static func fromBackgroundTask(_ block: BlockContext, counter: CounterActor) -> Int {
         let finalValue = Mutex(0)
+
         _ = block.runInTasks { _, barrier, log in
             await BatchTimer.timeBatchesOnCallerIsolation(
                 layout: block.layout,
@@ -111,7 +113,10 @@ enum CallerPaths {
         return finalValue.withLock { $0 }
     }
 
-    private static func fromBackgroundTask<Counter: LockCounter>(_ block: BlockContext, counter: Counter) -> Int {
+    private static func fromBackgroundTask<Counter: LockCounter>(
+        _ block: BlockContext,
+        counter: Counter
+    ) -> Int {
         _ = block.runInTasks { _, barrier, log in
             await BatchTimer.timeBatchesOnCallerIsolation(
                 layout: block.layout,
@@ -229,7 +234,10 @@ enum CallerPaths {
         return finalValue.withLock { $0 }
     }
 
-    private static func fromMainActor<Counter: LockCounter>(_ block: BlockContext, counter: Counter) -> Int {
+    private static func fromMainActor<Counter: LockCounter>(
+        _ block: BlockContext,
+        counter: Counter
+    ) -> Int {
         let mainThreadCPU = MainThreadCPURecorder(batches: block.layout.totalBatches)
         _ = block.runInTasks { _, barrier, log in
             await timeOnMainActor(

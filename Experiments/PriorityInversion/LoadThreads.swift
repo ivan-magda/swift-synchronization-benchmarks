@@ -14,10 +14,12 @@ final class LoadThreads: Sendable {
             while true {
                 wake.wait()
                 guard !ending.load(ordering: .acquiring) else { return }
+
                 let deadline = stopTick.load(ordering: .acquiring)
                 while Clock.now() < deadline && !ending.load(ordering: .relaxed) {
                     blackHole(referenceLoop(iterations: 1_000))
                 }
+
                 stopped.signal()
             }
         }
@@ -50,6 +52,7 @@ final class LoadThreads: Sendable {
                 return false
             }
         }
+
         return true
     }
 
@@ -59,6 +62,7 @@ final class LoadThreads: Sendable {
             worker.ending.store(true, ordering: .releasing)
             worker.wake.signal()
         }
+
         for thread in threads {
             thread.join()
         }
@@ -85,7 +89,12 @@ final class HolderThread: Sendable {
             while true {
                 worker.wake.wait()
                 guard !worker.ending.load(ordering: .acquiring) else { return }
-                lock.hold(trial: worker.trial.load(ordering: .acquiring), work: work, timestamps: timestamps)
+
+                lock.hold(
+                    trial: worker.trial.load(ordering: .acquiring),
+                    work: work,
+                    timestamps: timestamps
+                )
             }
         }
     }

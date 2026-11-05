@@ -21,7 +21,12 @@ struct MainThreadCPUClock: Sendable {
         )
         let result = withUnsafeMutablePointer(to: &information) { pointer in
             pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { information in
-                thread_info(mainThread, thread_flavor_t(THREAD_BASIC_INFO), information, &count)
+                thread_info(
+                    mainThread,
+                    thread_flavor_t(THREAD_BASIC_INFO),
+                    information,
+                    &count
+                )
             }
         }
         precondition(result == KERN_SUCCESS)

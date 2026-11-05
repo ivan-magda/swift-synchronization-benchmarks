@@ -101,7 +101,9 @@ def doctor(
     except DeviceControlError as error:
         finding('unlocked', False, str(error))
 
-    if plan is not None and any(needs_calibration(run.tunables) for run in plan.runs):
+    if plan is not None and any(
+        needs_calibration(run.tunables) for run in plan.runs
+    ):
         try:
             calibration = load_phone_calibration(results, phone.key)
             for run in plan.runs:
@@ -120,7 +122,9 @@ def doctor(
 
     target = plan.build_target if plan else 'ios26'
     try:
-        info = build_info if build_info is not None else latest_build(results, target)
+        info = (
+            build_info if build_info is not None else latest_build(results, target)
+        )
         finding('build', info is not None, 'local build for ' + target + ' must exist')
         if info is not None:
             pending = plan.runs if plan else ()

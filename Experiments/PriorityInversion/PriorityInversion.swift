@@ -40,7 +40,10 @@ struct PriorityInversion: Experiment {
         else {
             throw RequestError(message: "mechanisms must be nonempty, unique priorityInversion mechanisms")
         }
-        let holderQoS: [String: QoS] = ["utilityHolder": .utility, "backgroundHolder": .background]
+        let holderQoS: [String: QoS] = [
+            "utilityHolder": .utility,
+            "backgroundHolder": .background
+        ]
         guard !request.operations.isEmpty,
             Set(request.operations).count == request.operations.count,
             request.operations.allSatisfy({ holderQoS[$0] != nil })
@@ -73,7 +76,12 @@ struct PriorityInversion: Experiment {
         let timestamps = HolderTimestamps()
         let mainSide = MainSideRecord()
         let loadThreads = LoadThreads(count: PhoneFacts.read().cpuCount, qos: tunables.loadQoS)
-        let holder = HolderThread(qos: block.description.qos, lock: lock, work: work, timestamps: timestamps)
+        let holder = HolderThread(
+            qos: block.description.qos,
+            lock: lock,
+            work: work,
+            timestamps: timestamps
+        )
         let runner = TrialRunner(
             lock: lock,
             holder: holder,
@@ -92,11 +100,13 @@ struct PriorityInversion: Experiment {
         block.appendTrials(completed.trials)
         holder.shutDown()
         loadThreads.shutDown()
-        return [PriorityInversionChecks.check(
-            operation: block.description.operation,
-            trials: completed.trials,
-            timedOut: completed.timedOut,
-            block: block.position
-        )]
+        return [
+            PriorityInversionChecks.check(
+                operation: block.description.operation,
+                trials: completed.trials,
+                timedOut: completed.timedOut,
+                block: block.position
+            )
+        ]
     }
 }

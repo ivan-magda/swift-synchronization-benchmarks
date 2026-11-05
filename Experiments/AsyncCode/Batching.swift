@@ -28,6 +28,7 @@ enum Batching {
     private static func oneAwaitPerGroup(_ block: BlockContext) -> Int {
         let group = CounterGroupActor()
         let total = Mutex(0)
+
         _ = block.runInTasks { _, barrier, log in
             await BatchTimer.timeBatchesOnCallerIsolation(
                 layout: block.layout,
@@ -52,6 +53,7 @@ enum Batching {
     private static func awaitPerOperation(_ block: BlockContext) -> Int {
         let group = CounterGroupActor()
         let total = Mutex(0)
+
         _ = block.runInTasks { _, barrier, log in
             await BatchTimer.timeBatchesOnCallerIsolation(
                 layout: block.layout,
@@ -75,6 +77,7 @@ enum Batching {
 
     private static func oneLockPerGroup(_ block: BlockContext) -> Int {
         let group = MutexCounterGroup()
+
         _ = block.runInTasks { _, barrier, log in
             await BatchTimer.timeBatchesOnCallerIsolation(
                 layout: block.layout,

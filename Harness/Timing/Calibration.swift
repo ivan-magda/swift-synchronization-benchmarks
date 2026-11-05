@@ -62,10 +62,14 @@ struct Calibration: Experiment {
 
     func run(_ block: BlockContext) -> [CheckResult] {
         // Allocate and initialize every worker's storage before the block envelope starts.
-        let buffers = (0..<block.description.threads).map { _ in CalibrationSamples(capacity: repeats) }
+        let buffers = (0..<block.description.threads).map { _ in
+            CalibrationSamples(capacity: repeats)
+        }
         let measuresClock = block.description.mechanism.hasPrefix("clock")
+
         // The holder work has its own metric: the core map pools every referenceLoop line.
-        let workMetric = block.description.mechanism == "holderWorkSingleThread" ? "holderWork" : "referenceLoop"
+        let workMetric = block.description.mechanism == "holderWorkSingleThread"
+            ? "holderWork" : "referenceLoop"
         let repeats = repeats
         let iterations = iterations
 
