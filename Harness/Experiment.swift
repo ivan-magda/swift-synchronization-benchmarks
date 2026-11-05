@@ -48,6 +48,9 @@ protocol Experiment: Sendable {
 
 enum ExperimentRegistry {
     static func makeExperiment(for request: RunRequest) throws(RequestError) -> any Experiment {
+        if request.experiment == "baseComparison" {
+            return try BaseComparison(request: request)
+        }
         throw RequestError(message: "unknown experiment: \(request.experiment)")
     }
 }
