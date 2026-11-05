@@ -7,6 +7,7 @@ final class RunViewController: UIViewController {
     private var pendingRequest: RunRequest?
     private var displayLink: CADisplayLink?
     private var displayedFrames = 0
+
     private let statusLabel: UILabel = {
         let label = UILabel()
         label.text = "SyncBench idle"
@@ -16,10 +17,13 @@ final class RunViewController: UIViewController {
     }()
 
     /// The text the status label shows now.
-    var currentStatus: String { statusLabel.text ?? "" }
+    var currentStatus: String {
+        statusLabel.text ?? ""
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
         view.backgroundColor = .systemBackground
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusLabel)
@@ -27,8 +31,12 @@ final class RunViewController: UIViewController {
         NSLayoutConstraint.activate([
             statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor)
+            statusLabel.leadingAnchor.constraint(
+                greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor
+            ),
+            statusLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor
+            )
         ])
     }
 
@@ -38,15 +46,25 @@ final class RunViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        guard !decodedRequest else { return }
+
+        guard !decodedRequest else {
+            return
+        }
         decodedRequest = true
+
         do {
-            pendingRequest = try RunRequest.decode(launchArguments: ProcessInfo.processInfo.arguments)
+            pendingRequest = try RunRequest.decode(
+                launchArguments: ProcessInfo.processInfo.arguments
+            )
         } catch {
             showStatus(error.message)
             exit(2)
         }
-        guard pendingRequest != nil else { return }
+
+        guard pendingRequest != nil else {
+            return
+        }
+
         let link = CADisplayLink(target: self, selector: #selector(frameDisplayed))
         displayLink = link
         link.add(to: .main, forMode: .common)
@@ -54,13 +72,23 @@ final class RunViewController: UIViewController {
 
     @objc private func frameDisplayed() {
         displayedFrames += 1
-        guard displayedFrames == 2 else { return }
+
+        guard displayedFrames == 2 else {
+            return
+        }
+
         displayLink?.invalidate()
         displayLink = nil
-        guard let request = pendingRequest else { return }
+
+        guard let request = pendingRequest else {
+            return
+        }
         pendingRequest = nil
+
         RunController.launch(request) { [weak self] status in
-            MainActor.assumeIsolated { self?.showStatus(status) }
+            MainActor.assumeIsolated {
+                self?.showStatus(status)
+            }
         }
     }
 }
