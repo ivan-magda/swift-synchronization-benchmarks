@@ -32,6 +32,8 @@ targets:
     dependencies:
       - package: swift-atomics
         product: Atomics
+      - target: IsolationProbeTemplate
+      - target: IsolationProbeSwift6
     settings:
       groups: [swiftSettings]
       base:
@@ -65,3 +67,34 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.syncbench.tests
         GENERATE_INFOPLIST_FILE: YES
+
+  IsolationProbeTemplate:
+    type: library.static
+    platform: iOS
+    sources:
+      - IsolationProbe
+    settings:
+      base:
+        # The settings of a new Xcode 27.1 app (docs/experiments.md).
+        SWIFT_VERSION: "5.0"
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        # NONISOLATED_NONSENDING_BY_DEFAULT and INFER_ISOLATED_CONFORMANCES stay unset:
+        # they follow SWIFT_APPROACHABLE_CONCURRENCY, as in the template.
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+          SWIFT_COMPILATION_MODE: wholemodule
+
+  IsolationProbeSwift6:
+    type: library.static
+    platform: iOS
+    sources:
+      - IsolationProbe
+    settings:
+      groups: [swiftSettings]
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+          SWIFT_COMPILATION_MODE: wholemodule

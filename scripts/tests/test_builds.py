@@ -20,6 +20,38 @@ FIXTURES = Path(__file__).parent / 'fixtures'
 NOW = datetime(2026, 11, 5, tzinfo=timezone.utc)
 PHONE = Phone('fixture', 'UDID-FIXTURE', 'iPhone')
 CONFIG = LocalConfig('TEAM-PRIVATE', 'dev.private.fixture', {'fixture': PHONE})
+# The settings of the two experiment 7C libraries as -showBuildSettings reports them.
+TEMPLATE_SETTINGS = {
+    'SWIFT_VERSION': '5.0',
+    'SWIFT_APPROACHABLE_CONCURRENCY': 'YES',
+    'SWIFT_DEFAULT_ACTOR_ISOLATION': 'MainActor',
+    # Unset: they follow SWIFT_APPROACHABLE_CONCURRENCY, as in the Xcode template.
+    'SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT': '',
+    'SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES': '',
+    'SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY': 'YES',
+    'SWIFT_OPTIMIZATION_LEVEL': '-O',
+    'SWIFT_COMPILATION_MODE': 'wholemodule',
+}
+SWIFT6_SETTINGS = {
+    'SWIFT_VERSION': '6.0',
+    'SWIFT_APPROACHABLE_CONCURRENCY': 'NO',
+    'SWIFT_DEFAULT_ACTOR_ISOLATION': 'nonisolated',
+    'SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT': 'NO',
+    'SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES': 'NO',
+    'SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY': '',
+    'SWIFT_OPTIMIZATION_LEVEL': '-O',
+    'SWIFT_COMPILATION_MODE': 'wholemodule',
+}
+TARGET_SETTINGS = {
+    'SyncBench': {
+        'SWIFT_VERSION': '6.0',
+        'SWIFT_OPTIMIZATION_LEVEL': '-O',
+        'DEVELOPMENT_TEAM': CONFIG.team_id,
+        'PRODUCT_BUNDLE_IDENTIFIER': CONFIG.bundle_id,
+    },
+    'IsolationProbeTemplate': dict(TEMPLATE_SETTINGS, DEVELOPMENT_TEAM=CONFIG.team_id),
+    'IsolationProbeSwift6': SWIFT6_SETTINGS,
+}
 
 
 class BuildRunner:
@@ -39,17 +71,17 @@ class BuildRunner:
         elif '--show-sdk-version' in arguments:
             output = '27.1\n'
         elif '-showBuildSettings' in arguments:
+            # Like xcodebuild: a scheme lists only its own build target, SyncBench;
+            # each -target lists that target.
+            names = [
+                arguments[index + 1]
+                for index, argument in enumerate(arguments)
+                if argument == '-target'
+            ]
             output = json.dumps(
                 [
-                    {
-                        'target': 'SyncBench',
-                        'buildSettings': {
-                            'SWIFT_VERSION': '6.0',
-                            'SWIFT_OPTIMIZATION_LEVEL': '-O',
-                            'DEVELOPMENT_TEAM': CONFIG.team_id,
-                            'PRODUCT_BUNDLE_IDENTIFIER': CONFIG.bundle_id,
-                        },
-                    }
+                    {'target': name, 'buildSettings': TARGET_SETTINGS[name]}
+                    for name in names or ['SyncBench']
                 ]
             )
         elif arguments[0] == 'xcodebuild' and arguments[-1] == 'build':
@@ -115,6 +147,24 @@ class BuildsTests(unittest.TestCase):
             self.assertEqual(info['profileExpires'], '2026-11-12T00:00:00+00:00')
             self.assertEqual(latest_build(results, 'ios26'), info)
             self.assertIsNone(latest_build(results, 'ios18'))
+
+    def test_build_info_records_each_isolation_library_settings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            results = Path(temporary) / 'results'
+            with patch('runner.builds.Path.cwd', return_value=results.parent.resolve()):
+                info = build('ios26', CONFIG, PHONE, results, BuildRunner(), NOW)
+            stored = json.loads(
+                (results / 'builds' / info['buildID'] / 'build-info.json').read_text()
+            )
+
+        self.assertEqual(stored['settings']['SWIFT_VERSION'], '6.0')
+        self.assertEqual(
+            stored['librarySettings'],
+            {
+                'IsolationProbeTemplate': TEMPLATE_SETTINGS,
+                'IsolationProbeSwift6': SWIFT6_SETTINGS,
+            },
+        )
 
     def test_foreign_cwd_is_rejected_before_commands_or_files(self):
         with tempfile.TemporaryDirectory() as temporary:

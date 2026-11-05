@@ -30,6 +30,18 @@ SETTINGS = (
     'ARCHS',
     'ENABLE_TESTABILITY',
 )
+# Experiment 7C compiles one probe file into these two libraries, each with its settings.
+LIBRARY_TARGETS = ('IsolationProbeTemplate', 'IsolationProbeSwift6')
+LIBRARY_SETTINGS = (
+    'SWIFT_VERSION',
+    'SWIFT_APPROACHABLE_CONCURRENCY',
+    'SWIFT_DEFAULT_ACTOR_ISOLATION',
+    'SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT',
+    'SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES',
+    'SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY',
+    'SWIFT_OPTIMIZATION_LEVEL',
+    'SWIFT_COMPILATION_MODE',
+)
 
 
 class BuildError(ValueError):
@@ -80,6 +92,33 @@ def xcodebuild_arguments(
         'BENCH_GIT_DIRTY=' + ('YES' if dirty else 'NO'),
         'BENCH_BUILD_TARGET=' + target,
         'build',
+    ]
+
+
+def library_settings_arguments(target: str) -> List[str]:
+    """Settings of the experiment 7C libraries for the same build.
+
+    A scheme's settings list only its own build target, SyncBench, not the library
+    targets it depends on, so this asks for each library target by name. No `SWIFT_*`
+    setting is passed: it would apply to both libraries alike.
+    """
+    if target not in DEPLOYMENT_TARGETS:
+        raise BuildError('unknown build target')
+    arguments = [
+        'xcodebuild',
+        '-project',
+        'SyncBench.xcodeproj',
+        '-configuration',
+        'Release',
+        '-sdk',
+        'iphoneos',
+    ]
+    for name in LIBRARY_TARGETS:
+        arguments += ['-target', name]
+    return arguments + [
+        'IPHONEOS_DEPLOYMENT_TARGET=' + DEPLOYMENT_TARGETS[target],
+        '-showBuildSettings',
+        '-json',
     ]
 
 
@@ -192,14 +231,24 @@ def build(
     settings_text = _checked(
         arguments[:-1] + ['-showBuildSettings', '-json'], recorded, 120
     )
-    try:
-        targets = json.loads(settings_text)
+    library_settings_text = _checked(
+        library_settings_arguments(target), recorded, 120
+    )
+
+    def target_settings(text: str, name: str, keys) -> Dict[str, str]:
         settings = next(
             entry['buildSettings']
-            for entry in targets
-            if entry['target'] == 'SyncBench'
+            for entry in json.loads(text)
+            if entry['target'] == name
         )
-        selected = {key: settings.get(key, '') for key in SETTINGS}
+        return {key: settings.get(key, '') for key in keys}
+
+    try:
+        selected = target_settings(settings_text, 'SyncBench', SETTINGS)
+        library_settings = {
+            name: target_settings(library_settings_text, name, LIBRARY_SETTINGS)
+            for name in LIBRARY_TARGETS
+        }
     except (ValueError, KeyError, TypeError, StopIteration):
         raise BuildError('xcodebuild returned invalid build settings') from None
     source = (
@@ -219,6 +268,7 @@ def build(
         app=artifact.relative_to(root).as_posix(),
         builtAt=now.astimezone(timezone.utc).isoformat(),
         settings=selected,
+        librarySettings=library_settings,
     )
     encoded = json.dumps(info, sort_keys=True, indent=2) + '\n'
     private_values = [config.team_id, config.bundle_id, str(root)] + [
