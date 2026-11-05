@@ -1,0 +1,14 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "DEVICE-FIRST",
+    "installedApplications": [
+      {
+        "bundleID": "example.SyncBench",
+        "installationURL": "file:///private/var/containers/Bundle/Application/DEVICE-APP/SyncBench.app/"
+      }
+    ]
+  }
+}

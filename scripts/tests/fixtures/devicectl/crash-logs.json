@@ -1,0 +1,39 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "DEVICE-FIRST",
+    "domain": "systemCrashLogs",
+    "files": [
+      {
+        "metadata": {
+          "lastModDate": "2026-11-05T05:00:46.000Z"
+        },
+        "name": "NAME-Other-0.ips",
+        "relativePath": "NAME-Other-0.ips",
+        "resources": {
+          "isDirectory": false,
+          "isHidden": false,
+          "isReadable": true,
+          "isSymbolicLink": false,
+          "isWritable": true
+        }
+      },
+      {
+        "metadata": {
+          "lastModDate": "2026-10-23T15:49:25.000Z"
+        },
+        "name": "NAME-Other-1.ips",
+        "relativePath": "NAME-Other-1.ips",
+        "resources": {
+          "isDirectory": false,
+          "isHidden": false,
+          "isReadable": true,
+          "isSymbolicLink": false,
+          "isWritable": true
+        }
+      }
+    ]
+  }
+}

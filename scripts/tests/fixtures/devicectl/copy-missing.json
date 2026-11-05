@@ -1,0 +1,14 @@
+{
+  "info": {
+    "outcome": "failed"
+  },
+  "error": {
+    "code": 7000,
+    "domain": "com.apple.dt.CoreDeviceError",
+    "userInfo": {
+      "NSLocalizedDescription": {
+        "string": "Failed to retrieve the file node for Documents/runs/task13.no-such-file"
+      }
+    }
+  }
+}

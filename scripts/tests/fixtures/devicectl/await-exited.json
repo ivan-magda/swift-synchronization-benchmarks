@@ -1,0 +1,15 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "DEVICE-FIRST",
+    "process": {
+      "processIdentifier": 6323
+    },
+    "terminationStatus": {
+      "exitCode": 0,
+      "wasCoreDumpCreated": false
+    }
+  }
+}

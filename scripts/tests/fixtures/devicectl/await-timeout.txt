@@ -1,0 +1,14 @@
+{
+  "return_code": 2,
+  "stdout": "",
+  "stderr": "ERROR: Command timeout of 5.0 seconds exceeded. Assuming command got stuck and aborting.\n",
+  "document": {
+    "info": {
+      "outcome": "timeout"
+    },
+    "error": {
+      "domain": "ArgumentParserInternal.ExitCode",
+      "code": 2
+    }
+  }
+}

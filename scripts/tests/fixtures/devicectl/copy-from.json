@@ -1,0 +1,12 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "destination": "build/private/task13/result.jsonl",
+    "deviceIdentifier": "DEVICE-FIRST",
+    "domain": "appDataContainer",
+    "domainIdentifier": "example.SyncBench",
+    "source": "Documents/runs/task13.capture.smoke.jsonl"
+  }
+}

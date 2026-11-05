@@ -1,0 +1,11 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "DEVICE-FIRST",
+    "domain": "systemCrashLogs",
+    "source": "NAME-Other-0.ips",
+    "destination": "build/private/task13/copied-crash.ips"
+  }
+}

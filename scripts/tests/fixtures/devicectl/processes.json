@@ -1,0 +1,18 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "DEVICE-FIRST",
+    "runningProcesses": [
+      {
+        "executable": "file:///sbin/launchd",
+        "processIdentifier": 1
+      },
+      {
+        "executable": "file:///private/var/containers/Bundle/Application/DEVICE-APP/SyncBench.app/SyncBench",
+        "processIdentifier": 6325
+      }
+    ]
+  }
+}

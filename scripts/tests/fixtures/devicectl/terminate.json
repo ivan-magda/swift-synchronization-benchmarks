@@ -1,0 +1,16 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "DEVICE-FIRST",
+    "process": {
+      "executable": "file:///private/var/containers/Bundle/Application/DEVICE-APP/SyncBench.app/SyncBench",
+      "processIdentifier": 6326
+    },
+    "signal": {
+      "name": "NAME-SIGKILL",
+      "value": 9
+    }
+  }
+}
