@@ -4,7 +4,7 @@ Copied on 2026-11-05 from the study notes (decisions of 2026-11-04 and 2026-11-0
 
 ## Conditions (Ivan)
 
-- Phones: iPhone 11 Pro Max (A13, 60 Hz) and iPhone 15 Pro Max (A17 Pro, 120 Hz), both on the same iOS 27.x build for timed runs.
+- Phones remain on their installed OS: iPhone 11 Pro Max (A13, 60 Hz), iOS 26.6 (23G71); iPhone 15 Pro Max (A17 Pro, 120 Hz), iOS 26.6.2 (23G90). Automatic OS updates are disabled. No OS upgrade or common iOS 27.x build is required. Record and pin each phone's own OS build for timed runs.
 - Toolchain, frozen for the whole campaign: Xcode 27.1 (27A9275), Swift 6.4.0 (swiftlang-6.4.0.34.1).
 - Deployment target iOS 26.0 for the main runs. A separate iOS 18.0 build for experiments 1 and 3, where `Atomic` and `ManagedAtomic` compile to LL/SC loops instead of LSE instructions.
 - Energy is not measured.

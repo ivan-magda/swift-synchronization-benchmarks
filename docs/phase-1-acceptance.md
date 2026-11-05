@@ -67,7 +67,7 @@ Two builds from the same clean source have the same exact stripped-executable
 hash; the [build-check supplement](build-checks/2026-11-phase-1.md#corrected-app-build-supplement)
 records that evidence. These short runs verify startup and strict preflight on
 both phones. The earlier smoke files remain intact; the full final-binary matrix
-and matched-OS performance measurements remain outside this supplement.
+and performance measurements remain outside this supplement.
 
 ## Environment and provenance
 
@@ -78,11 +78,10 @@ and matched-OS performance measurements remain outside this supplement.
 
 Both phones answered live unlocked and Developer Mode queries, installed the
 signed app, launched without a debugger, and produced checked result files.
-The design calls for the same iOS 27.x build on both phones. The connected phones
-have the versions above; the supplied smoke plans have `iosBuild: null`.
-Functional acceptance used those recorded versions without changing the plans.
-A matched-OS measurement session still requires phone preparation and a pinned
-`iosBuild`.
+The installed versions above are now frozen by Ivan's decision; automatic OS
+updates are disabled and neither phone is to be upgraded. A shared iOS 27.x build
+is not required. Smoke plans record the observed versions; strict plans pin each
+phone's own `iosBuild`. Earlier results below remain historical evidence.
 
 Xcode 27.1 (27A9275), swiftlang-6.4.0.34.1, and XcodeGen 2.46.0 match the frozen
 toolchain. Builds use Release `-O`, whole-module optimization, Swift 6, explicit
@@ -206,5 +205,5 @@ and async barrier writes include their mechanism's allocation cost. Keep those
 facts visible when extending comparisons or choosing pilot batch sizes.
 
 Achieved display rate, the experiment-8B work size, System Trace validation,
-long-duration stability, and matched-OS performance measurements remain outside
+long-duration stability, and performance measurements remain outside
 this phase-1 smoke acceptance.

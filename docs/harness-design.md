@@ -26,7 +26,7 @@ The harness fails, even if it works, when:
 ## Constraints
 
 - Toolchain frozen: Xcode 27.1 (27A9275), swiftlang-6.4.0.34.1.
-- Phones: iPhone 11 Pro Max (A13, 60 Hz) and iPhone 15 Pro Max (A17 Pro, 120 Hz), both on one iOS 27.x build.
+- Phones stay on their installed OS: iPhone 11 Pro Max (A13, 60 Hz), iOS 26.6 (23G71); iPhone 15 Pro Max (A17 Pro, 120 Hz), iOS 26.6.2 (23G90). Automatic OS updates are disabled. Do not update either phone; a shared iOS 27.x build is not required.
 - Free Personal Team (Apple, "About your developer account", read 2026-11-05): provisioning profiles expire 7 days after issue, so we rebuild weekly; up to 3 apps per phone; up to 10 App IDs and up to 3 devices, each expiring after 7 days. One manual Trust per certificate on each phone (2026-10-29).
 - No debugger: launch with `xcrun devicectl device process launch` without `--console` (`P_TRACED` false, checked 2026-10-29).
 - Copy result files one at a time; directory copies have timed out (report E).
@@ -67,6 +67,8 @@ docs/              method notes, this design, notes from the build checks
 
 Build:
 - One app target, UIKit life cycle, iPhone only. Release, `-O`, whole-module. Exclusivity checking stays at its Release default; never `-Ounchecked`.
+- Measure ordinary Swift application code with standard Release exclusivity enforcement. Do not use `@exclusivity(unchecked)`. Harness wrappers must not add costs absent from ordinary code using the same mechanism. Base comparison uses concrete queue counters with direct `read`, `write`, and `increment` bodies inside queue closures, never a generic `body(&state)` for their integer storage.
+- Each experiment owns its wrapper declarations. The existing `Mechanisms/` wrappers are base-comparison-owned; future experiments must declare their state wrappers in their own experiment directories. Do not instantiate a base-comparison generic wrapper with dictionaries or other state types for another experiment: its stored property declaration is shared across specializations, which can change exclusivity optimization even for the existing Int row. Common clocks, thread infrastructure, and result types remain shared.
 - App module: Swift 6 language mode, default isolation `nonisolated`, Approachable Concurrency off. Isolation is written in the code (`nonisolated`, `@MainActor`, `@concurrent`, `Task.detached`), so hop counts do not depend on inference.
 - UIKit types (`UIViewController`, `UIView`, the app and scene delegates) are `@MainActor`. Code inside them runs on the main thread, and a `Task {}` written there inherits the main actor. So experiment code lives in the harness's own nonisolated types, and a run leaves the main thread explicitly: on its own pthread or in `Task.detached`.
 - Experiment 7C: the same source file compiles into `Exp7Template` (Swift 5 mode, Approachable Concurrency, default isolation `MainActor`, the other template settings listed in `docs/experiments.md`) and into `Exp7Swift6`. The `@concurrent` variant lives in `Exp7Template`.
