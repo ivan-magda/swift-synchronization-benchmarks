@@ -11,6 +11,16 @@ the iOS 26 base and calibration sessions also carry `dev: true` because the user
 was formatting repository files during acceptance. They do not establish
 performance rankings or replace the pilot.
 
+A final read-only recount found all 18 completed attempts started with
+`applicationState: "inactive"`; 12 also ended inactive and six ended active.
+Smoke bypasses the hard preflight conditions, so these accepted files establish
+smoke correctness and runner integration only. They do not establish a working
+non-smoke launch lifecycle. The corrected app waits for actual application and
+foreground-scene activation plus two active display callbacks before consuming
+the request, and resets that delay on interrupted activation. Simulator lifecycle
+ordering tests cover this correction; its physical non-smoke lifecycle has not
+yet been verified. No further device actions were taken after acceptance.
+
 ## Environment and provenance
 
 | Phone key | Model | Installed iOS | Build | CPUs | Tick timebase |
@@ -44,7 +54,10 @@ I built for each phone, and checked that the later provisioning profile covers
 both configured destinations before reusing it. Each target's installed apps
 have the exact executable hash recorded in the
 [build checks](build-checks/2026-11-phase-1.md). A same-HEAD, same-file-content
-pair proves iOS 26 hash stability without binary normalization. Concurrent
+pair proves iOS 26 hash stability for that prior source snapshot without binary
+normalization. The later lifecycle correction changes the app; this hash evidence
+does not apply to the corrected binary, which was only rebuilt unsigned in
+Release and tested on the Simulator. Concurrent
 formatting changed earlier snapshots; I did not use those pairs as proof.
 
 The base and calibration sessions used the then-current runner. The crash
