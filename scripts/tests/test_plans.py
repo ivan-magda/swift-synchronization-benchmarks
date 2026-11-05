@@ -141,11 +141,27 @@ class PlanTests(unittest.TestCase):
             (
                 "simulation",
                 lambda value: (
-                    value.update(smoke=False, iosBuild="24A1"),
+                    value.update(smoke=False, iosBuilds={"phone": "24A1"}),
                     value["runs"][0].update(simulation="crash"),
                 ),
             ),
-            ("iosBuild", lambda value: value.update(smoke=False)),
+            ("iosBuilds", lambda value: value.update(smoke=False)),
+            ("iosBuilds", lambda value: value.update(smoke=False, iosBuilds={})),
+            ("iosBuilds", lambda value: value.update(iosBuilds={"phone": "bad/build"})),
+            ("iosBuilds", lambda value: value.update(iosBuilds=["24A1"])),
+            ("iosBuild was replaced by iosBuilds", lambda value: value.update(iosBuild="24A1")),
+            (
+                "callsPerTask",
+                lambda value: value["runs"][0]["tunables"].update(
+                    asyncCode={"callsPerTask": 0, "warmupCallsPerTask": 0}
+                ),
+            ),
+            (
+                "warmupCallsPerTask",
+                lambda value: value["runs"][0]["tunables"].update(
+                    asyncCode={"callsPerTask": 1, "warmupCallsPerTask": -1}
+                ),
+            ),
             ("schema", lambda value: value.update(schema=True)),
             ("seed", lambda value: value.update(seed=2**53)),
             (
@@ -169,6 +185,70 @@ class PlanTests(unittest.TestCase):
                 mutate(invalid)
                 with self.assertRaisesRegex(PlanError, key):
                     self.load_document(invalid)
+
+    def test_priority_inversion_tunables(self):
+        document = json.loads(SMOKE_PLAN.read_text())
+        valid = {
+            "holderWorkIterations": "fromCalibration",
+            "loadQoS": "userInteractive",
+            "loadMilliseconds": 5,
+            "mainDelayMicroseconds": 0,
+            "pauseMilliseconds": 0,
+            "warmupTrials": 0,
+            "trials": 1,
+        }
+        document["shuffle"] = False
+        document["runs"][0]["tunables"]["priorityInversion"] = valid
+        plan = self.load_document(document)
+        self.assertEqual(
+            plan.runs[0].tunables["priorityInversion"]["holderWorkIterations"],
+            "fromCalibration",
+        )
+        valid["holderWorkIterations"] = 1000
+        self.load_document(document)
+
+        cases = (
+            ("holderWorkIterations", 0),
+            ("holderWorkIterations", "later"),
+            ("holderWorkIterations", True),
+            ("loadQoS", "urgent"),
+            ("loadMilliseconds", 0),
+            ("mainDelayMicroseconds", -1),
+            ("pauseMilliseconds", -1),
+            ("warmupTrials", -1),
+            ("trials", 0),
+        )
+        for key, value in cases:
+            with self.subTest(key=key, value=value):
+                invalid = deepcopy(document)
+                invalid["runs"][0]["tunables"]["priorityInversion"][key] = value
+                with self.assertRaisesRegex(PlanError, key):
+                    self.load_document(invalid)
+
+    def test_ios_builds_and_traced_are_loaded(self):
+        document = json.loads(SMOKE_PLAN.read_text())
+        document.update(smoke=False, iosBuilds={"phone-a": "24A1", "phone-b": "24B2"})
+        plan = self.load_document(document)
+        self.assertEqual(plan.ios_builds, {"phone-a": "24A1", "phone-b": "24B2"})
+        self.assertFalse(plan.traced)
+
+    def test_traced_is_copied_into_requests_only_when_true(self):
+        document = json.loads(SMOKE_PLAN.read_text())
+        untraced = self.load_document(document)
+        self.assertNotIn("traced", make_request(untraced.runs[0], "attempt-id", 1))
+
+        document["traced"] = False
+        untraced = self.load_document(document)
+        self.assertNotIn("traced", make_request(untraced.runs[0], "attempt-id", 1))
+
+        document["traced"] = True
+        traced = self.load_document(document)
+        self.assertTrue(traced.traced)
+        self.assertIs(make_request(traced.runs[0], "attempt-id", 1)["traced"], True)
+
+        document["traced"] = "yes"
+        with self.assertRaisesRegex(PlanError, "traced"):
+            self.load_document(document)
 
     def test_ids_reject_traversal_and_overlong_attempts(self):
         for name in ("../escape", "..", "/absolute", "bad/name", ""):

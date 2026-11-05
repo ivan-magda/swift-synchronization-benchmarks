@@ -3,7 +3,7 @@
   "name": "smoke-base-comparison-ios18",
   "buildTarget": "ios18",
   "smoke": true,
-  "iosBuild": null,
+  "iosBuilds": {},
   "seed": 20261105,
   "settleSeconds": 10,
   "pauseSeconds": 2,

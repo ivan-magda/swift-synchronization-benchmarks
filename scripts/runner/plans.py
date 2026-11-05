@@ -28,6 +28,7 @@ class PlannedRun:
     operations: Tuple[str, ...]
     tunables: Dict[str, Any]
     time_limit_seconds: int
+    traced: bool
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,8 @@ class Plan:
     name: str
     build_target: str
     smoke: bool
-    ios_build: Optional[str]
+    ios_builds: Dict[str, str]  # phone key -> installed iOS build
+    traced: bool
     seed: int
     shuffle: bool
     settle_seconds: int
@@ -82,17 +84,55 @@ def _strings(value: Any, key: str) -> Tuple[str, ...]:
     return values
 
 
+_QOS_NAMES = ("userInteractive", "userInitiated", "default", "utility", "background")
+
+
+def _ios_builds(value: Any, smoke: bool) -> Dict[str, str]:
+    if not isinstance(value, dict):
+        raise PlanError("iosBuilds must be an object of phone key to iOS build")
+    for phone_key, build in value.items():
+        _identifier(phone_key, "iosBuilds")
+        _identifier(build, "iosBuilds")
+    if not smoke and not value:
+        raise PlanError("iosBuilds is required outside smoke plans")
+    return dict(value)
+
+
+def _object(value: Any, key: str) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        raise PlanError(key + " must be an object")
+    return value
+
+
+def _async_code_tunables(value: Any) -> None:
+    value = _object(value, "tunables.asyncCode")
+    _integer(value.get("callsPerTask"), "tunables.asyncCode.callsPerTask", 1)
+    _integer(
+        value.get("warmupCallsPerTask"), "tunables.asyncCode.warmupCallsPerTask"
+    )
+
+
+def _priority_inversion_tunables(value: Any) -> None:
+    value = _object(value, "tunables.priorityInversion")
+    prefix = "tunables.priorityInversion."
+    iterations = value.get("holderWorkIterations")
+    # The session replaces "fromCalibration" with a number before it launches the app.
+    if iterations != "fromCalibration":
+        _integer(iterations, prefix + "holderWorkIterations", 1)
+    if value.get("loadQoS") not in _QOS_NAMES:
+        raise PlanError(prefix + "loadQoS is invalid")
+    _integer(value.get("loadMilliseconds"), prefix + "loadMilliseconds", 1)
+    _integer(value.get("mainDelayMicroseconds"), prefix + "mainDelayMicroseconds")
+    _integer(value.get("pauseMilliseconds"), prefix + "pauseMilliseconds")
+    _integer(value.get("warmupTrials"), prefix + "warmupTrials")
+    _integer(value.get("trials"), prefix + "trials", 1)
+
+
 def _tunables(value: Any) -> Dict[str, Any]:
     if not isinstance(value, dict):
         raise PlanError("tunables must be an object")
     _integer(value.get("threads"), "tunables.threads", 1, 64)
-    if value.get("qos") not in (
-        "userInteractive",
-        "userInitiated",
-        "default",
-        "utility",
-        "background",
-    ):
+    if value.get("qos") not in _QOS_NAMES:
         raise PlanError("tunables.qos is invalid")
     _integer(value.get("warmupBatches"), "tunables.warmupBatches")
     _integer(value.get("measuredBatches"), "tunables.measuredBatches", 1)
@@ -112,6 +152,10 @@ def _tunables(value: Any) -> Dict[str, Any]:
             )
     if "repeats" in value:
         _integer(value["repeats"], "tunables.repeats", 1)
+    if "asyncCode" in value:
+        _async_code_tunables(value["asyncCode"])
+    if "priorityInversion" in value:
+        _priority_inversion_tunables(value["priorityInversion"])
     return deepcopy(value)
 
 
@@ -154,11 +198,10 @@ def load_plan(path: Path) -> Plan:
     if build_target not in ("ios26", "ios18"):
         raise PlanError("buildTarget must be ios26 or ios18")
     smoke = _boolean(document.get("smoke"), "smoke")
-    ios_build = document.get("iosBuild")
-    if ios_build is not None:
-        _identifier(ios_build, "iosBuild")
-    elif not smoke:
-        raise PlanError("iosBuild is required outside smoke plans")
+    if "iosBuild" in document:
+        raise PlanError("iosBuild was replaced by iosBuilds (phone key → iOS build)")
+    ios_builds = _ios_builds(document.get("iosBuilds"), smoke)
+    traced = _boolean(document.get("traced", False), "traced")
     seed = _integer(document.get("seed"), "seed", 0, 2**53 - 1)
     shuffle = _boolean(document.get("shuffle", True), "shuffle")
     settle = _integer(document.get("settleSeconds"), "settleSeconds")
@@ -209,6 +252,7 @@ def load_plan(path: Path) -> Plan:
                     operations,
                     deepcopy(tunables),
                     time_limit,
+                    traced,
                 )
             )
     if shuffle:
@@ -217,7 +261,8 @@ def load_plan(path: Path) -> Plan:
         name,
         build_target,
         smoke,
-        ios_build,
+        ios_builds,
+        traced,
         seed,
         shuffle,
         settle,
@@ -248,6 +293,8 @@ def make_request(run: PlannedRun, attempt_id: str, attempt: int) -> Dict[str, An
     }
     if run.simulation is not None:
         request["simulation"] = run.simulation
+    if run.traced:
+        request["traced"] = True
     return request
 
 

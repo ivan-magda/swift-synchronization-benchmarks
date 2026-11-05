@@ -3,7 +3,7 @@
   "name": "acceptance-base-comparison",
   "buildTarget": "ios26",
   "smoke": true,
-  "iosBuild": null,
+  "iosBuilds": {},
   "seed": 20261105,
   "settleSeconds": 10,
   "pauseSeconds": 2,

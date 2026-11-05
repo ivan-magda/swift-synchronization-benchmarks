@@ -21,8 +21,9 @@ Before a device session:
   nominal thermal state. Allow the plan's settle time after installation.
 - Close the debugger and leave the benchmark app active. Unset
   `PTHREAD_MUTEX_*` environment overrides.
-- For comparable measurements, use the same planned iOS build on both phones
-  and set the plan's `iosBuild`. The supplied smoke plans leave it unpinned.
+- For comparable measurements, pin each phone's installed iOS build in the
+  plan's `iosBuilds` (phone key to iOS build). The supplied smoke plans leave
+  it empty.
 
 Run from the repository root, substituting your configured phone key:
 

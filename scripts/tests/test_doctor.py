@@ -69,7 +69,9 @@ class DoctorTests(unittest.TestCase):
     def test_doctor_findings(self):
         # Independent preflight gates must all be reported, even when earlier ones fail.
         plan = load_plan(Path('plans/smoke-base-comparison.json'))
-        plan = replace(plan, ios_build='EXPECTED-BUILD', settle_seconds=60)
+        plan = replace(
+            plan, ios_builds={PHONE.key: 'EXPECTED-BUILD'}, settle_seconds=60
+        )
 
         class Tools(BuildRunner):
             def __call__(self, arguments, timeout=None):
@@ -122,6 +124,51 @@ class DoctorTests(unittest.TestCase):
             ):
                 self.assertFalse(findings[name].ok, name)
             self.assertTrue(findings['available'].ok)
+
+    def test_ios_build_fails_when_a_non_smoke_plan_lacks_the_phone(self):
+        class Devices:
+            def list_devices(self):
+                return [
+                    DeviceInfo(PHONE.udid, 'iPhone', '26.0', 'FIXTURE', True, True)
+                ]
+
+            def is_unlocked(self, udid):
+                return True
+
+        base = load_plan(Path('plans/smoke-base-comparison.json'))
+        info = {
+            'buildID': 'fixture',
+            'codeHash': 'a' * 64,
+            'profileExpires': (NOW + timedelta(days=1)).isoformat(),
+            'dirty': True,
+        }
+        cases = (
+            ({'another-phone': 'FIXTURE'}, False, False),
+            ({PHONE.key: 'OTHER-BUILD'}, False, False),
+            ({PHONE.key: 'FIXTURE'}, False, True),
+            ({}, True, True),
+        )
+        for builds, smoke, expected in cases:
+            with self.subTest(builds=builds, smoke=smoke):
+                plan = replace(base, smoke=smoke, ios_builds=builds)
+                with tempfile.TemporaryDirectory() as temporary:
+                    findings = {
+                        item.name: item
+                        for item in doctor(
+                            CONFIG,
+                            PHONE,
+                            plan,
+                            Path(temporary) / 'results',
+                            BuildRunner(),
+                            Devices(),
+                            NOW,
+                            build_info=info,
+                        )
+                    }
+                if smoke:
+                    self.assertNotIn('ios-build', findings)
+                else:
+                    self.assertEqual(findings['ios-build'].ok, expected)
 
     def test_profile_budget_covers_retries_waits_pauses_and_only_pending_runs(self):
         plan = replace(

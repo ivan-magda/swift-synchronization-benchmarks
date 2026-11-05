@@ -76,11 +76,12 @@ def doctor(
             device is not None and device.developer_mode,
             'Developer Mode must be enabled',
         )
-        if plan is not None and plan.ios_build is not None:
+        if plan is not None and (not plan.smoke or phone.key in plan.ios_builds):
             finding(
                 'ios-build',
-                device is not None and device.os_build == plan.ios_build,
-                'phone iOS build must match plan iosBuild',
+                device is not None
+                and device.os_build == plan.ios_builds.get(phone.key),
+                'phone iOS build must match plan iosBuilds for the phone key',
             )
     except DeviceControlError as error:
         finding('phone', False, str(error))

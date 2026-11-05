@@ -9,7 +9,11 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
+from dataclasses import replace
+from unittest import mock
+
 from runner.attempt_check import check_attempt
+from runner.expected_attempt import expected_attempt
 
 from tests.synthetic_attempts import GOLDEN, make_attempt_lines, write_attempt
 
@@ -18,20 +22,67 @@ REQUEST = GOLDEN_LINES[0]["request"]
 BUILD_ID = GOLDEN_LINES[0]["build"]["buildID"]
 
 
+def trial_line(block, number, warmup=False, **replacement):
+    """A valid trial inside the block: the holder holds the lock, the load runs."""
+    start = block["start"]
+    line = {
+        "type": "trial",
+        "block": block["block"],
+        "trial": number,
+        "warmup": warmup,
+        "holderQoS": block["qos"],
+        "loadStart": start + 1,
+        "holderAcquire": start + 2,
+        "mainArrival": start + 3,
+        "holderRelease": start + 4,
+        "mainAcquire": start + 5,
+        "loadStop": start + 6,
+        "holderCPUReadings": [1, 1],
+        "mainCPU": 0,
+        "holderResultCorrect": True,
+        "mainObservedTrial": number,
+        "outcome": "valid",
+    }
+    line.update(replacement)
+    return line
+
+
+def with_trials(lines, count, warmup_trials):
+    """Append trial lines to the end of every block group."""
+    result = []
+    current = None
+    for index, line in enumerate(lines):
+        result.append(line)
+        if line["type"] == "block":
+            current = line
+        following = lines[index + 1]["type"] if index + 1 < len(lines) else None
+        if current is not None and following in ("block", "reference"):
+            result.extend(
+                trial_line(current, number, warmup=number < warmup_trials)
+                for number in range(count)
+            )
+            current = None
+    return result
+
+
 class AttemptCheckTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.path = Path(self.directory.name)
 
-    def verdict(self, lines, request=None):
+    def verdict(self, lines, request=None, expected_os_build=None):
         result, done = write_attempt(self.path, lines)
         return check_attempt(
-            result, done, REQUEST if request is None else request, BUILD_ID
+            result,
+            done,
+            REQUEST if request is None else request,
+            BUILD_ID,
+            expected_os_build,
         )
 
-    def assert_invalid(self, lines, request=None, reason=None):
-        verdict = self.verdict(lines, request)
+    def assert_invalid(self, lines, request=None, reason=None, expected_os_build=None):
+        verdict = self.verdict(lines, request, expected_os_build)
         self.assertEqual((verdict.status, verdict.accepted), ("invalid", False))
         self.assertTrue(verdict.reasons)
         if reason:
@@ -92,6 +143,25 @@ class AttemptCheckTests(unittest.TestCase):
                 lines = deepcopy(GOLDEN_LINES)
                 mutate(lines)
                 self.assert_invalid(lines)
+
+    def test_phone_ios_build_must_match_the_plan(self):
+        os_build = GOLDEN_LINES[0]["phone"]["osBuild"]
+        self.assertTrue(self.verdict(GOLDEN_LINES, expected_os_build=os_build).accepted)
+        self.assertTrue(self.verdict(GOLDEN_LINES).accepted)
+        self.assert_invalid(
+            GOLDEN_LINES,
+            reason="phone iOS build differs from the plan",
+            expected_os_build=os_build + "-other",
+        )
+
+    def test_trial_line_in_a_block_that_expects_none_is_invalid(self):
+        lines = deepcopy(GOLDEN_LINES)
+        last_batch = max(
+            index for index, line in enumerate(lines) if line["type"] == "batch"
+        )
+        block = next(line for line in lines if line["type"] == "block")
+        lines.insert(last_batch + 1, trial_line(block, 0, warmup=False))
+        self.assert_invalid(lines)
 
     def test_substituted_block_is_invalid(self):
         request = deepcopy(REQUEST)
@@ -286,3 +356,101 @@ class AttemptCheckTests(unittest.TestCase):
         rejected = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(rejected.returncode, 1, rejected.stderr)
         self.assertEqual(json.loads(rejected.stdout)["status"], "incomplete")
+
+
+class TrialLineTests(unittest.TestCase):
+    """No experiment expects trial lines yet, so the expectation is patched."""
+
+    TRIALS = 3
+    WARMUP_TRIALS = 1
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name)
+        self.request = deepcopy(REQUEST)
+        self.request["tunables"]["priorityInversion"] = {
+            "holderWorkIterations": 1000,
+            "loadQoS": "userInteractive",
+            "loadMilliseconds": 5,
+            "mainDelayMicroseconds": 0,
+            "pauseMilliseconds": 0,
+            "warmupTrials": self.WARMUP_TRIALS,
+            "trials": self.TRIALS - self.WARMUP_TRIALS,
+        }
+
+    def expecting_trials(self, request, cpu_count):
+        expected = expected_attempt(request, cpu_count)
+        blocks = {
+            key: replace(block, trial_lines=self.TRIALS)
+            for key, block in expected.blocks.items()
+        }
+        return replace(expected, blocks=blocks)
+
+    def lines(self):
+        base = make_attempt_lines(self.request, BUILD_ID)
+        return with_trials(base, self.TRIALS, self.WARMUP_TRIALS)
+
+    def verdict(self, lines):
+        result, done = write_attempt(self.path, lines)
+        with mock.patch(
+            "runner.attempt_check.expected_attempt", self.expecting_trials
+        ):
+            return check_attempt(result, done, self.request, BUILD_ID)
+
+    def trial_indexes(self, lines):
+        return [index for index, line in enumerate(lines) if line["type"] == "trial"]
+
+    def test_well_formed_trials_are_accepted(self):
+        self.assertTrue(self.verdict(self.lines()).accepted)
+
+    def test_a_missing_or_extra_trial_is_invalid(self):
+        lines = self.lines()
+        missing = deepcopy(lines)
+        missing.pop(self.trial_indexes(missing)[-1])
+        extra = deepcopy(lines)
+        index = self.trial_indexes(extra)[-1]
+        block = extra[index]["block"]
+        blocks = [line for line in extra if line["type"] == "block"]
+        extra.insert(index + 1, trial_line(blocks[block], self.TRIALS))
+        for broken in (missing, extra):
+            self.assertEqual(self.verdict(broken).status, "invalid")
+
+    def test_malformed_trials_are_invalid(self):
+        mutations = {
+            "gap": lambda line: line.update(trial=line["trial"] + 1),
+            "warmup flag": lambda line: line.update(warmup=not line["warmup"]),
+            "holder QoS": lambda line: line.update(holderQoS="background"),
+            "outcome": lambda line: line.update(outcome="censored"),
+            "wrong result": lambda line: line.update(holderResultCorrect=False),
+            "observed trial": lambda line: line.update(
+                mainObservedTrial=line["trial"] + 1
+            ),
+            "acquire before release": lambda line: line.update(
+                mainAcquire=line["holderRelease"] - 1,
+                outcome="valid",
+            ),
+            "before block": lambda line: line.update(loadStart=1),
+            "after block": lambda line: line.update(loadStop=10**6),
+            "CPU readings": lambda line: line.update(holderCPUReadings=[1]),
+            "type": lambda line: line.update(mainCPU="0"),
+            "missing field": lambda line: line.pop("loadStop"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(mutation=name):
+                lines = self.lines()
+                mutate(lines[self.trial_indexes(lines)[1]])
+                self.assertEqual(self.verdict(lines).status, "invalid")
+
+    def test_trials_must_follow_the_samples_and_stay_in_their_block(self):
+        lines = self.lines()
+        indexes = self.trial_indexes(lines)
+        misplaced = deepcopy(lines)
+        batch = next(
+            index for index, line in enumerate(misplaced) if line["type"] == "batch"
+        )
+        misplaced.insert(batch, misplaced.pop(indexes[0]))
+        other_block = deepcopy(lines)
+        other_block[indexes[0]]["block"] = 1
+        for broken in (misplaced, other_block):
+            self.assertEqual(self.verdict(broken).status, "invalid")

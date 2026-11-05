@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from runner.expected_attempt import ExpectedAttempt, expected_attempt
+from runner.trials import classify_trial
 
 
 @dataclass
@@ -187,7 +188,11 @@ def _validate_line(line: Any, number: int) -> None:
     _fields(
         line,
         name,
-        {"type": _enum("run", "reference", "block", "batch", "samples", "end")},
+        {
+            "type": _enum(
+                "run", "reference", "block", "batch", "samples", "trial", "end"
+            )
+        },
     )
     kind = line["type"]
     if kind == "run":
@@ -269,6 +274,28 @@ def _validate_line(line: Any, number: int) -> None:
                     len(line[key]) == len(line["values"]),
                     name + "." + key + " length differs from values",
                 )
+    elif kind == "trial":
+        _fields(
+            line,
+            name,
+            {
+                "block": _unsigned,
+                "trial": _unsigned,
+                "warmup": _boolean,
+                "holderQoS": _QOS,
+                "loadStart": _uint64,
+                "loadStop": _uint64,
+                "holderAcquire": _uint64,
+                "holderRelease": _uint64,
+                "mainArrival": _uint64,
+                "mainAcquire": _uint64,
+                "holderCPUReadings": _CPUS,
+                "mainCPU": _integer,
+                "holderResultCorrect": _boolean,
+                "mainObservedTrial": _integer,
+                "outcome": _enum("valid", "censored", "invalid"),
+            },
+        )
     else:
         _fields(
             line,
@@ -293,6 +320,34 @@ def _json(raw: bytes) -> Any:
     return json.loads(raw.decode("utf-8"), parse_constant=reject_constant)
 
 
+def _async_code_tunables(value: Any, name: str) -> None:
+    _fields(value, name, {"callsPerTask": _unsigned, "warmupCallsPerTask": _unsigned})
+    _require(value["callsPerTask"] >= 1, name + ".callsPerTask must be at least 1")
+
+
+def _priority_inversion_tunables(value: Any, name: str) -> None:
+    # The session turns "fromCalibration" into a number before it launches the app.
+    _fields(
+        value,
+        name,
+        {
+            "holderWorkIterations": _unsigned,
+            "loadQoS": _QOS,
+            "loadMilliseconds": _unsigned,
+            "mainDelayMicroseconds": _unsigned,
+            "pauseMilliseconds": _unsigned,
+            "warmupTrials": _unsigned,
+            "trials": _unsigned,
+        },
+    )
+    _require(
+        value["holderWorkIterations"] >= 1
+        and value["loadMilliseconds"] >= 1
+        and value["trials"] >= 1,
+        name + " has a value below its minimum",
+    )
+
+
 def _completed_request(request: Dict[str, Any]) -> None:
     """Completed work needs valid tunables; failed invalidRequest files do not."""
     _fields(
@@ -311,7 +366,7 @@ def _completed_request(request: Dict[str, Any]) -> None:
             "operations": _array(_string),
             "tunables": _object,
         },
-        {"simulation": _enum("crash", "hang")},
+        {"simulation": _enum("crash", "hang"), "traced": _boolean},
     )
     _fields(
         request["tunables"],
@@ -325,7 +380,11 @@ def _completed_request(request: Dict[str, Any]) -> None:
             "operationsPerBatch": _object,
             "referenceLoopIterations": _unsigned,
         },
-        {"repeats": _unsigned},
+        {
+            "repeats": _unsigned,
+            "asyncCode": _async_code_tunables,
+            "priorityInversion": _priority_inversion_tunables,
+        },
     )
     tunables = request["tunables"]
     _require(
@@ -366,6 +425,56 @@ def _check_conditions(conditions: Dict[str, Any]) -> None:
     )
 
 
+def _trial_ticks(line: Dict[str, Any]) -> List[int]:
+    return [
+        line[key]
+        for key in (
+            "loadStart",
+            "loadStop",
+            "holderAcquire",
+            "holderRelease",
+            "mainArrival",
+            "mainAcquire",
+        )
+    ]
+
+
+def _check_trials(
+    block_trials: List[Dict[str, Any]], expected_count: int, qos: str, warmup_trials: int
+) -> None:
+    _require(
+        len(block_trials) == expected_count,
+        "missing or extra trial lines",
+    )
+    for number, trial in enumerate(block_trials):
+        _require(
+            trial["trial"] == number,
+            "trial lines must be ordered by trial without gaps",
+        )
+        _require(
+            trial["warmup"] == (number < warmup_trials),
+            "trial warmup flag differs from request",
+        )
+        _require(trial["holderQoS"] == qos, "trial holderQoS differs from block qos")
+        _require(
+            len(trial["holderCPUReadings"]) == 2,
+            "trial holderCPUReadings require two values",
+        )
+        _require(
+            trial["outcome"] == classify_trial(trial),
+            "trial outcome differs from its timestamps",
+        )
+        _require(
+            trial["holderResultCorrect"] and trial["mainObservedTrial"] == number,
+            "trial result was not the holder's value",
+        )
+        _require(
+            trial["mainArrival"] >= trial["holderRelease"]
+            or trial["mainAcquire"] >= trial["holderRelease"],
+            "main thread acquired the lock while the holder held it",
+        )
+
+
 def _check_work(
     lines: List[Dict[str, Any]], request: Dict[str, Any], expected: ExpectedAttempt
 ) -> None:
@@ -400,8 +509,10 @@ def _check_work(
     blocks = []
     batches = []
     samples = []
+    trials = []
     current_block = None
     in_samples = False
+    in_trials = False
     previous_batch = None
     previous_end = references[0]["end"]
     for line in lines[2:-2]:
@@ -419,15 +530,19 @@ def _check_work(
             blocks.append(line)
             current_block = line
             in_samples = False
+            in_trials = False
             previous_batch = None
-        elif kind in ("batch", "samples"):
+        elif kind in ("batch", "samples", "trial"):
             _require(
                 current_block is not None
                 and line.get("block") == current_block["block"],
                 "batch or samples line is outside its block group",
             )
             if kind == "batch":
-                _require(not in_samples, "batch lines must precede samples in a block")
+                _require(
+                    not in_samples and not in_trials,
+                    "batch lines must precede samples in a block",
+                )
                 key = (line["thread"], line["batch"])
                 _require(
                     previous_batch is None or previous_batch < key,
@@ -442,9 +557,18 @@ def _check_work(
                     "batch timestamps are outside its block",
                 )
                 batches.append(line)
-            else:
+            elif kind == "samples":
+                _require(not in_trials, "samples lines must precede trial lines")
                 in_samples = True
                 samples.append(line)
+            else:
+                in_trials = True
+                _require(
+                    current_block["start"] <= min(_trial_ticks(line))
+                    and max(_trial_ticks(line)) <= current_block["end"],
+                    "trial timestamps are outside its block",
+                )
+                trials.append(line)
         else:
             raise _Invalid("unexpected line inside block groups: " + kind)
     _require(
@@ -526,6 +650,12 @@ def _check_work(
                     readings & set(sample) == (readings if group.cpu_readings else set()),
                     "samples CPU readings differ from request",
                 )
+        _check_trials(
+            [line for line in trials if line["block"] == block["block"]],
+            expected_block.trial_lines,
+            expected_block.qos,
+            request["tunables"].get("priorityInversion", {}).get("warmupTrials", 0),
+        )
     warmup = sum(batch["warmup"] for batch in batches)
     _require(
         end["blockLines"] == len(blocks)
@@ -555,6 +685,7 @@ def check_attempt(
     done_file: Optional[Path],
     request: Dict[str, Any],
     build_id: str,
+    expected_os_build: Optional[str] = None,
 ) -> AttemptVerdict:
     if done_file is None or not done_file.exists():
         return AttemptVerdict("incomplete", False, None, ["missing .done marker"])
@@ -607,6 +738,11 @@ def check_attempt(
         _require(
             run["build"]["buildID"] == build_id,
             "run build ID differs from expected build",
+        )
+        _require(
+            expected_os_build is None
+            or run["phone"]["osBuild"] == expected_os_build,
+            "phone iOS build differs from the plan",
         )
         if end["status"] in ("refused", "failed"):
             return AttemptVerdict(

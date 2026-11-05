@@ -305,7 +305,11 @@ def run_session(
                         if verdict.status not in ('timeout', 'deviceFailed'):
                             if has_marker:
                                 verdict = check_attempt(
-                                    result, marker, request, build_info['buildID']
+                                    result,
+                                    marker,
+                                    request,
+                                    build_info['buildID'],
+                                    plan.ios_builds.get(phone.key),
                                 )
                                 _write_json(
                                     folder / (attempt_id + '.check.json'),
