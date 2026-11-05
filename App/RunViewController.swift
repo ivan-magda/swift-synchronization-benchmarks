@@ -21,6 +21,10 @@ final class RunViewController: UIViewController {
         statusLabel.text ?? ""
     }
 
+    func showStatus(_ text: String) {
+        statusLabel.text = text
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -38,10 +42,6 @@ final class RunViewController: UIViewController {
                 lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor
             )
         ])
-    }
-
-    func showStatus(_ text: String) {
-        statusLabel.text = text
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -81,11 +81,13 @@ final class RunViewController: UIViewController {
         link.add(to: .main, forMode: .common)
     }
 
-    @objc private func activationChanged() {
+    @objc
+    private func activationChanged() {
         launchReadiness.activationChanged()
     }
 
-    @objc private func frameDisplayed() {
+    @objc
+    private func frameDisplayed() {
         guard launchReadiness.frameDisplayed(
             applicationIsActive: UIApplication.shared.applicationState == .active,
             sceneIsActive: view.window?.windowScene?.activationState == .foregroundActive
