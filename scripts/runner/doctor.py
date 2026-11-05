@@ -108,15 +108,9 @@ def doctor(
             if plan is not None:
                 required_seconds = plan.settle_seconds
                 for run in pending:
-                    attempts = state.attempts(run.run_id)
-                    thermal = sum(
-                        attempt.get('status') == 'refused'
-                        and attempt.get('reasonCode') == 'thermal'
-                        for attempt in attempts
-                    )
-                    launches = max(0, plan.max_thermal_retries + 1 - thermal)
-                    # A normal outcome advances to the next run; only thermal refusals
-                    # retry within this session. Previously exhausted runs are excluded.
+                    # Every pending run gets a fresh per-session thermal allowance.
+                    # A normal outcome advances; only thermal refusals retry here.
+                    launches = plan.max_thermal_retries + 1
                     required_seconds += (
                         launches * run.time_limit_seconds
                         + max(0, launches - 1) * plan.thermal_wait_seconds

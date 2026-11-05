@@ -169,6 +169,19 @@ class DoctorTests(unittest.TestCase):
             state = RunState.load_or_create(
                 state_path(results, plan, PHONE.key, info['codeHash']), plan
             )
+            for _ in range(2):
+                state.record_attempt(
+                    plan.runs[0].run_id,
+                    {'accepted': False, 'status': 'refused', 'reasonCode': 'thermal'},
+                )
+            # Previous thermal exhaustion must not reduce a fresh session's budget.
+            findings = doctor(
+                CONFIG, PHONE, plan, results, BuildRunner(), Devices(), NOW,
+                build_info=info,
+            )
+            self.assertFalse(
+                next(item for item in findings if item.name == 'profile').ok
+            )
             state.record_attempt(plan.runs[0].run_id, {'accepted': True})
             findings = doctor(
                 CONFIG,

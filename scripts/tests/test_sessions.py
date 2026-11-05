@@ -131,9 +131,28 @@ class SessionTests(unittest.TestCase):
         summary = self.run_session(['refuse-thermal', 'refuse-thermal'])
         self.assertEqual((summary.refused, summary.stop_reason), (2, 'thermal'))
         self.assertEqual(len(self.state().attempts(self.plan.runs[0].run_id)), 2)
-        resumed = self.run_session(['complete'])
-        self.assertEqual(resumed.stop_reason, 'thermal')
-        self.assertEqual(len(self.devices.requests), 2)
+        # A new session receives a fresh allowance without losing refusal history.
+        resumed = self.run_session(['complete', 'complete'])
+        self.assertEqual((resumed.accepted, resumed.stop_reason), (2, None))
+        self.assertEqual(len(self.devices.requests), 4)
+        attempts = self.state().attempts(self.plan.runs[0].run_id)
+        self.assertEqual(
+            [(a['attempt'], a['status']) for a in attempts],
+            [(1, 'refused'), (2, 'refused'), (3, 'completed')],
+        )
+        self.assertEqual(len({a['attemptID'] for a in attempts}), 3)
+        self.assertEqual(self.state().pending_runs(), [])
+
+    def test_each_thermal_session_remains_bounded_after_exhaustion(self):
+        self.plan = replace(self.plan, max_thermal_retries=1)
+        for total_attempts in (2, 4):
+            summary = self.run_session(['refuse-thermal', 'refuse-thermal'])
+            self.assertEqual((summary.refused, summary.stop_reason), (2, 'thermal'))
+            self.assertEqual(len(self.devices.requests), total_attempts)
+        self.assertEqual(
+            [a['attempt'] for a in self.state().attempts(self.plan.runs[0].run_id)],
+            [1, 2, 3, 4],
+        )
 
     def test_other_refusal_stops_the_session(self):
         summary = self.run_session(['refuse-battery'])

@@ -126,7 +126,7 @@ How `run` works:
    - copy the result file and the `.done` marker, one file at a time;
    - check the file; write one line to the session log; pause; next run.
 4. The status comes from the `end` line: `completed`, `refused` or `failed`. If the app is still alive after the time limit, terminate it and mark the attempt `timeout`. If it exited without `.done`, mark it `crashed` and copy the crash report (`devicectl device copy from --domain-type systemCrashLogs`).
-5. After a thermal refusal, wait and start a new attempt of the same run. Any other refusal stops the session. Every attempt and its files are kept.
+5. After a thermal refusal, wait and start a new attempt of the same run. Each run gets an initial attempt plus at most `maxThermalRetries` thermal retries per session; exhaustion stops that session. A fresh session gets a fresh thermal allowance, and doctor budgets it for every pending run. Thermal refusals do not count toward ordinary `maxAttempts`. Any other refusal stops the session. Every attempt and its files are kept, with attempt numbers increasing across sessions.
 
 The run state is saved after every run under `results/`, so a stopped session continues from the next run, and a running session does not make the git tree dirty. The script runs under `caffeinate`, so the Mac does not sleep. After a weekly rebuild, the same code hash keeps runs comparable; a different hash means a new build ID. Instruments runs (System Trace for experiments 7 and 8B) are separate, marked `traced`, and never mixed with timed data.
 

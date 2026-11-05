@@ -342,15 +342,11 @@ def run_session(
         failures = 0
 
         for run in state.pending_runs():
+            # Thermal retries are a per-run allowance for this session. Persisted
+            # refusals remain history and never exhaust ordinary maxAttempts.
+            thermal_count = 0
             while True:
                 attempts = state.attempts(run.run_id)
-                thermal_count = sum(
-                    a.get('status') == 'refused' and a.get('reasonCode') == 'thermal'
-                    for a in attempts
-                )
-                if thermal_count > plan.max_thermal_retries:
-                    summary.stop_reason = 'thermal'
-                    break
                 if not devices.is_unlocked(phone.udid):
                     summary.stop_reason = 'phone locked'
                     break
@@ -523,7 +519,8 @@ def run_session(
                     if verdict.reason_code != 'thermal':
                         summary.stop_reason = 'refused: ' + str(verdict.reason_code)
                         break
-                    if thermal_count >= plan.max_thermal_retries:
+                    thermal_count += 1
+                    if thermal_count > plan.max_thermal_retries:
                         summary.stop_reason = 'thermal'
                         break
                     sleep(plan.thermal_wait_seconds)
