@@ -196,7 +196,10 @@ struct PreflightCase: Sendable {
             batteryState: "unplugged",
             debuggerAttached: true,
             applicationState: "background",
-            environment: ["PTHREAD_MUTEX_USE_ULOCK": "1"], configuration: "Debug", smoke: true,
-            expected: .proceed),
+            environment: ["PTHREAD_MUTEX_USE_ULOCK": "1"],
+            configuration: "Debug",
+            smoke: true,
+            expected: .proceed
+        ),
     ]
 }
