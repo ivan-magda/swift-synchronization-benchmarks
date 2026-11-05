@@ -1,0 +1,67 @@
+name: SyncBench
+
+options:
+  deploymentTarget:
+    iOS: "26.0"
+
+packages:
+  swift-atomics:
+    url: https://github.com/apple/swift-atomics.git
+    exactVersion: 1.3.1
+
+settingGroups:
+  swiftSettings:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+    SWIFT_APPROACHABLE_CONCURRENCY: NO
+    SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: NO
+    SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES: NO
+
+targets:
+  SyncBench:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - path: Harness
+        optional: true
+      - path: Mechanisms
+        optional: true
+      - path: Experiments
+        optional: true
+    dependencies:
+      - package: swift-atomics
+        product: Atomics
+    settings:
+      groups: [swiftSettings]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.syncbench
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        BENCH_BUILD_ID: ""
+        BENCH_GIT_COMMIT: ""
+        BENCH_GIT_DIRTY: ""
+        BENCH_BUILD_TARGET: ""
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+          SWIFT_COMPILATION_MODE: wholemodule
+    scheme:
+      testTargets:
+        - SyncBenchTests
+
+  SyncBenchTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: SyncBench
+    settings:
+      groups: [swiftSettings]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.syncbench.tests
+        GENERATE_INFOPLIST_FILE: YES

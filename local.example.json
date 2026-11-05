@@ -1,0 +1,14 @@
+{
+  "teamID": "ABCDE12345",
+  "bundleID": "com.example.syncbench",
+  "phones": {
+    "iphone11": {
+      "udid": "00000000-0000000000000000",
+      "model": "iPhone12,5"
+    },
+    "iphone15": {
+      "udid": "00000000-0000000000000000",
+      "model": "iPhone16,2"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Default</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
+    <key>BenchBuildID</key>
+    <string>$(BENCH_BUILD_ID)</string>
+    <key>BenchGitCommit</key>
+    <string>$(BENCH_GIT_COMMIT)</string>
+    <key>BenchGitDirty</key>
+    <string>$(BENCH_GIT_DIRTY)</string>
+    <key>BenchBuildTarget</key>
+    <string>$(BENCH_BUILD_TARGET)</string>
+</dict>
+</plist>
