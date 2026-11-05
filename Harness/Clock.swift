@@ -11,6 +11,7 @@ enum Clock {
         var information = mach_timebase_info_data_t()
         let result = mach_timebase_info(&information)
         precondition(result == KERN_SUCCESS)
+
         return information
     }()
 }
@@ -21,6 +22,7 @@ enum CPU {
     static func current() -> Int {
         var number = -1
         let result = pthread_cpu_number_np(&number)
+
         return result == 0 ? Int(number) : -1
     }
 }

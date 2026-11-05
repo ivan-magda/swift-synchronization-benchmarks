@@ -38,6 +38,7 @@ final class ThreadLog: @unchecked Sendable {
         guard batches >= 0, readingsPerBatch >= 0 else {
             throw RequestError(message: "negative thread log size")
         }
+
         let (readings, readingsOverflow) = batches.multipliedReportingOverflow(by: readingsPerBatch)
         let (batchBytes, batchOverflow) = batches.multipliedReportingOverflow(by: MemoryLayout<Batch>.stride)
         let (readingBytes, readingOverflow) = readings.multipliedReportingOverflow(by: MemoryLayout<Int>.stride)
@@ -45,11 +46,13 @@ final class ThreadLog: @unchecked Sendable {
         let (writtenBytes, writtenOverflow) = readings.multipliedReportingOverflow(by: MemoryLayout<Bool>.stride)
         let (valueBytes, valueOverflow) = batchBytes.addingReportingOverflow(allReadingBytes)
         let (totalBytes, totalOverflow) = valueBytes.addingReportingOverflow(writtenBytes)
+
         guard !readingsOverflow, !batchOverflow, !readingOverflow, !allReadingOverflow,
             !writtenOverflow, !valueOverflow, !totalOverflow
         else {
             throw RequestError(message: "thread log size overflow")
         }
+
         return max(totalBytes, 1)
     }
 
@@ -74,13 +77,16 @@ final class ThreadLog: @unchecked Sendable {
 
         times = allocation.bindMemory(to: Batch.self, capacity: batches)
         callerCPUs = allocation.advanced(by: batchBytes).bindMemory(
-            to: Int.self, capacity: readingCount
+            to: Int.self,
+            capacity: readingCount
         )
         executorCPUs = allocation.advanced(by: batchBytes + readingBytes).bindMemory(
-            to: Int.self, capacity: readingCount
+            to: Int.self,
+            capacity: readingCount
         )
         executorSlotsWritten = allocation.advanced(by: valueBytes).bindMemory(
-            to: Bool.self, capacity: readingCount
+            to: Bool.self,
+            capacity: readingCount
         )
 
         times.initialize(repeating: Batch(), count: batches)

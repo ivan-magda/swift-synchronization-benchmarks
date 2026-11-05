@@ -21,7 +21,12 @@ struct ContextSwitches: Equatable, Sendable {
         )
         let taskResult = withUnsafeMutablePointer(to: &events) { pointer in
             pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { information in
-                task_info(mach_task_self_, task_flavor_t(TASK_EVENTS_INFO), information, &count)
+                task_info(
+                    mach_task_self_,
+                    task_flavor_t(TASK_EVENTS_INFO),
+                    information,
+                    &count
+                )
             }
         }
         precondition(taskResult == KERN_SUCCESS)

@@ -24,24 +24,40 @@ enum RunController {
         let initialConditions = captureConditions()
         let lines = ResultLineBuffer()
         lines.append(RunLine(
-            schema: 1, request: request, build: build, phone: phone, conditions: initialConditions))
+            schema: 1,
+            request: request,
+            build: build,
+            phone: phone,
+            conditions: initialConditions
+        ))
 
         // Retain the invalid request verbatim in its run line, but never use an unsafe
         // supplied identifier as a path. Such a diagnostic cannot be accepted as a run.
         let fileAttemptID = RunRequest.isValidIdentifier(request.attemptID)
-            ? request.attemptID : "invalid." + UUID().uuidString
+            ? request.attemptID
+            : "invalid." + UUID().uuidString
 
         func finish(
-            status: String, reasonCode: String? = nil, reason: String? = nil,
-            checks: [CheckResult] = [], warmupBatchLines: Int = 0,
-            conditions: Conditions, thermalChanges: [ThermalChange] = []
+            status: String,
+            reasonCode: String? = nil,
+            reason: String? = nil,
+            checks: [CheckResult] = [],
+            warmupBatchLines: Int = 0,
+            conditions: Conditions,
+            thermalChanges: [ThermalChange] = []
         ) -> RunOutcome {
             lines.append(EndLine(
-                status: status, reasonCode: reasonCode, reason: reason, checks: checks,
+                status: status,
+                reasonCode: reasonCode,
+                reason: reason,
+                checks: checks,
                 blockLines: lines.lineCounts["block", default: 0],
                 warmupBatchLines: warmupBatchLines,
                 measuredBatchLines: lines.lineCounts["batch", default: 0] - warmupBatchLines,
-                conditions: conditions, thermalChanges: thermalChanges))
+                conditions: conditions,
+                thermalChanges: thermalChanges
+            ))
+
             do {
                 let marker = try ResultWriter.write(lines, attemptID: fileAttemptID, to: directory)
                 return RunOutcome(status: status, reasonCode: reasonCode, marker: marker)
@@ -57,6 +73,7 @@ enum RunController {
             experiment = try makeExperiment(request)
             descriptions = experiment.blocks
             var batchLines = 0
+
             for description in descriptions {
                 let layout = layout(for: description, request: request)
                 try layout.validate(threads: description.threads)
@@ -69,16 +86,24 @@ enum RunController {
             }
         } catch {
             return finish(
-                status: "failed", reasonCode: "invalidRequest", reason: error.message,
-                conditions: initialConditions)
+                status: "failed",
+                reasonCode: "invalidRequest",
+                reason: error.message,
+                conditions: initialConditions
+            )
         }
 
         if case let .refuse(reason, detail) = Preflight.decide(
-            initialConditions, build: build, request: request
+            initialConditions,
+            build: build,
+            request: request
         ) {
             return finish(
-                status: "refused", reasonCode: reason.rawValue, reason: detail,
-                conditions: initialConditions)
+                status: "refused",
+                reasonCode: reason.rawValue,
+                reason: detail,
+                conditions: initialConditions
+            )
         }
 
         let monitor = ThermalMonitor()
@@ -87,24 +112,37 @@ enum RunController {
         let signposter = OSSignposter(subsystem: "SyncBench", category: "block")
         var checks: [CheckResult] = []
         var warmupBatchLines = 0
+
         for (position, description) in seededShuffle(descriptions, seed: request.seed).enumerated() {
             let block = BlockContext(
-                position: position, description: description,
-                layout: layout(for: description, request: request), request: request, lines: lines)
+                position: position,
+                description: description,
+                layout: layout(for: description, request: request),
+                request: request,
+                lines: lines
+            )
             let interval = signposter.beginInterval(
-                "block", "\(description.mechanism, privacy: .public) \(description.operation, privacy: .public)")
+                "block",
+                "\(description.mechanism, privacy: .public) \(description.operation, privacy: .public)"
+            )
             checks.append(contentsOf: experiment.run(block))
             signposter.endInterval("block", interval)
             warmupBatchLines += block.warmupBatchLines
+
             if position == 0 {
                 switch request.simulation {
-                case .crash: fatalError("simulated crash")
+                case .crash:
+                    fatalError("simulated crash")
                 case .hang:
-                    while true { sleep(3_600) }
-                case nil: break
+                    while true {
+                        sleep(3_600)
+                    }
+                case nil:
+                    break
                 }
             }
         }
+
         appendReference(when: "end", request: request, lines: lines)
         let finalConditions = captureConditions()
         let thermalChanges = monitor.stop()
@@ -113,8 +151,11 @@ enum RunController {
             status: failedChecks.isEmpty ? "completed" : "failed",
             reasonCode: failedChecks.isEmpty ? nil : "check",
             reason: failedChecks.isEmpty ? nil : failedChecks.map(\.name).joined(separator: ", "),
-            checks: checks, warmupBatchLines: warmupBatchLines,
-            conditions: finalConditions, thermalChanges: thermalChanges)
+            checks: checks,
+            warmupBatchLines: warmupBatchLines,
+            conditions: finalConditions,
+            thermalChanges: thermalChanges
+        )
     }
 
     /// The UI callback executes once on main before any measured block starts.
@@ -134,7 +175,9 @@ enum RunController {
         BatchLayout(
             warmupBatches: request.tunables.warmupBatches,
             measuredBatches: request.tunables.measuredBatches,
-            operationsPerBatch: block.operationsPerBatch, subBatches: request.tunables.subBatches)
+            operationsPerBatch: block.operationsPerBatch,
+            subBatches: request.tunables.subBatches
+        )
     }
 
     private static func appendReference(when: String, request: RunRequest, lines: ResultLineBuffer) {
@@ -145,7 +188,11 @@ enum RunController {
         let cpuAfter = CPU.current()
         blackHole(value)
         lines.append(ReferenceLine(
-            when: when, iterations: request.tunables.referenceLoopIterations,
-            start: start, end: end, cpuReadings: [cpuBefore, cpuAfter]))
+            when: when,
+            iterations: request.tunables.referenceLoopIterations,
+            start: start,
+            end: end,
+            cpuReadings: [cpuBefore, cpuAfter]
+        ))
     }
 }

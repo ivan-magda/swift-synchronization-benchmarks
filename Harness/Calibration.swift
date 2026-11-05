@@ -6,38 +6,50 @@ struct Calibration: Experiment {
 
     init(request: RunRequest) throws(RequestError) {
         try request.validate()
+
         guard request.variant == "default" else {
             throw RequestError(message: "variant must be default for calibration")
         }
+
         guard request.mechanisms.isEmpty else {
             throw RequestError(message: "mechanisms must be empty for calibration")
         }
+
         guard request.operations.isEmpty else {
             throw RequestError(message: "operations must be empty for calibration")
         }
+
         guard let repeats = request.tunables.repeats, repeats >= 1 else {
             throw RequestError(message: "repeats must be at least 1 for calibration")
         }
+
         let cpuCount = PhoneFacts.read().cpuCount
         let (bytes, overflow) = repeats.multipliedReportingOverflow(by: MemoryLayout<CalibrationSample>.stride)
         let (_, aggregateOverflow) = bytes.multipliedReportingOverflow(by: cpuCount)
+
         guard !overflow, !aggregateOverflow else {
             throw RequestError(message: "repeats sample storage size overflow")
         }
+
         self.repeats = repeats
         iterations = request.tunables.referenceLoopIterations
         blocks = ["clockSingleThread", "clockAllCPUs", "cpuSpeedUserInteractive", "cpuSpeedBackground"].map {
             BlockDescription(
-                mechanism: $0, operation: "", threads: $0 == "clockSingleThread" ? 1 : cpuCount,
+                mechanism: $0,
+                operation: "",
+                threads: $0 == "clockSingleThread" ? 1 : cpuCount,
                 qos: $0 == "cpuSpeedBackground" ? .background : .userInteractive,
-                operationsPerBatch: request.operationsPerBatch(for: $0))
+                operationsPerBatch: request.operationsPerBatch(for: $0)
+            )
         }
+
         for description in blocks {
             try BatchLayout(
                 warmupBatches: request.tunables.warmupBatches,
                 measuredBatches: request.tunables.measuredBatches,
                 operationsPerBatch: description.operationsPerBatch,
-                subBatches: request.tunables.subBatches).validate(threads: description.threads)
+                subBatches: request.tunables.subBatches
+            ).validate(threads: description.threads)
         }
     }
 
@@ -47,9 +59,11 @@ struct Calibration: Experiment {
         let measuresClock = block.description.mechanism.hasPrefix("clock")
         let repeats = repeats
         let iterations = iterations
+
         _ = block.runOnThreads(recording: .samplesOnly) { thread, barrier, _ in
             let buffer = buffers[thread]
             barrier.arriveAndWait()
+
             for _ in 0..<repeats {
                 if measuresClock {
                     let start = Clock.now()
@@ -64,25 +78,38 @@ struct Calibration: Experiment {
                     let cpuAtEnd = CPU.current()
                     blackHole(value)
                     buffer.append(CalibrationSample(
-                        ticks: end - start, cpuAtStart: cpuAtStart, cpuAtEnd: cpuAtEnd))
+                        ticks: end - start,
+                        cpuAtStart: cpuAtStart,
+                        cpuAtEnd: cpuAtEnd
+                    ))
                 }
             }
         }
+
         var passed = true
         for (thread, buffer) in buffers.enumerated() {
             let samples = buffer.samples
             let values = samples.map(\.ticks)
             passed = passed && values.count == repeats
+
             block.appendSamples(SamplesLine(
-                block: block.position, thread: thread,
-                metric: measuresClock ? "clockRead1000" : "referenceLoop", unit: "ticks",
+                block: block.position,
+                thread: thread,
+                metric: measuresClock ? "clockRead1000" : "referenceLoop",
+                unit: "ticks",
                 values: values,
                 cpuAtStart: measuresClock ? nil : samples.map(\.cpuAtStart),
-                cpuAtEnd: measuresClock ? nil : samples.map(\.cpuAtEnd)))
+                cpuAtEnd: measuresClock ? nil : samples.map(\.cpuAtEnd)
+            ))
         }
+
         return [CheckResult(
-            name: "calibration.samples", block: block.position, passed: passed,
-            detail: "Every samples line must contain \(repeats) values", violations: nil)]
+            name: "calibration.samples",
+            block: block.position,
+            passed: passed,
+            detail: "Every samples line must contain \(repeats) values",
+            violations: nil
+        )]
     }
 
     /// Keep the read loop separate for optimized-code inspection. Darwin clock reads

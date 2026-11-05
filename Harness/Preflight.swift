@@ -19,12 +19,15 @@ enum Preflight {
         build: BuildInfo,
         request: RunRequest
     ) -> PreflightDecision {
-        guard !request.smoke else { return .proceed }
+        guard !request.smoke else {
+            return .proceed
+        }
 
         var failures: [(reason: RefusalReason, detail: String)] = []
         if build.configuration != "Release" {
             failures.append(
-                (.configuration, "configuration=\(build.configuration) (requires Release)"))
+                (.configuration, "configuration=\(build.configuration) (requires Release)")
+            )
         }
         if conditions.debuggerAttached {
             failures.append((.debugger, "debuggerAttached=true"))
@@ -44,7 +47,11 @@ enum Preflight {
         for name in Conditions.watchedEnvironment where conditions.environment[name] != nil {
             failures.append((.environment, "environment=\(name)"))
         }
-        guard let first = failures.first else { return .proceed }
+
+        guard let first = failures.first else {
+            return .proceed
+        }
+
         return .refuse(first.reason, detail: failures.map(\.detail).joined(separator: "; "))
     }
 }

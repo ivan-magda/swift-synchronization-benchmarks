@@ -21,8 +21,11 @@ final class BlockContext: @unchecked Sendable {
     private(set) var warmupBatchLines = 0
 
     init(
-        position: Int, description: BlockDescription, layout: BatchLayout,
-        request: RunRequest, lines: ResultLineBuffer
+        position: Int,
+        description: BlockDescription,
+        layout: BatchLayout,
+        request: RunRequest,
+        lines: ResultLineBuffer
     ) {
         self.position = position
         self.description = description
@@ -47,7 +50,10 @@ final class BlockContext: @unchecked Sendable {
                 body(index, barrier, log)
             }
         }
-        for thread in threads { thread.join() }
+        for thread in threads {
+            thread.join()
+        }
+
         finish(start: start, switches: switches, thermal: thermal, logs: logs, recording: recording)
         return logs
     }
@@ -65,6 +71,7 @@ final class BlockContext: @unchecked Sendable {
         let start = Clock.now()
         let switches = ContextSwitches.now()
         let thermal = ProcessInfo.processInfo.thermalState.resultName
+
         for (index, log) in logs.enumerated() {
             completion.enter()
             Task.detached(priority: description.qos.taskPriority) {
@@ -72,6 +79,7 @@ final class BlockContext: @unchecked Sendable {
                 completion.leave()
             }
         }
+
         completion.wait()
         finish(start: start, switches: switches, thermal: thermal, logs: logs, recording: recording)
         return logs
@@ -93,34 +101,59 @@ final class BlockContext: @unchecked Sendable {
         (0..<description.threads).map { _ in
             ThreadLog(
                 batches: recording == .batches ? layout.totalBatches : 0,
-                readingsPerBatch: recording == .batches ? layout.subBatches + 1 : 0)
+                readingsPerBatch: recording == .batches ? layout.subBatches + 1 : 0
+            )
         }
     }
 
     private func finish(
-        start: UInt64, switches: ContextSwitches, thermal: String,
-        logs: [ThreadLog], recording: BlockRecording
+        start: UInt64,
+        switches: ContextSwitches,
+        thermal: String,
+        logs: [ThreadLog],
+        recording: BlockRecording
     ) {
         let end = Clock.now()
         let delta = ContextSwitches.now() - switches
         let thermalAtEnd = ProcessInfo.processInfo.thermalState.resultName
         lines.append(BlockLine(
-            block: position, mechanism: description.mechanism, operation: description.operation,
-            threads: description.threads, qos: description.qos,
-            operationsPerBatch: description.operationsPerBatch, start: start, end: end,
-            voluntaryContextSwitches: delta.voluntary, involuntaryContextSwitches: delta.involuntary,
-            taskContextSwitches: delta.task, thermalStateAtStart: thermal,
-            thermalStateAtEnd: thermalAtEnd))
-        guard recording == .batches else { return }
+            block: position,
+            mechanism: description.mechanism,
+            operation: description.operation,
+            threads: description.threads,
+            qos: description.qos,
+            operationsPerBatch: description.operationsPerBatch,
+            start: start,
+            end: end,
+            voluntaryContextSwitches: delta.voluntary,
+            involuntaryContextSwitches: delta.involuntary,
+            taskContextSwitches: delta.task,
+            thermalStateAtStart: thermal,
+            thermalStateAtEnd: thermalAtEnd
+        ))
+
+        guard recording == .batches else {
+            return
+        }
+
         for (thread, log) in logs.enumerated() {
             for batch in 0..<layout.totalBatches {
                 let warmup = batch < layout.warmupBatches
-                if warmup { warmupBatchLines += 1 }
+                if warmup {
+                    warmupBatchLines += 1
+                }
+
                 lines.append(BatchLine(
-                    block: position, batch: batch, thread: thread, warmup: warmup,
-                    operations: layout.operationsPerBatch, start: log.start(ofBatch: batch),
-                    end: log.end(ofBatch: batch), cpuReadings: log.cpuReadings(ofBatch: batch),
-                    executorCPUReadings: log.executorCPUReadings(ofBatch: batch)))
+                    block: position,
+                    batch: batch,
+                    thread: thread,
+                    warmup: warmup,
+                    operations: layout.operationsPerBatch,
+                    start: log.start(ofBatch: batch),
+                    end: log.end(ofBatch: batch),
+                    cpuReadings: log.cpuReadings(ofBatch: batch),
+                    executorCPUReadings: log.executorCPUReadings(ofBatch: batch)
+                ))
             }
         }
     }

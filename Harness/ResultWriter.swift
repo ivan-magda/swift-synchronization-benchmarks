@@ -10,6 +10,7 @@ final class ResultLineBuffer: @unchecked Sendable {
     func append<Line: Encodable>(_ line: Line) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+
         do {
             let encoded = try encoder.encode(line)
             let header = try JSONDecoder().decode(LineHeader.self, from: encoded)
@@ -44,7 +45,10 @@ enum ResultWriter {
             throw RequestError(message: "attemptID cannot be used as a result filename")
         }
 
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
 
         let filename = attemptID + ".jsonl"
         let markerURL = directory.appending(path: attemptID + ".done")

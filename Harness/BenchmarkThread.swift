@@ -4,11 +4,16 @@ import Synchronization
 extension QoS {
     var qosClass: qos_class_t {
         switch self {
-        case .userInteractive: QOS_CLASS_USER_INTERACTIVE
-        case .userInitiated: QOS_CLASS_USER_INITIATED
-        case .default: QOS_CLASS_DEFAULT
-        case .utility: QOS_CLASS_UTILITY
-        case .background: QOS_CLASS_BACKGROUND
+        case .userInteractive:
+            QOS_CLASS_USER_INTERACTIVE
+        case .userInitiated:
+            QOS_CLASS_USER_INITIATED
+        case .default:
+            QOS_CLASS_DEFAULT
+        case .utility:
+            QOS_CLASS_UTILITY
+        case .background:
+            QOS_CLASS_BACKGROUND
         }
     }
 
@@ -61,14 +66,19 @@ final class BenchmarkThread: @unchecked Sendable {
 
         let entry = Unmanaged.passRetained(Entry(name: name, body: body))
         var thread: pthread_t?
-        let result = pthread_create(&thread, &attributes, { pointer in
-            let entry = Unmanaged<Entry>.fromOpaque(pointer).takeRetainedValue()
-            let nameResult = pthread_setname_np(entry.name)
-            precondition(nameResult == 0)
+        let result = pthread_create(
+            &thread,
+            &attributes,
+            { pointer in
+                let entry = Unmanaged<Entry>.fromOpaque(pointer).takeRetainedValue()
+                let nameResult = pthread_setname_np(entry.name)
+                precondition(nameResult == 0)
 
-            entry.body()
-            return nil
-        }, entry.toOpaque())
+                entry.body()
+                return nil
+            },
+            entry.toOpaque()
+        )
 
         guard result == 0, let thread else {
             entry.release()

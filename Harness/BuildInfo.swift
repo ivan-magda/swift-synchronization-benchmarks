@@ -15,11 +15,13 @@ struct BuildInfo: Codable, Equatable, Sendable {
         let defaultTarget = minimumOS.hasPrefix("18.") ? "ios18" : "ios26"
         let dirtyValue = value(forKey: "BenchGitDirty", in: bundle) ?? ""
         let isDirty = ["1", "true", "YES"].contains(dirtyValue)
+
         #if DEBUG
             let configuration = "Debug"
         #else
             let configuration = "Release"
         #endif
+
         return BuildInfo(
             buildID: value(forKey: "BenchBuildID", in: bundle) ?? "unknown",
             commit: value(forKey: "BenchGitCommit", in: bundle) ?? "unknown",
@@ -37,6 +39,7 @@ struct BuildInfo: Codable, Equatable, Sendable {
         else {
             return nil
         }
+
         return value
     }
 }

@@ -18,21 +18,28 @@ struct BatchLayout: Equatable, Sendable {
 
     /// Reject unrepresentable storage and counts before allocating worker logs.
     func validate(threads: Int) throws(RequestError) {
-        guard (1...64).contains(threads), warmupBatches >= 0, measuredBatches >= 1,
-            subBatches >= 1, operationsPerBatch >= subBatches,
+        guard (1...64).contains(threads),
+            warmupBatches >= 0,
+            measuredBatches >= 1,
+            subBatches >= 1,
+            operationsPerBatch >= subBatches,
             operationsPerBatch % subBatches == 0
         else {
             throw RequestError(message: "invalid block batch layout")
         }
+
         let (batches, batchOverflow) = warmupBatches.addingReportingOverflow(measuredBatches)
         let (readings, readingOverflow) = subBatches.addingReportingOverflow(1)
+
         guard !batchOverflow, !readingOverflow else {
             throw RequestError(message: "batch layout count overflow")
         }
+
         let bytes = try ThreadLog.storageByteCount(batches: batches, readingsPerBatch: readings)
         let (_, storageOverflow) = bytes.multipliedReportingOverflow(by: threads)
         let (batchLines, lineOverflow) = batches.multipliedReportingOverflow(by: threads)
         let (_, operationOverflow) = batchLines.multipliedReportingOverflow(by: operationsPerBatch)
+
         guard !storageOverflow, !lineOverflow, !operationOverflow else {
             throw RequestError(message: "aggregate block size overflow")
         }
@@ -41,8 +48,10 @@ struct BatchLayout: Equatable, Sendable {
 
 protocol Experiment: Sendable {
     init(request: RunRequest) throws(RequestError)
+
     /// Fixed input order; the controller shuffles it with the request's seed.
     var blocks: [BlockDescription] { get }
+
     func run(_ block: BlockContext) -> [CheckResult]
 }
 
@@ -51,9 +60,11 @@ enum ExperimentRegistry {
         if request.experiment == "baseComparison" {
             return try BaseComparison(request: request)
         }
+
         if request.experiment == "calibration" {
             return try Calibration(request: request)
         }
+
         throw RequestError(message: "unknown experiment: \(request.experiment)")
     }
 }
