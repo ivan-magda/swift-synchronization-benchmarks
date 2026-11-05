@@ -30,6 +30,20 @@ Lines appear in this order: `run`; `reference` at start; for each block its `blo
 
 Refusal reason codes are `thermal`, `lowPower`, `battery`, `debugger`, `applicationState`, `environment`, `configuration`. Failure reason codes are `check`, `invalidRequest`.
 
+### Calibration work and checks
+
+Calibration writes four blocks with operation `""`: `clockSingleThread` (one thread),
+`clockAllCPUs`, `cpuSpeedUserInteractive`, and `cpuSpeedBackground` (each using
+`phone.cpuCount` threads). Clock blocks use metric `clockRead1000`; CPU-speed
+blocks use `referenceLoop`. Each block writes one `samples` line per thread,
+with unit `ticks` and exactly `tunables.repeats` values. Calibration writes no
+batch lines. Each block owns exactly one `calibration.samples` correctness check
+with its block position; there is no separate run-level calibration check.
+
+The attempt checker's `ExpectedAttempt.check_per_block` is the experiment prefix
+`baseComparison` (followed by `.<operation>`) or the fixed calibration check name
+`calibration.samples`. `run_checks` is empty for both experiments.
+
 ## Request validation
 
 Every validation error names the field. `schema` is 1. `runID` and `attemptID` match `^[A-Za-z0-9._-]{1,128}$`. `attempt` is at least 1; `seed` is below 2^53. `threads` is 1…64; `warmupBatches` is at least 0; `measuredBatches` and `subBatches` are at least 1. `operationsPerBatch` has a `default` key and every value is a multiple of `subBatches` and at least `subBatches`. `referenceLoopIterations` is at least 1. `simulation` appears only in smoke requests. Decoding does not validate, allowing an invalid decoded request to be included in a failure result.

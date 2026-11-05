@@ -1,0 +1,261 @@
+from __future__ import annotations
+
+from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+from runner.attempt_check import check_attempt
+from tests.synthetic_attempts import GOLDEN, make_attempt_lines, write_attempt
+
+GOLDEN_LINES = [json.loads(line) for line in GOLDEN.read_text().splitlines()]
+REQUEST = GOLDEN_LINES[0]["request"]
+BUILD_ID = GOLDEN_LINES[0]["build"]["buildID"]
+
+
+class AttemptCheckTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name)
+
+    def verdict(self, lines, request=None):
+        result, done = write_attempt(self.path, lines)
+        return check_attempt(result, done, REQUEST if request is None else request, BUILD_ID)
+
+    def assert_invalid(self, lines, request=None, reason=None):
+        verdict = self.verdict(lines, request)
+        self.assertEqual((verdict.status, verdict.accepted), ("invalid", False))
+        self.assertTrue(verdict.reasons)
+        if reason:
+            self.assertIn(reason, " ".join(verdict.reasons))
+
+    def test_golden_file_is_accepted(self):
+        result, marker = write_attempt(self.path, GOLDEN_LINES)
+        result.write_bytes(GOLDEN.read_bytes())
+        # The writer fixture itself, rather than reserialized Python output, is the contract.
+        document = json.loads(marker.read_text())
+        document.update(bytes=len(result.read_bytes()), sha256=hashlib.sha256(result.read_bytes()).hexdigest())
+        marker.write_text(json.dumps(document))
+        self.assertEqual(check_attempt(result, marker, REQUEST, BUILD_ID).accepted, True)
+
+    def test_missing_done_is_incomplete(self):
+        result, marker = write_attempt(self.path, GOLDEN_LINES)
+        marker.unlink()
+        for done in (None, marker):
+            verdict = check_attempt(result, done, REQUEST, BUILD_ID)
+            self.assertEqual((verdict.status, verdict.accepted), ("incomplete", False))
+
+    def test_done_mismatches_are_invalid(self):
+        for key, value in (("sha256", "0" * 64), ("attemptID", "another-attempt"),
+                           ("bytes", 1), ("file", "another.jsonl")):
+            with self.subTest(key=key):
+                result, marker = write_attempt(self.path, GOLDEN_LINES)
+                document = json.loads(marker.read_text())
+                document[key] = value
+                marker.write_text(json.dumps(document))
+                self.assertEqual(check_attempt(result, marker, REQUEST, BUILD_ID).status, "invalid")
+
+    def test_other_build_id_is_invalid(self):
+        lines = deepcopy(GOLDEN_LINES)
+        lines[0]["build"]["buildID"] = "other-build"
+        self.assert_invalid(lines, reason="build")
+
+    def test_changed_seed_is_invalid(self):
+        lines = deepcopy(GOLDEN_LINES)
+        lines[0]["request"]["seed"] = 8
+        self.assert_invalid(lines, reason="request")
+
+    def test_missing_measured_batch_is_invalid(self):
+        lines = deepcopy(GOLDEN_LINES)
+        del lines[4]
+        self.assert_invalid(lines)
+
+    def test_duplicate_batch_is_invalid(self):
+        lines = deepcopy(GOLDEN_LINES)
+        lines[5] = deepcopy(lines[4])
+        self.assert_invalid(lines)
+
+    def test_wrong_operation_count_is_invalid(self):
+        lines = deepcopy(GOLDEN_LINES)
+        lines[4]["operations"] = 5
+        self.assert_invalid(lines)
+
+    def test_substituted_block_is_invalid(self):
+        request = deepcopy(REQUEST)
+        request["mechanisms"] = ["mutex", "nsLock"]
+        lines = make_attempt_lines(request, BUILD_ID)
+        blocks = [line for line in lines if line["type"] == "block"]
+        blocks[1]["mechanism"] = "mutex"
+        self.assert_invalid(lines, request)
+
+    def test_missing_checks_are_invalid(self):
+        lines = deepcopy(GOLDEN_LINES)
+        lines[-1]["checks"] = []
+        self.assert_invalid(lines)
+
+    def test_check_failures_and_wrong_ownership_are_invalid(self):
+        for replacement in ({"violations": 1}, {"passed": False}, {"block": 1},
+                            {"name": "baseComparison.read"}):
+            with self.subTest(replacement=replacement):
+                lines = deepcopy(GOLDEN_LINES)
+                lines[-1]["checks"][0].update(replacement)
+                self.assert_invalid(lines)
+
+    def test_thermal_refusal_and_failed_run_are_classified(self):
+        for status, reason in (("refused", "thermal"), ("failed", "check"),
+                               ("failed", "invalidRequest")):
+            with self.subTest(status=status, reason=reason):
+                verdict = self.verdict(make_attempt_lines(REQUEST, BUILD_ID, status, reason))
+                self.assertEqual((verdict.status, verdict.accepted, verdict.reason_code),
+                                 (status, False, reason))
+
+    def test_missing_end_line_is_invalid(self):
+        self.assert_invalid(deepcopy(GOLDEN_LINES[:-1]))
+
+    def test_bad_conditions_rejected_outside_smoke(self):
+        request = deepcopy(REQUEST)
+        request["smoke"] = False
+        for endpoint in (0, -1):
+            for key, value in (("thermalState", "fair"), ("applicationState", "background"),
+                               ("debuggerAttached", True), ("lowPowerMode", True),
+                               ("batteryState", "unplugged"), ("environment", {"PTHREAD_MUTEX_POLICY": "firstfit"})):
+                with self.subTest(endpoint=endpoint, key=key):
+                    lines = make_attempt_lines(request, BUILD_ID)
+                    lines[endpoint]["conditions"][key] = value
+                    self.assert_invalid(lines, request, "conditions")
+
+    def test_unavailable_hardware_facts_are_still_valid(self):
+        # PhoneFacts uses -1 when signed hardware count/size queries are unavailable.
+        lines = deepcopy(GOLDEN_LINES)
+        lines[0]["phone"]["cacheLineBytes"] = -1
+        lines[0]["phone"]["performanceLevels"][0]["l1DataCacheBytes"] = -1
+        self.assertTrue(self.verdict(lines).accepted)
+
+    def test_malformed_launch_request_is_invalid_without_crashing(self):
+        for key, value in (("tunables", []), ("mechanisms", [{}]), ("smoke", 1)):
+            with self.subTest(key=key):
+                request = deepcopy(REQUEST)
+                request[key] = value
+                lines = deepcopy(GOLDEN_LINES)
+                lines[0]["request"] = deepcopy(request)
+                self.assert_invalid(lines, request)
+
+    def test_nonobject_and_broken_json_lines_are_invalid(self):
+        for value in (None, [], 1, "run"):
+            with self.subTest(value=value):
+                lines = deepcopy(GOLDEN_LINES)
+                lines[1] = value
+                self.assert_invalid(lines)
+        for raw in (b"{broken JSON}\n", b"\n", b'{"type":"run","schema":NaN}\n'):
+            with self.subTest(raw=raw):
+                result, done = write_attempt(self.path, GOLDEN_LINES)
+                result.write_bytes(raw)
+                marker = json.loads(done.read_text())
+                marker.update(bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+                done.write_text(json.dumps(marker))
+                self.assertEqual(check_attempt(result, done, REQUEST, BUILD_ID).status, "invalid")
+
+    def test_smoke_allows_unfavorable_conditions(self):
+        lines = deepcopy(GOLDEN_LINES)
+        lines[-1]["conditions"]["thermalState"] = "fair"
+        self.assertTrue(self.verdict(lines).accepted)
+
+    def test_line_grouping_reference_and_block_positions(self):
+        def swap(lines, first, second):
+            lines[first], lines[second] = lines[second], lines[first]
+        mutations = [
+            lambda lines: swap(lines, 1, 2),
+            lambda lines: swap(lines, 4, 5),
+            lambda lines: lines[-2].update(when="start"),
+            lambda lines: lines[2].update(block=2),
+            lambda lines: lines.insert(2, deepcopy(lines[0])),
+            lambda lines: lines.insert(-1, {"type": "mystery"}),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutation=mutations.index(mutate)):
+                lines = deepcopy(GOLDEN_LINES)
+                mutate(lines)
+                self.assert_invalid(lines)
+
+    def test_timestamp_containment_and_cpu_lengths(self):
+        mutations = [
+            (2, {"end": 130}), (4, {"start": 129}), (4, {"end": 201}),
+            (4, {"end": 159}), (1, {"start": 99}), (-2, {"end": 231}),
+            (4, {"cpuReadings": [0, 0]}), (1, {"cpuReadings": [0]}),
+            (4, {"executorCPUReadings": [0]}),
+        ]
+        for index, replacement in mutations:
+            with self.subTest(index=index, replacement=replacement):
+                lines = deepcopy(GOLDEN_LINES)
+                lines[index].update(replacement)
+                self.assert_invalid(lines)
+
+    def test_malformed_field_types_are_invalid_without_crashing(self):
+        mutations = [
+            (0, "phone", []), (0, "build", None), (0, "conditions", []),
+            (0, "schema", True), (2, "block", []), (2, "threads", True),
+            (3, "warmup", 1), (3, "cpuReadings", "000"), (3, "start", -1),
+            (-1, "status", "timeout"), (-1, "checks", {}), (-1, "checks", [None]),
+            (-1, "blockLines", True), (-1, "thermalChanges", [None]),
+        ]
+        for index, key, value in mutations:
+            with self.subTest(index=index, key=key):
+                lines = deepcopy(GOLDEN_LINES)
+                lines[index][key] = value
+                self.assert_invalid(lines)
+
+    def test_calibration_counts(self):
+        request = deepcopy(REQUEST)
+        request.update(experiment="calibration", variant="default", mechanisms=[], operations=[])
+        request["tunables"]["repeats"] = 3
+        lines = make_attempt_lines(request, BUILD_ID, cpu_count=2)
+        # Four blocks and 1 + 3*2 = 7 sample lines, each with three raw values.
+        self.assertTrue(self.verdict(lines, request).accepted)
+        samples = [index for index, line in enumerate(lines) if line["type"] == "samples"]
+        mutations = [
+            lambda broken: broken.pop(samples[0]),
+            lambda broken: broken[samples[1]].update(block=0),
+            lambda broken: broken[samples[2]].update(thread=0),
+            lambda broken: broken[samples[0]].update(metric="referenceLoop"),
+            lambda broken: broken[samples[0]].update(values=[3, 3]),
+            lambda broken: broken[samples[-1]].update(cpuAtEnd=[0]),
+            lambda broken: broken[-1]["checks"].pop(),
+            lambda broken: broken[-1]["checks"][1].update(block=0),
+            lambda broken: broken[-1]["checks"][0].pop("block"),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutation=mutations.index(mutate)):
+                broken = deepcopy(lines)
+                mutate(broken)
+                self.assert_invalid(broken, request)
+
+    def test_multithread_batches_and_mechanism_specific_counts(self):
+        request = deepcopy(REQUEST)
+        request.update(mechanisms=["mutex", "nsLock"], operations=["read", "increment"])
+        request["tunables"].update(threads=2, operationsPerBatch={"default": 4, "nsLock": 8})
+        lines = make_attempt_lines(request, BUILD_ID)
+        self.assertTrue(self.verdict(lines, request).accepted)
+        for key, value in (("thread", 2), ("batch", 3), ("warmup", False)):
+            with self.subTest(key=key):
+                broken = deepcopy(lines)
+                broken[3][key] = value
+                self.assert_invalid(broken, request)
+
+    def test_check_cli_prints_verdict_and_returns_failure_for_rejection(self):
+        result, marker = write_attempt(self.path, GOLDEN_LINES)
+        request_path = self.path / "request.json"
+        request_path.write_text(json.dumps(REQUEST))
+        command = [sys.executable, str(Path(__file__).resolve().parents[1] / "bench.py"),
+                   "check", str(result), "--request", str(request_path), "--build-id", BUILD_ID]
+        accepted = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertTrue(json.loads(accepted.stdout)["accepted"])
+        marker.unlink()
+        rejected = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(rejected.returncode, 1, rejected.stderr)
+        self.assertEqual(json.loads(rejected.stdout)["status"], "incomplete")
