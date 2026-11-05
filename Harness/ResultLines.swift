@@ -35,7 +35,7 @@ struct PerformanceLevel: Encodable {
     let cpusPerL2: Int
 }
 
-struct Conditions: Encodable {
+struct Conditions: Encodable, Sendable {
     let thermalState: String
     let lowPowerMode: Bool
     let batteryState: String
@@ -120,7 +120,7 @@ struct CheckResult: Encodable {
     let violations: Int?
 }
 
-struct ThermalChange: Encodable {
+struct ThermalChange: Encodable, Sendable {
     let ticks: UInt64
     let thermalState: String
 }
