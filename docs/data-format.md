@@ -129,6 +129,39 @@ The attempt checker's `ExpectedAttempt.check_per_block` is the experiment prefix
 `baseComparison` (followed by `.<operation>`) or the fixed calibration check name
 `calibration.samples`. `run_checks` is empty for both experiments.
 
+### Priority inversion (experiment 8B)
+
+Variant `default` runs every requested mechanism × operation pair. The fourteen mechanisms
+are `mutex`, `osAllocatedUnfairLock`, `osAllocatedUnfairLockAdaptiveSpin`, `osUnfairLock`,
+`nsLock`, `nsRecursiveLock`, `pthreadMutex`, `pthreadReadWriteLock`, `serialQueue`,
+`barrierQueueSyncWrite`, `barrierQueueAsyncWrite`, `dispatchSemaphore`, `actor`, and `objcSync`.
+Operations are `utilityHolder` and `backgroundHolder`. A block has one thread and reports the
+holder's QoS (`utility` or `background`); the controller pthread runs at `tunables.qos`.
+Requests require nonempty, unique mechanism and operation lists, `tunables.threads` 1,
+and `tunables.priorityInversion`.
+Duration conversion must fit unsigned 64-bit nanoseconds and ticks: `loadMilliseconds`
+is at most 18,446,744,073,709 and `mainDelayMicroseconds` at most 18,446,744,073,709,551,
+with a smaller limit when required by the recorded clock timebase. `pauseMilliseconds`
+is at most 4,294,967 so its microseconds fit `useconds_t`. A deadline addition that
+overflows the tick clock is reported as a timeout.
+
+Blocks emit no `batch` or `samples` lines. Each emits `warmupTrials + trials` `trial` lines,
+indexed from 0; only the first `warmupTrials` have `warmup` true. The controller waits for
+the holder to acquire while the CPUs are free, then releases one load pthread per CPU.
+`loadStart` and `loadStop` are the intended fixed load interval; the main side targets
+the holder acquire plus `mainDelayMicroseconds` for arrival. Outcome classification follows the tick
+rules above. All trials, including invalid and censored ones, remain in the file.
+
+Each block has one `priorityInversion.<operation>` check with its block position. It passes
+when no wait timed out, every holder result is correct, every main-side observation equals
+the trial index, and `mainAcquire >= holderRelease` whenever `mainArrival < holderRelease`.
+`violations` counts trials breaking any of those correctness rules once per trial. The detail
+reports the outcome counts and timeout flag, for example
+`valid 8, censored 2, invalid 1; timed out false`. Invalid or censored outcomes alone do not
+fail correctness. An acquire wait times out after 2 seconds; subsequent waits share a deadline
+5 seconds after `loadStop`. A timeout stops that block's trials early, retains the completed
+trial lines, and fails the check even if their `violations` count is zero.
+
 ## Request validation
 
 Every validation error names the field. `schema` is 1. `runID` and `attemptID` match `^[A-Za-z0-9._-]{1,128}$`. `attempt` is at least 1; `seed` is below 2^53. `threads` is 1…64; `warmupBatches` is at least 0; `measuredBatches` and `subBatches` are at least 1. `operationsPerBatch` has a `default` key and every value is a multiple of `subBatches` and at least `subBatches`. `referenceLoopIterations` is at least 1. When `asyncCode` is present, `callsPerTask` is at least 1 and `warmupCallsPerTask` at least 0. When `priorityInversion` is present, `holderWorkIterations`, `loadMilliseconds` and `trials` are at least 1, `mainDelayMicroseconds`, `pauseMilliseconds` and `warmupTrials` at least 0, and `warmupTrials + trials` fits a signed 64-bit integer. Experiments add their own rules. `simulation` appears only in smoke requests. Decoding does not validate, allowing an invalid decoded request to be included in a failure result.

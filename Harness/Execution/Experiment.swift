@@ -65,6 +65,10 @@ enum ExperimentRegistry {
             return try AsyncCode(request: request)
         }
 
+        if request.experiment == "priorityInversion" {
+            return try PriorityInversion(request: request)
+        }
+
         if request.experiment == "calibration" {
             return try Calibration(request: request)
         }

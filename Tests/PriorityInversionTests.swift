@@ -5,6 +5,145 @@ import Testing
 @testable import SyncBench
 
 @Suite struct PriorityInversionTests {
+    // Missing registration, trial emission or warm-up indexing must fail the complete attempt.
+    @Test(.timeLimit(.minutes(1)))
+    func priorityInversionSmokeRunPasses() async throws {
+        let attempt = try await runAsyncCodeAttempt(.priorityInversionSmoke)
+
+        #expect(attempt.status == "completed")
+        #expect(attempt.blocks.count == 4)
+        #expect(attempt.checks.count == 4)
+        #expect(attempt.lines.allSatisfy { $0["type"] as? String != "batch" })
+        for block in attempt.blocks {
+            let position = try #require(block["block"] as? Int)
+            let trials = attempt.lines(type: "trial", block: position)
+            #expect(trials.count == 4)
+            #expect(trials.compactMap { $0["trial"] as? Int } == [0, 1, 2, 3])
+            #expect(trials.compactMap { $0["warmup"] as? Bool } == [true, false, false, false])
+            #expect(trials.allSatisfy { $0["holderQoS"] as? String == "utility" })
+            #expect(block["threads"] as? Int == 1)
+            #expect(block["qos"] as? String == "utility")
+        }
+        #expect(attempt.checks.allSatisfy { $0["name"] as? String == "priorityInversion.utilityHolder" })
+    }
+
+    // An absent acquire must stop the controller before any main-side lock attempt is submitted.
+    @Test(.timeLimit(.minutes(1)))
+    func stuckHolderTimesOutWithoutBlockingMain() async {
+        let lock = UnacquiredHolderLock()
+        let timestamps = HolderTimestamps()
+        let mainSide = MainSideRecord()
+        let work = HolderWork(iterations: 1, expectedResult: referenceLoop(iterations: 1))
+        let tunables = RunRequest.priorityInversionSmoke.tunables.priorityInversion!
+        let observation = await onBenchmarkThread {
+            let holder = HolderThread(qos: .utility, lock: lock, work: work, timestamps: timestamps)
+            let loadThreads = LoadThreads(count: 1, qos: .userInitiated)
+            defer {
+                holder.shutDown()
+                loadThreads.shutDown()
+            }
+            let runner = TrialRunner(
+                lock: lock,
+                holder: holder,
+                timestamps: timestamps,
+                tunables: tunables,
+                loadThreads: loadThreads,
+                acquireTimeoutTicks: ticks(milliseconds: 200),
+                mainSide: mainSide
+            )
+            let start = Clock.now()
+            let result = runner.runTrials(block: 0)
+            return (result.timedOut, result.trials.count, Clock.now() - start)
+        }
+
+        #expect(observation.0)
+        #expect(observation.1 == 0)
+        #expect(observation.2 >= ticks(milliseconds: 200))
+        #expect(observation.2 < ticks(milliseconds: 1_000))
+        #expect(mainSide.arrival == 0)
+        #expect(lock.touched.load(ordering: .acquiring) == false)
+    }
+
+    // Reject every malformed row selection, rather than silently omitting requested blocks.
+    @Test func rejectsUnknownMechanismAndHolder() {
+        let invalidRows: [([String], [String])] = [
+            (["unknown"], ["utilityHolder"]),
+            (["atomic"], ["utilityHolder"]),
+            (["actor"], ["unknown"]),
+            ([], ["utilityHolder"]),
+            (["actor", "actor"], ["utilityHolder"]),
+            (["actor"], []),
+            (["actor"], ["backgroundHolder", "backgroundHolder"]),
+        ]
+        for (mechanisms, operations) in invalidRows {
+            var request = RunRequest.priorityInversionSmoke
+            request.mechanisms = mechanisms
+            request.operations = operations
+            #expect(throws: RequestError.self) { try PriorityInversion(request: request) }
+        }
+        var request = RunRequest.priorityInversionSmoke
+        request.variant = "unknown"
+        #expect(throws: RequestError.self) { try PriorityInversion(request: request) }
+        request.variant = "default"
+        request.tunables.threads = 2
+        #expect(throws: RequestError.self) { try PriorityInversion(request: request) }
+    }
+
+    @Test func rejectsMissingTunables() {
+        var request = RunRequest.priorityInversionSmoke
+        request.tunables.priorityInversion = nil
+        #expect(throws: RequestError.self) { try PriorityInversion(request: request) }
+    }
+
+    // Values accepted by generic validation must still fit the experiment's duration conversions.
+    @Test func rejectsUnrepresentableTrialDurations() {
+        for field in ["loadMilliseconds", "mainDelayMicroseconds", "pauseMilliseconds"] {
+            var request = RunRequest.priorityInversionSmoke
+            switch field {
+            case "loadMilliseconds": request.tunables.priorityInversion!.loadMilliseconds = Int.max
+            case "mainDelayMicroseconds": request.tunables.priorityInversion!.mainDelayMicroseconds = Int.max
+            default: request.tunables.priorityInversion!.pauseMilliseconds = Int.max
+            }
+            #expect(throws: RequestError.self) { try PriorityInversion(request: request) }
+        }
+    }
+
+    // Each incorrect trial counts once; censorship alone is not a correctness failure.
+    @Test func checksWorkObservationExclusionAndTimeout() {
+        let incorrectTrials: [(Bool, Int, UInt64)] = [
+            (false, 0, 450), (true, -1, 450), (true, 0, 399), (false, -1, 399),
+        ]
+        for (correct, observed, acquire) in incorrectTrials {
+            let check = PriorityInversionChecks.check(
+                operation: "utilityHolder",
+                trials: [trialLine(correct: correct, observed: observed, acquire: acquire)],
+                timedOut: false,
+                block: 3
+            )
+            #expect(!check.passed)
+            #expect(check.violations == 1)
+            #expect(check.block == 3)
+        }
+        let completed = PriorityInversionChecks.check(
+            operation: "backgroundHolder",
+            trials: [
+                trialLine(outcome: .valid),
+                trialLine(acquire: 601, outcome: .censored),
+                trialLine(arrival: 401, outcome: .invalid),
+            ],
+            timedOut: false,
+            block: 2
+        )
+        #expect(completed.passed)
+        #expect(completed.violations == 0)
+        #expect(completed.name == "priorityInversion.backgroundHolder")
+        #expect(completed.detail.contains("valid 1, censored 1, invalid 1"))
+
+        let timedOut = PriorityInversionChecks.check(operation: "utilityHolder", trials: [], timedOut: true, block: 0)
+        #expect(!timedOut.passed)
+        #expect(timedOut.violations == 0)
+    }
+
     // The same ticks as scripts/tests/test_trials.py: the holder holds the lock from 200 to 400.
     @Test func classifiesTrials() {
         #expect(classify() == .valid)
@@ -103,6 +242,39 @@ import Testing
     }
 }
 
+extension RunRequest {
+    fileprivate static var priorityInversionSmoke: RunRequest {
+        var request = RunRequest.golden
+        request.experiment = "priorityInversion"
+        request.variant = "default"
+        request.mechanisms = ["osUnfairLock", "dispatchSemaphore", "barrierQueueAsyncWrite", "actor"]
+        request.operations = ["utilityHolder"]
+        request.tunables.priorityInversion = PriorityInversionTunables(
+            holderWorkIterations: 10_000,
+            loadQoS: .userInitiated,
+            loadMilliseconds: 20,
+            mainDelayMicroseconds: 1_000,
+            pauseMilliseconds: 5,
+            warmupTrials: 1,
+            trials: 3
+        )
+        return request
+    }
+}
+
+/// Controls the one failure not offered by real locks: hold returns without publishing an acquire.
+private final class UnacquiredHolderLock: ContendedLock {
+    let touched = Atomic<Bool>(false)
+
+    func hold(trial: Int, work: HolderWork, timestamps: HolderTimestamps) {}
+
+    @MainActor
+    func touch(done: @escaping @Sendable (UInt64, Int) -> Void) {
+        touched.store(true, ordering: .releasing)
+        done(Clock.now(), -1)
+    }
+}
+
 private func classify(
     holderRelease: UInt64 = 400,
     mainArrival: UInt64 = 300,
@@ -114,6 +286,32 @@ private func classify(
         mainArrival: mainArrival,
         mainAcquire: mainAcquire,
         loadStop: 600
+    )
+}
+
+private func trialLine(
+    correct: Bool = true,
+    observed: Int = 0,
+    arrival: UInt64 = 300,
+    acquire: UInt64 = 450,
+    outcome: TrialOutcome = .valid
+) -> TrialLine {
+    TrialLine(
+        block: 3,
+        trial: 0,
+        warmup: false,
+        holderQoS: .utility,
+        loadStart: 100,
+        loadStop: 600,
+        holderAcquire: 200,
+        holderRelease: 400,
+        mainArrival: arrival,
+        mainAcquire: acquire,
+        holderCPUReadings: [0, 0],
+        mainCPU: 1,
+        holderResultCorrect: correct,
+        mainObservedTrial: observed,
+        outcome: outcome
     )
 }
 
