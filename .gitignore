@@ -1,0 +1,7 @@
+*.xcodeproj/
+build/
+results/
+local.json
+.DS_Store
+__pycache__/
+*.pyc
