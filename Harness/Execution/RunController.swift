@@ -164,9 +164,12 @@ enum RunController {
             DispatchQueue.main.sync {
                 showStatus("running \(request.runID)")
             }
-            let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+            let directory = FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask)[0]
                 .appending(path: "runs")
             _ = runToCompletion(request, writingTo: directory)
+
             exit(0)
         }
     }
