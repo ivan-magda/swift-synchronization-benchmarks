@@ -45,8 +45,13 @@ target; `doctor` requires that artifact to exist. The acceptance plans cover
 1 and 2 threads. All these plans have `smoke: true`; their samples are for
 functional checks.
 
-The runner saves each launch, resumes pending runs by plan and code hash, and
-uses `caffeinate` during the session. `status` reports both configured phones.
+The runner saves each launch, resumes pending runs by plan, phone, code hash,
+and build eligibility (`clean` or `dev`), and uses `caffeinate` during the session.
+Dirty-build progress never satisfies clean runs. State filenames now end in
+`--clean.json` or `--dev.json`. Older state files without this marker are retained
+unchanged as history, but their unknown eligibility is not credited; run the plan
+again to create eligible progress. `run`, `doctor`, and `status` use the same
+namespace. `status` reports both configured phones.
 `calibrate` writes `results/<phone>/calibration.json` after checking stable CPU
 samples and performance-level counts. Check a copied attempt against its saved
 launch request and expected build ID:

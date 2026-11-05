@@ -101,7 +101,9 @@ def doctor(
         if info is not None:
             pending = plan.runs if plan else ()
             if plan is not None:
-                path = state_path(results, plan, phone.key, info['codeHash'])
+                path = state_path(
+                    results, plan, phone.key, info['codeHash'], dirty=info['dirty']
+                )
                 state = RunState.load_or_create(path, plan)
                 pending = state.pending_runs()
             required_seconds = 0

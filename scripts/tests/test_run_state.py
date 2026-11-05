@@ -94,19 +94,24 @@ class RunStateTests(unittest.TestCase):
 
     def test_state_path_is_safe_and_code_hash_separates_builds(self):
         results = Path(self.directory.name)
-        first = state_path(results, self.plan, "phone", "a" * 64)
+        first = state_path(results, self.plan, "phone", "a" * 64, dirty=False)
         self.assertEqual(first.parent, results / "state")
-        self.assertTrue(first.name.endswith("--aaaaaaaa.json"))
+        self.assertTrue(first.name.endswith("--aaaaaaaa--clean.json"))
         self.assertNotEqual(
-            first, state_path(results, self.plan, "phone", "b" * 64)
+            first, state_path(results, self.plan, "phone", "b" * 64, dirty=False)
         )
+        self.assertNotEqual(
+            first, state_path(results, self.plan, "phone", "a" * 64, dirty=True)
+        )
+        with self.assertRaisesRegex(StateError, "dirty"):
+            state_path(results, self.plan, "phone", "a" * 64, dirty=None)
         for phone, code_hash in (
             ("../escape", "a" * 64),
             ("..", "a" * 64),
             ("phone", "../escape"),
         ):
             with self.subTest(phone=phone), self.assertRaises(StateError):
-                state_path(results, self.plan, phone, code_hash)
+                state_path(results, self.plan, phone, code_hash, dirty=False)
 
     def test_unknown_run_is_not_silently_recorded(self):
         state = RunState.load_or_create(self.path, self.plan)

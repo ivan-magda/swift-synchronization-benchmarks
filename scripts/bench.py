@@ -92,7 +92,10 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
                 summary = run_session(plan, phone, config, results, devices, info)
                 print(json.dumps(asdict(summary), sort_keys=True))
                 state = RunState.load_or_create(
-                    state_path(results, plan, phone.key, info["codeHash"]), plan
+                    state_path(
+                        results, plan, phone.key, info["codeHash"], dirty=info["dirty"]
+                    ),
+                    plan,
                 )
                 accepted = [
                     attempt

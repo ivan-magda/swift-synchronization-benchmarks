@@ -99,6 +99,7 @@ class DoctorTests(unittest.TestCase):
                 'buildID': 'fixture',
                 'app': 'results/builds/fixture/SyncBench.app',
                 'codeHash': 'a' * 64,
+                'dirty': False,
                 'profileExpires': (NOW + timedelta(seconds=59)).isoformat(),
             }
             (folder / 'build-info.json').write_text(json.dumps(info))
@@ -149,6 +150,7 @@ class DoctorTests(unittest.TestCase):
                 'buildID': 'fixture',
                 'codeHash': 'a' * 64,
                 'profileExpires': (NOW + timedelta(seconds=1300)).isoformat(),
+                'dirty': True,
             }
 
             # Per run: 2 launches * 300 + 30 thermal wait + 30 crash grace + 5 pause.
@@ -167,7 +169,10 @@ class DoctorTests(unittest.TestCase):
                 next(item for item in findings if item.name == 'profile').ok
             )
             state = RunState.load_or_create(
-                state_path(results, plan, PHONE.key, info['codeHash']), plan
+                state_path(
+                    results, plan, PHONE.key, info['codeHash'], dirty=info['dirty']
+                ),
+                plan,
             )
             for _ in range(2):
                 state.record_attempt(
@@ -194,6 +199,15 @@ class DoctorTests(unittest.TestCase):
                 build_info=info,
             )
             self.assertTrue(
+                next(item for item in findings if item.name == 'profile').ok
+            )
+
+            # Clean sessions cannot spend progress accepted in the dev namespace.
+            findings = doctor(
+                CONFIG, PHONE, plan, results, BuildRunner(), Devices(), NOW,
+                build_info=dict(info, dirty=False),
+            )
+            self.assertFalse(
                 next(item for item in findings if item.name == 'profile').ok
             )
 

@@ -70,3 +70,9 @@ Ruling: Final reviewer declined scopes remain future work: performance/pilot sta
 The final lifecycle correction replaces Task 7's literal second-display-callback launch with actual application and foreground-scene activation followed by two active display callbacks. An interrupted activation resets the delay; launching consumes the request once. The hard non-smoke preflight conditions remain authoritative. Simulator ordering coverage verifies this correction; physical non-smoke lifecycle verification is pending.
 
 Build commands now reject a caller outside the repository root before executing any command or creating scratch files. This enforces the documented root-only workflow for git queries, project generation, build, and settings collection together. If that contract is too restrictive, callers must change directory before invoking build.
+
+Cross-review corrections approved on 2026-11-05: synchronous read timing omits executor probes and pending-write drains; mutations retain timed completion and executor observations, and actor/MainActor reads retain required executor sampling. The original device smoke remains functional evidence, not unbiased read timing.
+
+Thermal refusal allowance is per run within each session (initial attempt plus `maxThermalRetries`); all attempts remain recorded and numbered across sessions. A fresh session may retry a cooled phone, and doctor budgets that fresh allowance for each pending run. Ordinary `maxAttempts` remains unchanged.
+
+Run state now separates clean and dev eligibility in addition to plan, phone, and code hash. Legacy state without an eligibility marker remains untouched but receives no progress credit because its eligibility is unknown. Fresh runs are required; guessing eligibility could silently finish a clean campaign using dev work.

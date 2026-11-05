@@ -300,7 +300,10 @@ def run_session(
             'build app must be an existing repository-relative path'
         ) from None
     state = RunState.load_or_create(
-        state_path(results, plan, phone.key, build_info['codeHash']), plan
+        state_path(
+            results, plan, phone.key, build_info['codeHash'], dirty=build_info['dirty']
+        ),
+        plan,
     )
     started = now().astimezone(timezone.utc)
     session_id = (
@@ -315,7 +318,7 @@ def run_session(
         osBuild=None,
         buildID=build_info['buildID'],
         codeHash=build_info['codeHash'],
-        dev=bool(build_info.get('dirty')),
+        dev=build_info['dirty'],
         plan=plan.name,
         planSHA256=plan.sha256,
         start=started.isoformat(),
@@ -491,6 +494,8 @@ def run_session(
                     accepted=verdict.accepted,
                     reasons=verdict.reasons,
                     sessionID=session_id,
+                    buildID=build_info['buildID'],
+                    dev=build_info['dirty'],
                     files=[
                         path.relative_to(results).as_posix()
                         for path in sorted(folder.glob(attempt_id + '.*'))
@@ -557,7 +562,7 @@ def status_report(plan: Plan, phone_key: str, results: Path) -> str:
             f'pending {len(plan.runs)}, exhausted 0 (no build)'
         )
     state = RunState.load_or_create(
-        state_path(results, plan, phone_key, info['codeHash']), plan
+        state_path(results, plan, phone_key, info['codeHash'], dirty=info['dirty']), plan
     )
     attempts = [attempt for run in plan.runs for attempt in state.attempts(run.run_id)]
     accepted = sum(attempt['accepted'] for attempt in attempts)

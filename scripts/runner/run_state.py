@@ -15,7 +15,12 @@ class StateError(ValueError):
     """Invalid state must be repaired explicitly instead of losing progress."""
 
 
-def state_path(results: Path, plan: Plan, phone_key: str, code_hash: str) -> Path:
+def state_path(
+    results: Path, plan: Plan, phone_key: str, code_hash: str, *, dirty: bool
+) -> Path:
+    """Keep clean campaign progress separate from dev and ambiguous legacy data."""
+    if type(dirty) is not bool:
+        raise StateError("dirty must be a boolean")
     for key, value in (("name", plan.name), ("phone key", phone_key)):
         if not isinstance(value, str) or not re.fullmatch(
             r"[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}", value
@@ -27,7 +32,7 @@ def state_path(results: Path, plan: Plan, phone_key: str, code_hash: str) -> Pat
     return (
         results
         / "state"
-        / f"{plan.name}--{phone_key}--{plan.sha256[:8]}--{code_hash[:8]}.json"
+        / f"{plan.name}--{phone_key}--{plan.sha256[:8]}--{code_hash[:8]}--{'dev' if dirty else 'clean'}.json"
     )
 
 

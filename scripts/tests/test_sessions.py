@@ -63,7 +63,10 @@ class SessionTests(unittest.TestCase):
 
     def state(self):
         return RunState.load_or_create(
-            state_path(self.results, self.plan, PHONE.key, self.info['codeHash']),
+            state_path(
+                self.results, self.plan, PHONE.key, self.info['codeHash'],
+                dirty=self.info['dirty'],
+            ),
             self.plan,
         )
 
@@ -378,6 +381,48 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(summary.accepted, 2)
         self.assertEqual(len(list((self.results / 'state').glob('*.json'))), 2)
 
+    def test_dirty_acceptance_does_not_satisfy_clean_runs_with_the_same_hash(self):
+        self.plan = replace(
+            self.plan,
+            smoke=False,
+            runs=tuple(replace(run, smoke=False) for run in self.plan.runs),
+        )
+        dirty = self.run_session(['complete', 'complete'])
+        dirty_state = self.state()
+        dirty_bytes = dirty_state.path.read_bytes()
+        self.assertEqual(dirty.accepted, 2)
+        self.info['dirty'] = False
+        self.info['buildID'] = 'fixture-clean-build'
+        self.devices.build_id = 'fixture-clean-build'
+        clean = self.run_session(['complete', 'complete'])
+        self.assertEqual((clean.accepted, clean.stop_reason), (2, None))
+        self.assertEqual(len(self.devices.requests), 4)
+        self.assertNotEqual(self.state().path, dirty_state.path)
+        self.assertEqual(dirty_state.path.read_bytes(), dirty_bytes)
+        attempts = self.state().attempts(self.plan.runs[0].run_id)
+        self.assertEqual(
+            [(a['buildID'], a['dev']) for a in attempts],
+            [('fixture-clean-build', False)],
+        )
+        resumed = self.run_session()
+        self.assertEqual((resumed.accepted, resumed.stop_reason), (0, None))
+        self.assertEqual(len(self.devices.requests), 4)
+
+    def test_legacy_state_is_retained_without_crediting_unknown_eligibility(self):
+        legacy_path = self.results / 'state' / (
+            f'{self.plan.name}--{PHONE.key}--{self.plan.sha256[:8]}--aaaaaaaa.json'
+        )
+        legacy = RunState.load_or_create(legacy_path, self.plan)
+        for run in self.plan.runs:
+            legacy.record_attempt(run.run_id, {'accepted': True})
+        previous = legacy_path.read_bytes()
+        self.info['dirty'] = False
+        summary = self.run_session(['complete', 'complete'])
+        self.assertEqual(summary.accepted, 2)
+        self.assertEqual(len(self.devices.requests), 2)
+        self.assertEqual(legacy_path.read_bytes(), previous)
+        self.assertNotEqual(self.state().path, legacy_path)
+
     def test_launch_failure_is_recorded_and_stops_the_session(self):
         summary = self.run_session(['launch-failed'])
         self.assertEqual((summary.rejected, summary.stop_reason), (1, 'launch failed'))
@@ -552,6 +597,14 @@ class SessionTests(unittest.TestCase):
             report = status_report(self.plan, PHONE.key, self.results)
         for phrase in ('accepted 1', 'rejected 1', 'refused 0', 'pending 1'):
             self.assertIn(phrase, report)
+        with patch(
+            'runner.sessions.latest_build',
+            return_value=dict(self.info, dirty=False),
+        ):
+            report = status_report(self.plan, PHONE.key, self.results)
+        self.assertIn('accepted 0', report)
+        self.assertIn('rejected 0', report)
+        self.assertIn('pending 2', report)
         with patch(
             'runner.sessions.latest_build',
             return_value=dict(self.info, codeHash='b' * 64),
