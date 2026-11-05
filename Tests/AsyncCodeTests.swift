@@ -16,53 +16,49 @@ import Testing
         #expect(checks.count == 14)
         #expect(checks.allSatisfy { ($0["name"] as? String)?.hasPrefix("asyncCode.") == true })
         #expect(checks.allSatisfy { $0["passed"] as? Bool == true })
-    }
 
-    // Path "fromManyTasks" times single calls, so it writes samples instead of batches.
-    @Test(.timeLimit(.minutes(1)))
-    func fromManyTasksWritesOneCallTimeLinePerTask() async throws {
-        let attempt = try await runAsyncCodeAttempt(.callerPathsSmoke)
-        let blocks = attempt.blocks(operation: "fromManyTasks")
+        // Path "fromManyTasks" times single calls, so it writes samples instead of batches.
+        do {
+            let blocks = attempt.blocks(operation: "fromManyTasks")
 
-        #expect(blocks.count == 4)
-        for block in blocks {
-            let position = try #require(block["block"] as? Int)
-            #expect(block["threads"] as? Int == 50)
-            #expect(attempt.lines(type: "batch", block: position).isEmpty)
+            #expect(blocks.count == 4)
+            for block in blocks {
+                let position = try #require(block["block"] as? Int)
+                #expect(block["threads"] as? Int == 50)
+                #expect(attempt.lines(type: "batch", block: position).isEmpty)
 
-            let samples = attempt.lines(type: "samples", block: position)
-            #expect(samples.count == 50)
-            #expect(samples.allSatisfy { $0["metric"] as? String == "callTime" })
-            #expect(samples.allSatisfy { $0["unit"] as? String == "ticks" })
-            #expect(samples.allSatisfy { ($0["values"] as? [Int])?.count == 5 })
-            #expect(samples.compactMap { $0["thread"] as? Int } == Array(0..<50))
-        }
-    }
-
-    // Main-thread CPU time is read at both edges of every batch, warm-up included.
-    @Test(.timeLimit(.minutes(1)))
-    func mainActorPathsWriteMainThreadCPU() async throws {
-        let attempt = try await runAsyncCodeAttempt(.callerPathsSmoke)
-        let blocks = attempt.blocks(operation: "fromMainActor") + attempt.blocks(operation: "toMainActor")
-
-        #expect(blocks.count == 5)
-        for block in blocks {
-            let position = try #require(block["block"] as? Int)
-            let samples = attempt.lines(type: "samples", block: position)
-            let atStart = try #require(samples.first { $0["metric"] as? String == "mainThreadCPUAtBatchStart" })
-            let atEnd = try #require(samples.first { $0["metric"] as? String == "mainThreadCPUAtBatchEnd" })
-
-            #expect(samples.count == 2)
-            for line in [atStart, atEnd] {
-                #expect(line["unit"] as? String == "microseconds")
-                #expect(line["thread"] == nil)
+                let samples = attempt.lines(type: "samples", block: position)
+                #expect(samples.count == 50)
+                #expect(samples.allSatisfy { $0["metric"] as? String == "callTime" })
+                #expect(samples.allSatisfy { $0["unit"] as? String == "ticks" })
+                #expect(samples.allSatisfy { ($0["values"] as? [Int])?.count == 5 })
+                #expect(samples.compactMap { $0["thread"] as? Int } == Array(0..<50))
             }
+        }
 
-            let startValues = try #require(atStart["values"] as? [Int])
-            let endValues = try #require(atEnd["values"] as? [Int])
-            #expect(startValues.count == 3)
-            #expect(endValues.count == 3)
-            #expect(zip(startValues, endValues).allSatisfy { $0 <= $1 })
+        // Main-thread CPU time is read at both edges of every batch, warm-up included.
+        do {
+            let blocks = attempt.blocks(operation: "fromMainActor") + attempt.blocks(operation: "toMainActor")
+
+            #expect(blocks.count == 5)
+            for block in blocks {
+                let position = try #require(block["block"] as? Int)
+                let samples = attempt.lines(type: "samples", block: position)
+                let atStart = try #require(samples.first { $0["metric"] as? String == "mainThreadCPUAtBatchStart" })
+                let atEnd = try #require(samples.first { $0["metric"] as? String == "mainThreadCPUAtBatchEnd" })
+
+                #expect(samples.count == 2)
+                for line in [atStart, atEnd] {
+                    #expect(line["unit"] as? String == "microseconds")
+                    #expect(line["thread"] == nil)
+                }
+
+                let startValues = try #require(atStart["values"] as? [Int])
+                let endValues = try #require(atEnd["values"] as? [Int])
+                #expect(startValues.count == 3)
+                #expect(endValues.count == 3)
+                #expect(zip(startValues, endValues).allSatisfy { $0 <= $1 })
+            }
         }
     }
 
