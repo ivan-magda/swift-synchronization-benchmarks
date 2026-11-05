@@ -13,6 +13,29 @@ func onBenchmarkThread<Result: Sendable>(
     }
 }
 
+func makeIntegerProtection(
+    _ mechanism: MechanismID,
+    initialValue: Int
+) -> any StateProtection<Int> {
+    switch mechanism {
+    case .unsynchronized: NoProtection(initialValue)
+    case .mutex: MutexProtection(initialValue)
+    case .osAllocatedUnfairLock: AllocatedUnfairLockProtection(initialValue)
+    case .osAllocatedUnfairLockAdaptiveSpin: AdaptiveSpinUnfairLockProtection(initialValue)
+    case .osUnfairLock: UnfairLockProtection(initialValue)
+    case .nsLock: NSLockProtection(initialValue)
+    case .nsRecursiveLock: NSRecursiveLockProtection(initialValue)
+    case .pthreadMutex: PthreadMutexProtection(initialValue)
+    case .pthreadReadWriteLock: PthreadReadWriteLockProtection(initialValue)
+    case .serialQueue: SerialQueueProtection(initialValue)
+    case .barrierQueueSyncWrite: BarrierQueueSyncWriteProtection(initialValue)
+    case .barrierQueueAsyncWrite: BarrierQueueAsyncWriteProtection(initialValue)
+    case .dispatchSemaphore: SemaphoreProtection(initialValue)
+    case .objcSync: ObjcSyncProtection(initialValue)
+    default: preconditionFailure("This mechanism does not implement StateProtection: \(mechanism)")
+    }
+}
+
 extension RunRequest {
     static var golden: RunRequest {
         RunRequest(
