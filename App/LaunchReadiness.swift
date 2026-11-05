@@ -7,18 +7,25 @@ struct LaunchReadiness {
         displayedFrames = 0
     }
 
-    mutating func frameDisplayed(applicationIsActive: Bool, sceneIsActive: Bool) -> Bool {
+    mutating func frameDisplayed(
+        applicationIsActive: Bool,
+        sceneIsActive: Bool
+    ) -> Bool {
         guard !launched else {
             return false
         }
+
         guard applicationIsActive, sceneIsActive else {
             displayedFrames = 0
             return false
         }
+
         displayedFrames += 1
+
         guard displayedFrames == 2 else {
             return false
         }
+
         launched = true
         return true
     }
