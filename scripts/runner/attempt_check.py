@@ -626,7 +626,7 @@ def _check_work(
             ]
             _require(
                 len(group_samples) == group.lines,
-                "samples must cover each block thread exactly once",
+                "samples line count of a metric differs from request",
             )
             if group.per_thread:
                 _require(

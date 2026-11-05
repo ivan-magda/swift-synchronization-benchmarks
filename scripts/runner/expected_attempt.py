@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, FrozenSet, Tuple
+from typing import Any, Dict, FrozenSet, List, Tuple
 
 
 @dataclass(frozen=True)
@@ -53,6 +53,110 @@ _CALIBRATION_BLOCKS = (
     ("holderWorkSingleThread", 1, "userInteractive", "holderWork", True),
 )
 
+# Experiment 7: variant -> operation -> mechanisms measured with it.
+# Must equal `AsyncCode.rows` in Experiments/AsyncCode/AsyncCode.swift.
+ASYNC_CODE_ROWS: Dict[str, Dict[str, List[str]]] = {
+    "callerPaths": {
+        "onActor": ["actor"],
+        "fromBackgroundTask": ["actor", "mutex", "osAllocatedUnfairLock", "nsLock"],
+        "fromManyTasks": ["actor", "mutex", "osAllocatedUnfairLock", "nsLock"],
+        "fromMainActor": ["actor", "mutex", "osAllocatedUnfairLock", "nsLock"],
+        "toMainActor": ["mainActor"],
+    },
+    "batching": {
+        "oneAwaitPerGroup": ["actor"],
+        "awaitPerOperation": ["actor"],
+        "oneLockPerGroup": ["mutex"],
+    },
+    "isolationSettings": {
+        "callFromMainActor": ["templateDefaults", "swift6Language", "concurrentAttribute"],
+    },
+}
+
+# Tasks in path "fromManyTasks" (`AsyncCode.manyTasks`).
+MANY_TASKS = 50
+
+# Operations per await or per lock in experiment 7B (`AsyncCode.groupSize`).
+GROUP_SIZE = 100
+
+# Operations whose blocks also write the main thread's CPU time at each batch edge.
+_MAIN_THREAD_CPU_OPERATIONS = ("fromMainActor", "toMainActor", "callFromMainActor")
+
+
+def _async_code_blocks(
+    request: Dict[str, Any]
+) -> Tuple[Dict[Tuple[str, str], ExpectedBlock], int, int]:
+    """The blocks of an experiment 7 request, with its warm-up and measured batch counts."""
+    tunables = request["tunables"]
+    operations = tunables["operationsPerBatch"]
+    warmup = tunables["warmupBatches"]
+    measured = tunables["measuredBatches"]
+    rows = ASYNC_CODE_ROWS.get(request["variant"])
+    if rows is None:
+        raise ValueError("request.variant is not supported by asyncCode")
+    if request["variant"] == "batching":
+        for count in operations.values():
+            if (count // tunables["subBatches"]) % GROUP_SIZE != 0:
+                raise ValueError(
+                    "operationsPerBatch must be a multiple of subBatches x "
+                    + str(GROUP_SIZE)
+                )
+
+    blocks: Dict[Tuple[str, str], ExpectedBlock] = {}
+    for mechanism in request["mechanisms"]:
+        for operation in request["operations"]:
+            if mechanism not in rows.get(operation, ()):
+                continue
+            many_tasks = operation == "fromManyTasks"
+            threads = MANY_TASKS if many_tasks else 1
+            if many_tasks:
+                samples = (
+                    ExpectedSamples(
+                        "callTime",
+                        "ticks",
+                        True,
+                        MANY_TASKS,
+                        _many_tasks_tunables(request)["callsPerTask"],
+                        False,
+                    ),
+                )
+            elif operation in _MAIN_THREAD_CPU_OPERATIONS:
+                samples = tuple(
+                    ExpectedSamples(metric, "microseconds", False, 1, warmup + measured, False)
+                    for metric in (
+                        "mainThreadCPUAtBatchStart",
+                        "mainThreadCPUAtBatchEnd",
+                    )
+                )
+            else:
+                samples = ()
+            blocks[(mechanism, operation)] = ExpectedBlock(
+                mechanism,
+                operation,
+                threads,
+                tunables["qos"],
+                operations.get(mechanism, operations["default"]),
+                0 if many_tasks else threads * (warmup + measured),
+                samples,
+                0,
+                "asyncCode." + operation,
+            )
+
+    for mechanism in request["mechanisms"]:
+        if not any(key[0] == mechanism for key in blocks):
+            raise ValueError("request.mechanisms has an entry without a requested operation")
+    for operation in request["operations"]:
+        if not any(key[1] == operation for key in blocks):
+            raise ValueError("request.operations has an entry without a requested mechanism")
+    return blocks, warmup, measured
+
+
+def _many_tasks_tunables(request: Dict[str, Any]) -> Dict[str, Any]:
+    tunables = request["tunables"].get("asyncCode")
+    if tunables is None:
+        raise ValueError("request.tunables.asyncCode is required for fromManyTasks")
+    return tunables
+
 
 def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt:
     tunables = request["tunables"]
@@ -99,6 +203,8 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
                 0,
                 "calibration.samples",
             )
+    elif request["experiment"] == "asyncCode":
+        blocks, warmup, measured = _async_code_blocks(request)
     else:
         raise ValueError("request.experiment is not supported by the attempt checker")
     return ExpectedAttempt(

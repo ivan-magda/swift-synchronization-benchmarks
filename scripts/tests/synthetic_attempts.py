@@ -8,9 +8,43 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from runner.expected_attempt import ASYNC_CODE_ROWS, MANY_TASKS
+
 GOLDEN = (
     Path(__file__).resolve().parents[2] / "Tests/Fixtures/golden-base-comparison.jsonl"
 )
+
+
+MAIN_THREAD_CPU_OPERATIONS = ("fromMainActor", "toMainActor", "callFromMainActor")
+CALLER_PATHS_MECHANISMS = ["actor", "mutex", "osAllocatedUnfairLock", "nsLock", "mainActor"]
+CALLER_PATHS_OPERATIONS = [
+    "onActor",
+    "fromBackgroundTask",
+    "fromManyTasks",
+    "fromMainActor",
+    "toMainActor",
+]
+
+
+def async_code_request(variant, mechanisms, operations, calls_per_task=3):
+    """An experiment 7 request built on the golden one: two warm-up and two measured batches."""
+    request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
+    request.update(
+        experiment="asyncCode",
+        variant=variant,
+        mechanisms=list(mechanisms),
+        operations=list(operations),
+    )
+    tunables = request["tunables"]
+    tunables.update(warmupBatches=2, measuredBatches=2)
+    tunables["asyncCode"] = {
+        "callsPerTask": calls_per_task,
+        "warmupCallsPerTask": 1,
+    }
+    if variant == "batching":
+        # Every sub-batch holds whole groups of 100 operations.
+        tunables["operationsPerBatch"] = {"default": 200}
+    return request
 
 
 def make_attempt_lines(
@@ -40,10 +74,11 @@ def make_attempt_lines(
     start_reference["iterations"] = tunables["referenceLoopIterations"]
     lines = [run, start_reference]
     calibration = request["experiment"] == "calibration"
+    async_code = request["experiment"] == "asyncCode"
 
     # These are the five measurements specified by Calibration, independently of the checker.
-    measurements = (
-        [
+    if calibration:
+        measurements = [
             ("clockSingleThread", "", 1, "userInteractive", "clockRead1000"),
             ("clockAllCPUs", "", cpu_count, "userInteractive", "clockRead1000"),
             (
@@ -56,13 +91,27 @@ def make_attempt_lines(
             ("cpuSpeedBackground", "", cpu_count, "background", "referenceLoop"),
             ("holderWorkSingleThread", "", 1, "userInteractive", "holderWork"),
         ]
-        if calibration
-        else [
+    elif async_code:
+        # The requested pairs that the table allows, mechanisms first, as the app orders them.
+        rows = ASYNC_CODE_ROWS[request["variant"]]
+        measurements = [
+            (
+                mechanism,
+                operation,
+                MANY_TASKS if operation == "fromManyTasks" else 1,
+                tunables["qos"],
+                None,
+            )
+            for mechanism in request["mechanisms"]
+            for operation in request["operations"]
+            if mechanism in rows.get(operation, ())
+        ]
+    else:
+        measurements = [
             (mechanism, operation, tunables["threads"], tunables["qos"], None)
             for mechanism in request["mechanisms"]
             for operation in request["operations"]
         ]
-    )
     tick = 130
     for position, (mechanism, operation, threads, qos, metric) in enumerate(
         measurements
@@ -98,7 +147,23 @@ def make_attempt_lines(
                         cpuAtStart=[thread] * count, cpuAtEnd=[thread] * count
                     )
                 lines.append(sample)
+            elif async_code and operation == "fromManyTasks":
+                # No batch lines: one callTime line per task.
+                lines.append(
+                    dict(
+                        type="samples",
+                        block=position,
+                        thread=thread,
+                        metric="callTime",
+                        unit="ticks",
+                        values=[3] * request["tunables"]["asyncCode"]["callsPerTask"],
+                    )
+                )
             else:
+                # Only actor and main-actor rows read the executor's CPU, except onActor.
+                reads_executor = (
+                    async_code and mechanism in ("actor", "mainActor") and operation != "onActor"
+                )
                 for batch in range(
                     tunables["warmupBatches"] + tunables["measuredBatches"]
                 ):
@@ -116,15 +181,30 @@ def make_attempt_lines(
                             cpuReadings=[thread] * (tunables["subBatches"] + 1),
                         )
                     )
+                    if reads_executor:
+                        lines[-1]["executorCPUReadings"] = [thread] * (
+                            tunables["subBatches"] + 1
+                        )
                     tick += 10
                     end["warmupBatchLines" if warmup else "measuredBatchLines"] += 1
+        if async_code and operation in MAIN_THREAD_CPU_OPERATIONS:
+            for metric in ("mainThreadCPUAtBatchStart", "mainThreadCPUAtBatchEnd"):
+                lines.append(
+                    dict(
+                        type="samples",
+                        block=position,
+                        metric=metric,
+                        unit="microseconds",
+                        values=[500] * (tunables["warmupBatches"] + tunables["measuredBatches"]),
+                    )
+                )
         block["end"] = tick
         tick += 10
         end["checks"].append(
             dict(
                 name="calibration.samples"
                 if calibration
-                else "baseComparison." + operation,
+                else ("asyncCode." if async_code else "baseComparison.") + operation,
                 block=position,
                 passed=True,
                 detail="Synthetic completed work",

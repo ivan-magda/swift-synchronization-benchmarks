@@ -15,7 +15,14 @@ from unittest import mock
 from runner.attempt_check import check_attempt
 from runner.expected_attempt import expected_attempt
 
-from tests.synthetic_attempts import GOLDEN, make_attempt_lines, write_attempt
+from tests.synthetic_attempts import (
+    CALLER_PATHS_MECHANISMS,
+    CALLER_PATHS_OPERATIONS,
+    GOLDEN,
+    async_code_request,
+    make_attempt_lines,
+    write_attempt,
+)
 
 GOLDEN_LINES = [json.loads(line) for line in GOLDEN.read_text().splitlines()]
 REQUEST = GOLDEN_LINES[0]["request"]
@@ -356,6 +363,116 @@ class AttemptCheckTests(unittest.TestCase):
         rejected = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(rejected.returncode, 1, rejected.stderr)
         self.assertEqual(json.loads(rejected.stdout)["status"], "incomplete")
+
+    def caller_paths(self):
+        return async_code_request(
+            "callerPaths", CALLER_PATHS_MECHANISMS, CALLER_PATHS_OPERATIONS
+        )
+
+    def first_sample(self, lines, metric, operation):
+        """Index of the first samples line of a metric inside the blocks of an operation."""
+        blocks = {
+            line["block"]
+            for line in lines
+            if line["type"] == "block" and line["operation"] == operation
+        }
+        return next(
+            index
+            for index, line in enumerate(lines)
+            if line["type"] == "samples"
+            and line["metric"] == metric
+            and line["block"] in blocks
+        )
+
+    def accepted_lines(self, request):
+        lines = make_attempt_lines(request, BUILD_ID)
+        self.assertTrue(self.verdict(lines, request).accepted)
+        return lines
+
+    def test_caller_paths_acceptance_request_is_accepted_with_fourteen_blocks(self):
+        request = self.caller_paths()
+        self.assertEqual(
+            len(request["mechanisms"]) * len(request["operations"]), 25
+        )
+        lines = self.accepted_lines(request)
+        self.assertEqual(sum(line["type"] == "block" for line in lines), 14)
+        many_tasks = [
+            line
+            for line in lines
+            if line["type"] == "samples" and line["metric"] == "callTime"
+        ]
+        # Four mechanisms, 50 tasks each.
+        self.assertEqual(len(many_tasks), 4 * 50)
+
+    def test_batching_and_isolation_settings_attempts_are_accepted(self):
+        for variant, mechanisms, operations in (
+            (
+                "batching",
+                ["actor", "mutex"],
+                ["oneAwaitPerGroup", "awaitPerOperation", "oneLockPerGroup"],
+            ),
+            (
+                "isolationSettings",
+                ["templateDefaults", "swift6Language", "concurrentAttribute"],
+                ["callFromMainActor"],
+            ),
+        ):
+            with self.subTest(variant):
+                self.accepted_lines(async_code_request(variant, mechanisms, operations))
+
+    def test_malformed_async_code_files_are_invalid(self):
+        request = self.caller_paths()
+        lines = self.accepted_lines(request)
+
+        def drop_call_time_line(copy):
+            copy.pop(self.first_sample(copy, "callTime", "fromManyTasks"))
+
+        def drop_call_time_value(copy):
+            copy[self.first_sample(copy, "callTime", "fromManyTasks")]["values"].pop()
+
+        def drop_main_thread_end_line(copy):
+            copy.pop(
+                self.first_sample(copy, "mainThreadCPUAtBatchEnd", "fromMainActor")
+            )
+
+        def add_batch_line_to_many_tasks(copy):
+            block = next(
+                line
+                for line in copy
+                if line["type"] == "block" and line["operation"] == "fromManyTasks"
+            )
+            batch = next(line for line in copy if line["type"] == "batch")
+            extra = deepcopy(batch)
+            extra.update(
+                block=block["block"], start=block["start"], end=block["start"] + 1
+            )
+            copy.insert(copy.index(block) + 1, extra)
+
+        def add_thread_to_main_thread_line(copy):
+            copy[
+                self.first_sample(copy, "mainThreadCPUAtBatchStart", "toMainActor")
+            ]["thread"] = 0
+
+        for name, mutate in {
+            "49 tasks": drop_call_time_line,
+            "one value too few": drop_call_time_value,
+            "end line removed": drop_main_thread_end_line,
+            "batch line in fromManyTasks": add_batch_line_to_many_tasks,
+            "thread on a block line": add_thread_to_main_thread_line,
+        }.items():
+            with self.subTest(name):
+                copy = deepcopy(lines)
+                mutate(copy)
+                self.assert_invalid(copy, request)
+
+    def test_a_request_without_an_allowed_pair_is_invalid(self):
+        request = async_code_request("callerPaths", ["mainActor"], ["fromMainActor"])
+        # The file is well formed for a neighboring request; the expectation fails first.
+        lines = make_attempt_lines(
+            async_code_request("callerPaths", ["actor"], ["fromMainActor"]), BUILD_ID
+        )
+        lines[0]["request"] = request
+        self.assert_invalid(lines, request)
 
 
 class TrialLineTests(unittest.TestCase):
