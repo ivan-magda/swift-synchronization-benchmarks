@@ -2,22 +2,34 @@ enum BaseComparisonChecks {
     static let threadStride = 1_000_000_000_000
 
     /// Requests validate the maximum encoded value before entering a loop.
-    static func valueWritten(byThread thread: Int, operation: Int) -> Int {
+    static func valueWritten(
+        byThread thread: Int,
+        operation: Int
+    ) -> Int {
         thread * threadStride + (operation + 1)
     }
 
     static func checkIncrements(
-        finalValue: Int, threads: Int, operationsPerThread: Int, block: Int
+        finalValue: Int,
+        threads: Int,
+        operationsPerThread: Int,
+        block: Int
     ) -> CheckResult {
         let (expected, overflow) = threads.multipliedReportingOverflow(by: operationsPerThread)
         return CheckResult(
-            name: "baseComparison.increment", block: block,
+            name: "baseComparison.increment",
+            block: block,
             passed: !overflow && finalValue == expected,
-            detail: "Final value \(finalValue); expected \(threads) × \(operationsPerThread)", violations: nil)
+            detail: "Final value \(finalValue); expected \(threads) × \(operationsPerThread)",
+            violations: nil
+        )
     }
 
     static func checkWrites(
-        finalValue: Int, threads: Int, operationsPerThread: Int, block: Int
+        finalValue: Int,
+        threads: Int,
+        operationsPerThread: Int,
+        block: Int
     ) -> CheckResult {
         let passed = threads > 0 && operationsPerThread > 0 && (0..<threads).contains { thread in
             let (base, baseOverflow) = thread.multipliedReportingOverflow(by: threadStride)
@@ -25,14 +37,23 @@ enum BaseComparisonChecks {
             return !baseOverflow && !lastOverflow && finalValue == last
         }
         return CheckResult(
-            name: "baseComparison.write", block: block, passed: passed,
-            detail: "Final value \(finalValue) must be a writer's last encoded value", violations: nil)
+            name: "baseComparison.write",
+            block: block,
+            passed: passed,
+            detail: "Final value \(finalValue) must be a writer's last encoded value",
+            violations: nil
+        )
     }
 
     static func checkReads(
-        finalValue: Int, batchSums: [[Int]], operationsPerBatch: Int, block: Int
+        finalValue: Int,
+        batchSums: [[Int]],
+        operationsPerBatch: Int,
+        block: Int
     ) -> CheckResult {
-        let (expected, overflow) = BaseComparison.valueForReads.multipliedReportingOverflow(by: operationsPerBatch)
+        let (expected, overflow) = BaseComparison.valueForReads.multipliedReportingOverflow(
+            by: operationsPerBatch
+        )
         var violations = 0
         for sums in batchSums {
             for sum in sums where overflow || sum != expected {
@@ -40,9 +61,11 @@ enum BaseComparisonChecks {
             }
         }
         return CheckResult(
-            name: "baseComparison.read", block: block,
+            name: "baseComparison.read",
+            block: block,
             passed: !overflow && finalValue == BaseComparison.valueForReads && violations == 0,
             detail: "Final value \(finalValue); \(violations) batches have an incorrect read sum",
-            violations: violations)
+            violations: violations
+        )
     }
 }
