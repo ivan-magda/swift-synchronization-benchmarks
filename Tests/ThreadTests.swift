@@ -154,7 +154,7 @@ private func countMainThreadOperations(
     )
     var mainThreadCalls = 0
 
-    await BatchTimer.timeBatches(
+    await BatchTimer.timeBatchesOnCallerIsolation(
         layout: callerActorLayout,
         barrier: TaskBarrier(parties: 1),
         log: log,
@@ -190,7 +190,7 @@ func batchEdgesAreReportedAroundEveryBatch() async {
     )
     var edges: [(batch: Int, edge: BatchEdge)] = []
 
-    await BatchTimer.timeBatches(
+    await BatchTimer.timeBatchesOnCallerIsolation(
         layout: callerActorLayout,
         barrier: TaskBarrier(parties: 1),
         log: log,
