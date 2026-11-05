@@ -1,7 +1,135 @@
-*.xcodeproj/
-build/
+# Based on github/gitignore: Swift, Python, and Global/macOS.
+# Project-specific paths are anchored to avoid hiding source groups such as Harness/Results.
+
+# Generated project and local benchmark artifacts
+/*.xcodeproj/
+/build/
 /results/
-local.json
-.DS_Store
+/local.json
+/.superpowers/
+
+# SourceKit-LSP / Xcode build server (machine-specific paths)
+/buildServer.json
+/.compile
+
+# Xcode user state and generated output
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+DerivedData/
+*.hmap
+*.xcresult/
+*.xcarchive/
+*.profdata
+*.profraw
+
+# iOS application packages and symbols
+*.app/
+*.ipa
+*.dSYM/
+*.dSYM.zip
+
+# Swift Package Manager / Carthage / Playgrounds
+.build/
+.swiftpm/xcode/package.xcworkspace/
+Carthage/Build/
+timeline.xctimeline
+playground.xcworkspace
+
+# fastlane generated reports
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Python bytecode and packaging
 __pycache__/
-*.pyc
+*.py[codz]
+*$py.class
+*.so
+.Python
+.eggs/
+*.egg-info/
+*.egg
+.installed.cfg
+dist/
+wheels/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Python virtual environments and local tool state
+.venv/
+venv/
+env/
+ENV/
+venv.bak/
+env.bak/
+__pypackages__/
+.pdm-python
+.pdm-build/
+.pixi/
+
+# Test, coverage, lint and type-check caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.tox/
+.nox/
+.hypothesis/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+*.py.cover
+*.lcov
+.dmypy.json
+dmypy.json
+.ipynb_checkpoints/
+
+# Shell scripts: local environment, logs and temporary files
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+.direnv/
+*.log
+*.pid
+*.pid.lock
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+nohup.out
+.bash_history
+.zsh_history
+.zcompdump*
+
+# macOS filesystem metadata
+.DS_Store
+.localized
+.AppleDouble
+.LSOverride
+._*
+__MACOSX/
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+.DocumentRevisions-V100/
+.TemporaryItems/
+.VolumeIcon.icns
+.AppleDB
+.AppleDesktop
+Network Trash Folder/
+Temporary Items/
+.apdisk
+
+# Keep project.yml, shared editor settings, dependency lockfiles,
+# Package.resolved, and environment examples under version control.
