@@ -6,7 +6,7 @@ Schema 1 uses UTF-8 JSON Lines: one object per line, with a final newline. Keys 
 
 `run`: `type` (`run`), `schema` (1), `request` (the request as decoded), `build`, `phone`, `conditions`.
 
-The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `variant`, `seed`, `smoke`, optional `simulation`, `mechanisms`, `operations`, `tunables`. Tunables contain `threads`, `qos`, `warmupBatches`, `measuredBatches`, `subBatches`, `operationsPerBatch` (mechanism ID to operations count, with a `default` fallback), `referenceLoopIterations`, optional calibration `repeats`. QoS is `userInteractive`, `userInitiated`, `default`, `utility`, or `background`. Simulation is `crash` or `hang`, only in smoke runs.
+The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `variant`, `seed`, `smoke`, optional `simulation`, `mechanisms`, `operations`, `tunables`, optional `traced` (`true` only in requests from a traced plan; omitted otherwise). Tunables contain `threads`, `qos`, `warmupBatches`, `measuredBatches`, `subBatches`, `operationsPerBatch` (mechanism ID to operations count, with a `default` fallback), `referenceLoopIterations`, optional calibration `repeats`, optional `asyncCode`, optional `priorityInversion`. `asyncCode` (experiment 7, path `fromManyTasks`) has `callsPerTask` (timed calls per task) and `warmupCallsPerTask` (untimed calls per task before the timed ones). `priorityInversion` (experiment 8B) has `holderWorkIterations` (`referenceLoop` iterations the holder runs under the lock), `loadQoS`, `loadMilliseconds`, `mainDelayMicroseconds`, `pauseMilliseconds`, `warmupTrials`, `trials`. QoS is `userInteractive`, `userInitiated`, `default`, `utility`, or `background`. Simulation is `crash` or `hang`, only in smoke runs.
 
 `build`: `buildID`, `commit`, `dirty`, `target` (`ios26` or `ios18`), `minimumOS`, `configuration` (`Release` or `Debug`). The build script embeds metadata before signing. An Xcode build without script metadata uses `unknown` for build ID and commit.
 
@@ -22,11 +22,15 @@ The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `v
 
 `samples`: `type` (`samples`), optional `block`, optional `thread`, `metric`, `unit`, `values`, optional `cpuAtStart` and `cpuAtEnd` (each as long as `values`). Values are raw unsigned 64-bit samples.
 
+`trial` (experiment 8B): `type` (`trial`), `block`, `trial` (starting at 0, warm-up trials first), `warmup`, `holderQoS`, the ticks `loadStart`, `loadStop`, `holderAcquire`, `holderRelease`, `mainArrival`, `mainAcquire`, `holderCPUReadings` (CPU numbers on the holder side at acquire and at release), `mainCPU` (CPU number of the main thread after it got the lock), `holderResultCorrect`, `mainObservedTrial` (the value the main thread read under the lock; the holder writes the trial index), `outcome` (`valid`, `censored`, `invalid`).
+
+A trial is `valid` when the main thread arrived while the holder held the lock (`holderAcquire < mainArrival < holderRelease`) and before the load stopped (`mainArrival < loadStop`), and got the lock no later than the load stop (`mainAcquire <= loadStop`). It is `censored` when the main thread arrived the same way but got the lock only after the load stopped (`mainAcquire > loadStop`): the wait is kept and reported apart, never as a measured wait. Every other trial is `invalid`: it is kept and counted, but its wait is never used.
+
 `end`: `type` (`end`), `status` (`completed`, `refused`, `failed`), optional `reasonCode`, optional `reason`, `checks`, `blockLines`, `warmupBatchLines`, `measuredBatchLines`, `conditions` (at the end), `thermalChanges`. Each check has `name`, optional `block`, `passed`, `detail`, optional `violations`. Each thermal change has `ticks`, `thermalState`.
 
 ## Order and status
 
-Lines appear in this order: `run`; `reference` at start; for each block its `block` line, then `batch` lines ordered by thread and batch, then `samples` lines; `reference` at end; `end`. Block timestamps enclose batch timestamps, so a block's end tick is written before the enclosed batches. A refused or invalid attempt has only `run` and `end`.
+Lines appear in this order: `run`; `reference` at start; for each block its `block` line, then `batch` lines ordered by thread and batch, then `samples` lines, then `trial` lines ordered by `trial`; `reference` at end; `end`. Block timestamps enclose batch timestamps, so a block's end tick is written before the enclosed batches. A refused or invalid attempt has only `run` and `end`.
 
 Refusal reason codes are `thermal`, `lowPower`, `battery`, `debugger`, `applicationState`, `environment`, `configuration`. Failure reason codes are `check`, `invalidRequest`.
 
@@ -46,7 +50,7 @@ The attempt checker's `ExpectedAttempt.check_per_block` is the experiment prefix
 
 ## Request validation
 
-Every validation error names the field. `schema` is 1. `runID` and `attemptID` match `^[A-Za-z0-9._-]{1,128}$`. `attempt` is at least 1; `seed` is below 2^53. `threads` is 1…64; `warmupBatches` is at least 0; `measuredBatches` and `subBatches` are at least 1. `operationsPerBatch` has a `default` key and every value is a multiple of `subBatches` and at least `subBatches`. `referenceLoopIterations` is at least 1. `simulation` appears only in smoke requests. Decoding does not validate, allowing an invalid decoded request to be included in a failure result.
+Every validation error names the field. `schema` is 1. `runID` and `attemptID` match `^[A-Za-z0-9._-]{1,128}$`. `attempt` is at least 1; `seed` is below 2^53. `threads` is 1…64; `warmupBatches` is at least 0; `measuredBatches` and `subBatches` are at least 1. `operationsPerBatch` has a `default` key and every value is a multiple of `subBatches` and at least `subBatches`. `referenceLoopIterations` is at least 1. When `asyncCode` is present, `callsPerTask` is at least 1 and `warmupCallsPerTask` at least 0. When `priorityInversion` is present, `holderWorkIterations`, `loadMilliseconds` and `trials` are at least 1, `mainDelayMicroseconds`, `pauseMilliseconds` and `warmupTrials` at least 0, and `warmupTrials + trials` fits a signed 64-bit integer. Experiments add their own rules. `simulation` appears only in smoke requests. Decoding does not validate, allowing an invalid decoded request to be included in a failure result.
 
 SplitMix64 and descending Fisher–Yates determine seeded order: for each index from count − 1 to 1, swap with `next() % (index + 1)`.
 

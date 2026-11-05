@@ -136,3 +136,69 @@ func taskBarrierWorksWithMoreTasksThanCores() async {
 
     #expect(violations.load(ordering: .relaxed) == 0)
 }
+
+private let callerActorLayout = BatchLayout(
+    warmupBatches: 1,
+    measuredBatches: 2,
+    operationsPerBatch: 2,
+    subBatches: 2
+)
+
+/// Counts the `runOperations` calls that ran on the main thread.
+private func countMainThreadOperations(
+    isolation: isolated (any Actor)? = #isolation
+) async -> Int {
+    let log = ThreadLog(
+        batches: callerActorLayout.totalBatches,
+        readingsPerBatch: callerActorLayout.subBatches + 1
+    )
+    var mainThreadCalls = 0
+
+    await BatchTimer.timeBatches(
+        layout: callerActorLayout,
+        barrier: TaskBarrier(parties: 1),
+        log: log,
+        recordExecutorCPU: { _ in },
+        runOperations: { _, _, _ in
+            if pthread_main_np() != 0 {
+                mainThreadCalls += 1
+            }
+            return 0
+        }
+    )
+
+    return mainThreadCalls
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func batchTimerRunsOnTheCallersActor() async {
+    #expect(await countMainThreadOperations() == 6)
+
+    let detachedCount = await Task.detached {
+        await countMainThreadOperations()
+    }.value
+
+    #expect(detachedCount == 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func batchEdgesAreReportedAroundEveryBatch() async {
+    let log = ThreadLog(
+        batches: callerActorLayout.totalBatches,
+        readingsPerBatch: callerActorLayout.subBatches + 1
+    )
+    var edges: [(batch: Int, edge: BatchEdge)] = []
+
+    await BatchTimer.timeBatches(
+        layout: callerActorLayout,
+        barrier: TaskBarrier(parties: 1),
+        log: log,
+        recordExecutorCPU: { _ in },
+        recordBatchEdge: { batch, edge in edges.append((batch, edge)) },
+        runOperations: { _, _, _ in 0 }
+    )
+
+    #expect(edges.map(\.batch) == [0, 0, 1, 1, 2, 2])
+    #expect(edges.map(\.edge) == [.start, .end, .start, .end, .start, .end])
+}

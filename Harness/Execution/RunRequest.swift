@@ -32,6 +32,29 @@ struct Tunables: Codable, Equatable, Sendable {
 
     /// Calibration only: samples per measurement.
     var repeats: Int?
+    var asyncCode: AsyncCodeTunables?
+    var priorityInversion: PriorityInversionTunables?
+}
+
+/// Tunables of experiment 7, path "fromManyTasks".
+struct AsyncCodeTunables: Codable, Equatable, Sendable {
+    /// Timed calls per task.
+    var callsPerTask: Int
+
+    /// Untimed calls per task before the timed ones.
+    var warmupCallsPerTask: Int
+}
+
+/// Tunables of experiment 8B.
+struct PriorityInversionTunables: Codable, Equatable, Sendable {
+    /// `referenceLoop` iterations the holder runs under the lock.
+    var holderWorkIterations: Int
+    var loadQoS: QoS
+    var loadMilliseconds: Int
+    var mainDelayMicroseconds: Int
+    var pauseMilliseconds: Int
+    var warmupTrials: Int
+    var trials: Int
 }
 
 struct RunRequest: Codable, Equatable, Sendable {
@@ -47,6 +70,9 @@ struct RunRequest: Codable, Equatable, Sendable {
     var mechanisms: [String]
     var operations: [String]
     var tunables: Tunables
+
+    /// True only in traced plans; omitted otherwise.
+    var traced: Bool?
 
     /// Decode separately from validation so an invalid attempt can be reported.
     /// No `--bench-request` means an idle app launch.
@@ -135,8 +161,41 @@ struct RunRequest: Codable, Equatable, Sendable {
             ).validate(threads: tunables.threads)
         }
 
+        if let asyncCode = tunables.asyncCode {
+            try Self.require(asyncCode.callsPerTask, atLeast: 1, "asyncCode.callsPerTask")
+            try Self.require(asyncCode.warmupCallsPerTask, atLeast: 0, "asyncCode.warmupCallsPerTask")
+        }
+
+        if let priorityInversion = tunables.priorityInversion {
+            try Self.require(
+                priorityInversion.holderWorkIterations,
+                atLeast: 1,
+                "priorityInversion.holderWorkIterations"
+            )
+            try Self.require(priorityInversion.loadMilliseconds, atLeast: 1, "priorityInversion.loadMilliseconds")
+            try Self.require(
+                priorityInversion.mainDelayMicroseconds,
+                atLeast: 0,
+                "priorityInversion.mainDelayMicroseconds"
+            )
+            try Self.require(priorityInversion.pauseMilliseconds, atLeast: 0, "priorityInversion.pauseMilliseconds")
+            try Self.require(priorityInversion.warmupTrials, atLeast: 0, "priorityInversion.warmupTrials")
+            try Self.require(priorityInversion.trials, atLeast: 1, "priorityInversion.trials")
+
+            let (_, overflow) = priorityInversion.warmupTrials.addingReportingOverflow(priorityInversion.trials)
+            guard !overflow else {
+                throw RequestError(message: "priorityInversion.warmupTrials + priorityInversion.trials overflows")
+            }
+        }
+
         guard simulation == nil || smoke else {
             throw RequestError(message: "simulation requires smoke")
+        }
+    }
+
+    private static func require(_ value: Int, atLeast minimum: Int, _ field: String) throws(RequestError) {
+        guard value >= minimum else {
+            throw RequestError(message: "\(field) must be at least \(minimum)")
         }
     }
 

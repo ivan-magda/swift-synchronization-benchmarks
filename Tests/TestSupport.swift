@@ -64,6 +64,33 @@ extension RunRequest {
     }
 }
 
+extension AsyncCodeTunables {
+    static func valid(callsPerTask: Int = 20, warmupCallsPerTask: Int = 2) -> AsyncCodeTunables {
+        AsyncCodeTunables(callsPerTask: callsPerTask, warmupCallsPerTask: warmupCallsPerTask)
+    }
+}
+
+extension PriorityInversionTunables {
+    static func valid(
+        holderWorkIterations: Int = 10_000,
+        loadMilliseconds: Int = 20,
+        mainDelayMicroseconds: Int = 1_000,
+        pauseMilliseconds: Int = 5,
+        warmupTrials: Int = 1,
+        trials: Int = 3
+    ) -> PriorityInversionTunables {
+        PriorityInversionTunables(
+            holderWorkIterations: holderWorkIterations,
+            loadQoS: .userInitiated,
+            loadMilliseconds: loadMilliseconds,
+            mainDelayMicroseconds: mainDelayMicroseconds,
+            pauseMilliseconds: pauseMilliseconds,
+            warmupTrials: warmupTrials,
+            trials: trials
+        )
+    }
+}
+
 func fixtureURL(_ name: String) -> URL {
     URL(filePath: #filePath)
         .deletingLastPathComponent()
@@ -93,6 +120,15 @@ struct InvalidRequestCase: Sendable {
             ("operationsPerBatch", { $0.tunables.operationsPerBatch["mutex"] = 1 }),
             ("operationsPerBatch", { $0.tunables.operationsPerBatch["mutex"] = 3 }),
             ("referenceLoopIterations", { $0.tunables.referenceLoopIterations = 0 }),
+            ("callsPerTask", { $0.tunables.asyncCode = .valid(callsPerTask: 0) }),
+            ("warmupCallsPerTask", { $0.tunables.asyncCode = .valid(warmupCallsPerTask: -1) }),
+            ("holderWorkIterations", { $0.tunables.priorityInversion = .valid(holderWorkIterations: 0) }),
+            ("loadMilliseconds", { $0.tunables.priorityInversion = .valid(loadMilliseconds: 0) }),
+            ("mainDelayMicroseconds", { $0.tunables.priorityInversion = .valid(mainDelayMicroseconds: -1) }),
+            ("pauseMilliseconds", { $0.tunables.priorityInversion = .valid(pauseMilliseconds: -1) }),
+            ("warmupTrials", { $0.tunables.priorityInversion = .valid(warmupTrials: -1) }),
+            ("trials", { $0.tunables.priorityInversion = .valid(trials: 0) }),
+            ("trials", { $0.tunables.priorityInversion = .valid(warmupTrials: Int.max, trials: 1) }),
             (
                 "simulation",
                 {

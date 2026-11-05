@@ -20,6 +20,9 @@ final class BlockContext: @unchecked Sendable {
     private var hasRun = false
     private(set) var warmupBatchLines = 0
 
+    /// Trial lines follow every samples line and are ordered by trial.
+    private var lastAppendedTrial: Int?
+
     init(
         position: Int,
         description: BlockDescription,
@@ -37,6 +40,7 @@ final class BlockContext: @unchecked Sendable {
 
     func runOnThreads(
         recording: BlockRecording = .batches,
+        workerQoS: QoS? = nil,
         _ body: @escaping @Sendable (_ thread: Int, _ barrier: ThreadBarrier, _ log: ThreadLog) -> Void
     ) -> [ThreadLog] {
         beginWorkers()
@@ -46,7 +50,7 @@ final class BlockContext: @unchecked Sendable {
         let switches = ContextSwitches.now()
         let thermal = ProcessInfo.processInfo.thermalState.resultName
         let threads = logs.enumerated().map { index, log in
-            BenchmarkThread.start(name: "benchmark-\(position)-\(index)", qos: description.qos) {
+            BenchmarkThread.start(name: "benchmark-\(position)-\(index)", qos: workerQoS ?? description.qos) {
                 body(index, barrier, log)
             }
         }
@@ -88,7 +92,20 @@ final class BlockContext: @unchecked Sendable {
     /// Encode samples after workers finish, never inside measured work.
     func appendSamples(_ line: SamplesLine) {
         precondition(pthread_equal(owner, pthread_self()) != 0)
+        precondition(lastAppendedTrial == nil, "Samples lines come before the block's trial lines")
         lines.append(line)
+    }
+
+    /// Appends the block's trial lines. Owner thread only; after every samples line of the block.
+    func appendTrials(_ trials: [TrialLine]) {
+        precondition(pthread_equal(owner, pthread_self()) != 0)
+
+        for trial in trials {
+            precondition(trial.block == position, "A trial line belongs to its own block")
+            precondition(lastAppendedTrial.map { trial.trial > $0 } ?? true, "Trial lines are ordered by trial")
+            lastAppendedTrial = trial.trial
+            lines.append(trial)
+        }
     }
 
     private func beginWorkers() {

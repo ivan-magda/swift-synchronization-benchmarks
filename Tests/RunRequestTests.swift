@@ -48,3 +48,20 @@ func invalidRequestNamesTheField(_ invalidCase: InvalidRequestCase) {
 
     #expect(try RunRequest.decode(launchArguments: ["--bench-request", argument]) == request)
 }
+
+@Test func requestWithNewTunablesRoundTrips() throws {
+    var request = RunRequest.golden
+    request.traced = true
+    request.tunables.asyncCode = AsyncCodeTunables(callsPerTask: 20, warmupCallsPerTask: 2)
+    request.tunables.priorityInversion = PriorityInversionTunables(
+        holderWorkIterations: 10_000,
+        loadQoS: .userInitiated,
+        loadMilliseconds: 20,
+        mainDelayMicroseconds: 1_000,
+        pauseMilliseconds: 5,
+        warmupTrials: 1,
+        trials: 3
+    )
+    let encoded = try JSONEncoder().encode(request)
+    #expect(try JSONDecoder().decode(RunRequest.self, from: encoded) == request)
+}

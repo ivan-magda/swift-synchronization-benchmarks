@@ -99,6 +99,38 @@ struct SamplesLine: Encodable {
     let cpuAtEnd: [Int]?
 }
 
+enum TrialOutcome: String, Codable, Sendable {
+    case valid
+    case censored
+    case invalid
+}
+
+/// One trial of experiment 8B.
+struct TrialLine: Encodable, Sendable {
+    let type = "trial"
+    let block: Int
+    let trial: Int
+    let warmup: Bool
+    let holderQoS: QoS
+    let loadStart: UInt64
+    let loadStop: UInt64
+    let holderAcquire: UInt64
+    let holderRelease: UInt64
+    let mainArrival: UInt64
+    let mainAcquire: UInt64
+
+    /// CPU numbers on the holder side at acquire and at release.
+    let holderCPUReadings: [Int]
+
+    /// CPU number of the main thread after it got the lock.
+    let mainCPU: Int
+    let holderResultCorrect: Bool
+
+    /// The value the main thread read under the lock: the holder writes the trial index.
+    let mainObservedTrial: Int
+    let outcome: TrialOutcome
+}
+
 struct EndLine: Encodable {
     let type = "end"
     let status: String
