@@ -2,6 +2,17 @@ import Foundation
 
 @testable import SyncBench
 
+/// Keeps blocking test work off the main thread and the cooperative task pool.
+func onBenchmarkThread<Result: Sendable>(
+    _ body: @escaping @Sendable () -> Result
+) async -> Result {
+    await withCheckedContinuation { continuation in
+        _ = BenchmarkThread.start(name: "test-worker", qos: .userInitiated) {
+            continuation.resume(returning: body())
+        }
+    }
+}
+
 extension RunRequest {
     static var golden: RunRequest {
         RunRequest(
