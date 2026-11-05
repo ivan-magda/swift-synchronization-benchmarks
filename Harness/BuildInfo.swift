@@ -11,25 +11,32 @@ struct BuildInfo: Codable, Equatable, Sendable {
     var configuration: String
 
     static func current(bundle: Bundle = .main) -> BuildInfo {
-        func value(_ key: String) -> String? {
-            guard let text = bundle.object(forInfoDictionaryKey: key) as? String,
-                !text.isEmpty, !text.hasPrefix("$(")
-            else { return nil }
-            return text
-        }
-        let minimumOS = value("MinimumOSVersion") ?? "unknown"
+        let minimumOS = value(forKey: "MinimumOSVersion", in: bundle) ?? "unknown"
+        let defaultTarget = minimumOS.hasPrefix("18.") ? "ios18" : "ios26"
+        let dirtyValue = value(forKey: "BenchGitDirty", in: bundle) ?? ""
+        let isDirty = ["1", "true", "YES"].contains(dirtyValue)
         #if DEBUG
             let configuration = "Debug"
         #else
             let configuration = "Release"
         #endif
         return BuildInfo(
-            buildID: value("BenchBuildID") ?? "unknown",
-            commit: value("BenchGitCommit") ?? "unknown",
-            dirty: ["1", "true", "YES"].contains(value("BenchGitDirty") ?? ""),
-            target: value("BenchBuildTarget") ?? (minimumOS.hasPrefix("18.") ? "ios18" : "ios26"),
+            buildID: value(forKey: "BenchBuildID", in: bundle) ?? "unknown",
+            commit: value(forKey: "BenchGitCommit", in: bundle) ?? "unknown",
+            dirty: isDirty,
+            target: value(forKey: "BenchBuildTarget", in: bundle) ?? defaultTarget,
             minimumOS: minimumOS,
             configuration: configuration
         )
+    }
+
+    private static func value(forKey key: String, in bundle: Bundle) -> String? {
+        guard let value = bundle.object(forInfoDictionaryKey: key) as? String,
+            !value.isEmpty,
+            !value.hasPrefix("$(")
+        else {
+            return nil
+        }
+        return value
     }
 }
