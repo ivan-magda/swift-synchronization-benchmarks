@@ -7,7 +7,7 @@ import Testing
     // Every allowed pair of the five paths and five mechanisms runs and keeps its count.
     @Test(.timeLimit(.minutes(1)))
     func callerPathsSmokeRunPasses() async throws {
-        let attempt = try await runCallerPathsSmoke()
+        let attempt = try await runAsyncCodeAttempt(.callerPathsSmoke)
 
         #expect(attempt.status == "completed")
         #expect(attempt.blocks.count == 14)
@@ -21,7 +21,7 @@ import Testing
     // Path "fromManyTasks" times single calls, so it writes samples instead of batches.
     @Test(.timeLimit(.minutes(1)))
     func fromManyTasksWritesOneCallTimeLinePerTask() async throws {
-        let attempt = try await runCallerPathsSmoke()
+        let attempt = try await runAsyncCodeAttempt(.callerPathsSmoke)
         let blocks = attempt.blocks(operation: "fromManyTasks")
 
         #expect(blocks.count == 4)
@@ -42,7 +42,7 @@ import Testing
     // Main-thread CPU time is read at both edges of every batch, warm-up included.
     @Test(.timeLimit(.minutes(1)))
     func mainActorPathsWriteMainThreadCPU() async throws {
-        let attempt = try await runCallerPathsSmoke()
+        let attempt = try await runAsyncCodeAttempt(.callerPathsSmoke)
         let blocks = attempt.blocks(operation: "fromMainActor") + attempt.blocks(operation: "toMainActor")
 
         #expect(blocks.count == 5)
@@ -96,28 +96,74 @@ import Testing
 
         #expect(throws: RequestError.self) { try AsyncCode(request: request) }
     }
+
+    // One actor await, 100 actor awaits and one lock, each covering 100 increments.
+    @Test(.timeLimit(.minutes(1)))
+    func batchingSmokeRunPasses() async throws {
+        let attempt = try await runAsyncCodeAttempt(.batchingSmoke)
+
+        #expect(attempt.status == "completed")
+        #expect(attempt.blocks.count == 3)
+        #expect(Set(attempt.checks.compactMap { $0["name"] as? String }) == [
+            "asyncCode.oneAwaitPerGroup", "asyncCode.awaitPerOperation", "asyncCode.oneLockPerGroup",
+        ])
+        #expect(attempt.checks.allSatisfy { $0["passed"] as? Bool == true })
+    }
+
+    // A sub-batch must hold whole groups of 100 operations.
+    @Test func batchingRejectsGroupsThatDoNotDivide() {
+        var request = RunRequest.batchingSmoke
+        request.tunables.operationsPerBatch = ["default": 300]
+
+        #expect(throws: RequestError.self) { try AsyncCode(request: request) }
+    }
 }
 
 extension RunRequest {
-    fileprivate static var callerPathsSmoke: RunRequest {
+    /// An `asyncCode` smoke request: one warm-up batch, two measured batches, two sub-batches.
+    static func asyncCodeSmoke(
+        variant: String,
+        operations: [String],
+        mechanisms: [String],
+        operationsPerBatch: Int
+    ) -> RunRequest {
         var request = RunRequest.golden
         request.runID = "smoke.async-code.1"
         request.attemptID = "smoke.async-code.1.attempt1.20261105T000000Z.0000"
         request.experiment = "asyncCode"
-        request.variant = "callerPaths"
-        request.operations = ["onActor", "fromBackgroundTask", "fromManyTasks", "fromMainActor", "toMainActor"]
-        request.mechanisms = ["actor", "mainActor", "mutex", "osAllocatedUnfairLock", "nsLock"]
+        request.variant = variant
+        request.operations = operations
+        request.mechanisms = mechanisms
         request.tunables.warmupBatches = 1
         request.tunables.measuredBatches = 2
         request.tunables.subBatches = 2
-        request.tunables.operationsPerBatch = ["default": 40]
+        request.tunables.operationsPerBatch = ["default": operationsPerBatch]
+        return request
+    }
+
+    fileprivate static var callerPathsSmoke: RunRequest {
+        var request = asyncCodeSmoke(
+            variant: "callerPaths",
+            operations: ["onActor", "fromBackgroundTask", "fromManyTasks", "fromMainActor", "toMainActor"],
+            mechanisms: ["actor", "mainActor", "mutex", "osAllocatedUnfairLock", "nsLock"],
+            operationsPerBatch: 40
+        )
         request.tunables.asyncCode = AsyncCodeTunables(callsPerTask: 5, warmupCallsPerTask: 1)
         return request
+    }
+
+    fileprivate static var batchingSmoke: RunRequest {
+        asyncCodeSmoke(
+            variant: "batching",
+            operations: ["oneAwaitPerGroup", "awaitPerOperation", "oneLockPerGroup"],
+            mechanisms: ["actor", "mutex"],
+            operationsPerBatch: 400
+        )
     }
 }
 
 /// The decoded lines of one finished attempt.
-private struct FinishedAttempt {
+struct FinishedAttempt {
     let status: String
     let lines: [[String: Any]]
 
@@ -138,11 +184,10 @@ private struct FinishedAttempt {
     }
 }
 
-private func runCallerPathsSmoke() async throws -> FinishedAttempt {
+func runAsyncCodeAttempt(_ request: RunRequest) async throws -> FinishedAttempt {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
 
-    let request = RunRequest.callerPathsSmoke
     let outcome = await onBenchmarkThread {
         RunController.runToCompletion(
             request,

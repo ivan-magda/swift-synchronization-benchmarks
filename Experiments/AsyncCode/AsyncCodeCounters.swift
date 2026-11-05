@@ -110,3 +110,46 @@ final class NSLockCounter: LockCounter, @unchecked Sendable {
         return value
     }
 }
+
+// Experiment 7B state: 128 counters; operation k increments counter k % 128. With a single
+// `Int` the compiler would fold a group of increments into one addition.
+
+actor CounterGroupActor {
+    private var counters = [Int](repeating: 0, count: 128)
+
+    /// `AsyncCode.groupSize` operations in one call.
+    func incrementGroup(startingAt operation: Int) {
+        for index in operation..<(operation + AsyncCode.groupSize) {
+            counters[index % 128] &+= 1
+        }
+    }
+
+    func incrementOne(at operation: Int) {
+        counters[operation % 128] &+= 1
+    }
+
+    func executorCPU() -> Int {
+        CPU.current()
+    }
+
+    func total() -> Int {
+        counters.reduce(0, &+)
+    }
+}
+
+final class MutexCounterGroup: Sendable {
+    private let counters = Mutex([Int](repeating: 0, count: 128))
+
+    /// `AsyncCode.groupSize` operations under one `withLock`.
+    func incrementGroup(startingAt operation: Int) {
+        counters.withLock { counters in
+            for index in operation..<(operation + AsyncCode.groupSize) {
+                counters[index % 128] &+= 1
+            }
+        }
+    }
+
+    func total() -> Int {
+        counters.withLock { $0.reduce(0, &+) }
+    }
+}

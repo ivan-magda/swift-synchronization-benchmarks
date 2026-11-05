@@ -25,9 +25,6 @@ struct AsyncCode: Experiment {
     /// Operations per await or per lock in experiment 7B.
     static let groupSize = 100
 
-    /// Variants whose blocks this build can run; the other parts follow in later tasks.
-    private static let implementedVariants: Set = ["callerPaths"]
-
     let blocks: [BlockDescription]
 
     /// Present whenever path "fromManyTasks" is requested.
@@ -38,10 +35,6 @@ struct AsyncCode: Experiment {
 
         guard let operationsTable = Self.rows[request.variant] else {
             throw RequestError(message: "variant is unknown: \(request.variant)")
-        }
-
-        guard Self.implementedVariants.contains(request.variant) else {
-            throw RequestError(message: "variant is not implemented yet: \(request.variant)")
         }
 
         guard request.tunables.threads == 1 else {
@@ -81,6 +74,16 @@ struct AsyncCode: Experiment {
             )
         }
 
+        if request.variant == "batching" {
+            // Every sub-batch must hold whole groups. `validate()` made each value a multiple of subBatches.
+            for (key, operations) in request.tunables.operationsPerBatch.sorted(by: { $0.key < $1.key })
+            where !(operations / request.tunables.subBatches).isMultiple(of: Self.groupSize) {
+                throw RequestError(
+                    message: "operationsPerBatch: \(key) must be a multiple of subBatches × \(Self.groupSize)"
+                )
+            }
+        }
+
         if request.operations.contains("fromManyTasks") {
             guard let asyncCode = request.tunables.asyncCode else {
                 throw RequestError(message: "asyncCode is required for fromManyTasks")
@@ -114,6 +117,13 @@ struct AsyncCode: Experiment {
     }
 
     func run(_ block: BlockContext) -> [CheckResult] {
-        CallerPaths.run(block, asyncCode: asyncCode)
+        switch block.description.operation {
+        case "oneAwaitPerGroup", "awaitPerOperation", "oneLockPerGroup":
+            Batching.run(block)
+        case "callFromMainActor":
+            IsolationSettings.run(block)
+        default:
+            CallerPaths.run(block, asyncCode: asyncCode)
+        }
     }
 }

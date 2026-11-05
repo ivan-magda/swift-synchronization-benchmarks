@@ -360,7 +360,8 @@ private final class CallTimes: @unchecked Sendable {
 
 /// Main-thread CPU time at both edges of every batch, allocated before the block.
 /// The batch loop writes one batch at a time; the run thread reads after `runInTasks` returns.
-private final class MainThreadCPURecorder: @unchecked Sendable {
+/// Experiments 7A and 7C write its two lines.
+final class MainThreadCPURecorder: @unchecked Sendable {
     private let clock: MainThreadCPUClock
     private let batches: Int
     private let atBatchStart: UnsafeMutablePointer<UInt64>

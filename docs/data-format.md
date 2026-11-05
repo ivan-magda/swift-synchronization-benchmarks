@@ -83,10 +83,9 @@ The variant picks a table of operations; each operation lists the mechanisms mea
 The blocks are the requested (operation, mechanism) pairs that the table allows. A request
 is rejected when the variant is not in the table, when `tunables.threads` is not 1, when
 `mechanisms` or `operations` is empty or repeats a value, when a requested mechanism or
-operation is in no allowed pair, or when `fromManyTasks` is requested without `asyncCode`.
-Every block uses QoS `tunables.qos` and `operationsPerBatch` for its mechanism. The app
-runs `callerPaths` now; `batching` and `isolationSettings` are added with experiments 7B
-and 7C.
+operation is in no allowed pair, when `fromManyTasks` is requested without `asyncCode`, or,
+for `batching`, when an `operationsPerBatch` value is not a multiple of `subBatches × 100`.
+Every block uses QoS `tunables.qos` and `operationsPerBatch` for its mechanism.
 
 `callerPaths` blocks:
 - `onActor`, `fromBackgroundTask`, `fromMainActor`, `toMainActor`: one task (`threads` 1)
@@ -103,9 +102,28 @@ and 7C.
   A value is the main thread's user plus system CPU time, read just before the batch's start
   tick or just after its end tick.
 
-Each block has one check, `asyncCode.<operation>`, with its block position: the counter's
-final value equals `threads × (warmupBatches + measuredBatches) × operationsPerBatch`, or
-`50 × (warmupCallsPerTask + callsPerTask)` for `fromManyTasks`.
+`batching` blocks: one task (`threads` 1) and the usual `batch` lines. The state is 128
+counters; operation `k` of a sub-batch increments counter `k % 128`. `oneAwaitPerGroup`
+awaits one actor call per 100 operations, `awaitPerOperation` one actor call per operation,
+and `oneLockPerGroup` takes a `Mutex` once per 100 operations. The two `actor` rows carry
+`executorCPUReadings`; `oneLockPerGroup` does not.
+
+`isolationSettings` blocks: one task (`threads` 1) whose batch loop runs on the main actor;
+one operation is one call of the probe from the main actor. `templateDefaults` calls
+`nonisolatedWork()` of `IsolationProbeTemplate`, `swift6Language` the same function of
+`IsolationProbeSwift6`, and `concurrentAttribute` `concurrentWork()` of
+`IsolationProbeTemplate`. The block writes the usual `batch` lines without
+`executorCPUReadings` and the two main-thread CPU `samples` lines described for `callerPaths`.
+
+Each block has one check, `asyncCode.<operation>`, with its block position. For `callerPaths`
+and `batching`, the counter's final value (the sum of the 128 counters for `batching`) equals
+`threads × (warmupBatches + measuredBatches) × operationsPerBatch`, or
+`50 × (warmupCallsPerTask + callsPerTask)` for `fromManyTasks`. For `isolationSettings`, the
+probe is reset before the block; after it, the probe's call count equals
+`(warmupBatches + measuredBatches) × operationsPerBatch`, and its count of calls that ran on
+the main thread equals that number for `templateDefaults` and 0 for the other two rows
+(0 and 2 thread switches per call). The detail names both numbers, for example
+`calls 1200/1200; on main thread 1200, expected 1200`.
 
 The attempt checker's `ExpectedAttempt.check_per_block` is the experiment prefix
 `baseComparison` (followed by `.<operation>`) or the fixed calibration check name

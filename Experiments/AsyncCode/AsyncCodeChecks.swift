@@ -21,4 +21,22 @@ enum AsyncCodeChecks {
     static func expectedCount(tasks: Int, asyncCode: AsyncCodeTunables) -> Int {
         tasks * (asyncCode.warmupCallsPerTask + asyncCode.callsPerTask)
     }
+
+    /// Experiment 7C: every call reached the probe, and the expected number ran on the main thread.
+    static func checkMainThreadCalls(
+        operation: String,
+        calls: Int,
+        onMainThread: Int,
+        expectedCalls: Int,
+        expectedOnMainThread: Int,
+        block: Int
+    ) -> CheckResult {
+        CheckResult(
+            name: "asyncCode.\(operation)",
+            block: block,
+            passed: calls == expectedCalls && onMainThread == expectedOnMainThread,
+            detail: "calls \(calls)/\(expectedCalls); on main thread \(onMainThread), expected \(expectedOnMainThread)",
+            violations: nil
+        )
+    }
 }
