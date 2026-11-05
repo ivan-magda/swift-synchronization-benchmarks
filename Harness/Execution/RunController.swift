@@ -149,6 +149,7 @@ enum RunController {
         let finalConditions = captureConditions()
         let thermalChanges = monitor.stop()
         let failedChecks = checks.filter { !$0.passed }
+
         return finish(
             status: failedChecks.isEmpty ? "completed" : "failed",
             reasonCode: failedChecks.isEmpty ? nil : "check",
