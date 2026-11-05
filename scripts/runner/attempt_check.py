@@ -450,39 +450,25 @@ def _check_work(
     _require(
         len(blocks) == len(expected.blocks)
         and {(block["mechanism"], block["operation"]) for block in blocks}
-        == expected.blocks,
+        == set(expected.blocks),
         "block mechanism/operation pairs differ from request",
     )
-    calibration = request["experiment"] == "calibration"
+    total_batches = expected.warmup_batches + expected.measured_batches
     for block in blocks:
-        threads = (
-            1
-            if calibration and block["mechanism"] == "clockSingleThread"
-            else expected.threads
-        )
-        qos = (
-            (
-                "background"
-                if block["mechanism"] == "cpuSpeedBackground"
-                else "userInteractive"
-            )
-            if calibration
-            else tunables["qos"]
-        )
+        expected_block = expected.blocks[(block["mechanism"], block["operation"])]
+        threads = expected_block.threads
         _require(
-            block["threads"] == threads and block["qos"] == qos,
+            block["threads"] == threads and block["qos"] == expected_block.qos,
             "block threads or qos differ from request",
         )
         _require(
-            block["operationsPerBatch"]
-            == expected.operations_per_batch[block["mechanism"]],
+            block["operationsPerBatch"] == expected_block.operations_per_batch,
             "block operationsPerBatch differs from request",
         )
         block_batches = [line for line in batches if line["block"] == block["block"]]
-        total_batches = expected.warmup_batches + expected.measured_batches
         # Uniqueness and order were checked while reading the block group.
         _require(
-            len(block_batches) == threads * total_batches,
+            len(block_batches) == expected_block.batch_lines,
             "missing or extra batch lines",
         )
         for batch in block_batches:
@@ -501,36 +487,45 @@ def _check_work(
             for key in ("cpuReadings", "executorCPUReadings"):
                 if key in batch:
                     _require(
-                        len(batch[key]) == tunables["subBatches"] + 1,
+                        len(batch[key]) == expected.sub_batches + 1,
                         "batch " + key + " length differs from subBatches",
                     )
-        if calibration:
-            block_samples = [
-                line for line in samples if line["block"] == block["block"]
-            ]
-            _require(
-                len(block_samples) == threads
-                and {line.get("thread") for line in block_samples}
-                == set(range(threads)),
-                "calibration samples must cover each block thread exactly once",
-            )
-            metric = (
-                "clockRead1000"
-                if block["mechanism"].startswith("clock")
-                else "referenceLoop"
-            )
-            for sample in block_samples:
-                _require(
-                    sample["metric"] == metric
-                    and sample["unit"] == "ticks"
-                    and len(sample["values"]) == tunables["repeats"],
-                    "calibration samples metric, unit or repeats differ from request",
-                )
-    if expected.samples_lines is not None:
+        block_samples = [line for line in samples if line["block"] == block["block"]]
         _require(
-            len(samples) == expected.samples_lines,
+            len(block_samples)
+            == sum(group.lines for group in expected_block.samples),
             "samples line count differs from request",
         )
+        for group in expected_block.samples:
+            group_samples = [
+                line for line in block_samples if line["metric"] == group.metric
+            ]
+            _require(
+                len(group_samples) == group.lines,
+                "samples must cover each block thread exactly once",
+            )
+            if group.per_thread:
+                _require(
+                    {line.get("thread") for line in group_samples}
+                    == set(range(group.lines)),
+                    "samples must cover each block thread exactly once",
+                )
+            else:
+                _require(
+                    all("thread" not in line for line in group_samples),
+                    "block samples must not carry a thread",
+                )
+            for sample in group_samples:
+                _require(
+                    sample["unit"] == group.unit
+                    and len(sample["values"]) == group.values_per_line,
+                    "samples unit or value count differs from request",
+                )
+                readings = {"cpuAtStart", "cpuAtEnd"}
+                _require(
+                    readings & set(sample) == (readings if group.cpu_readings else set()),
+                    "samples CPU readings differ from request",
+                )
     warmup = sum(batch["warmup"] for batch in batches)
     _require(
         end["blockLines"] == len(blocks)
@@ -539,12 +534,9 @@ def _check_work(
         "end line counts differ from written work",
     )
     expected_checks = {(name, None) for name in expected.run_checks}
-    if expected.check_per_block is not None:
-        for block in blocks:
-            name = expected.check_per_block
-            if request["experiment"] == "baseComparison":
-                name += "." + block["operation"]
-            expected_checks.add((name, block["block"]))
+    for block in blocks:
+        expected_block = expected.blocks[(block["mechanism"], block["operation"])]
+        expected_checks.add((expected_block.check, block["block"]))
     checks = end["checks"]
     _require(
         len(checks) == len(expected_checks)
