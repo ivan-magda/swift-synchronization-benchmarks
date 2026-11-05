@@ -51,6 +51,9 @@ enum ExperimentRegistry {
         if request.experiment == "baseComparison" {
             return try BaseComparison(request: request)
         }
+        if request.experiment == "calibration" {
+            return try Calibration(request: request)
+        }
         throw RequestError(message: "unknown experiment: \(request.experiment)")
     }
 }
