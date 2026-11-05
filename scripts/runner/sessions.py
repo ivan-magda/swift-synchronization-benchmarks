@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import time
 from typing import Any, Callable, Dict, Optional, Sequence
@@ -84,120 +82,9 @@ def _await_exit(devices, phone, bundle_id, pid, deadline, sleep, monotonic) -> b
     return False
 
 
-# Identity fields present in modern IPS and legacy crash reports. Keep diagnostic frames,
-# symbols, offsets and hardware facts; retain the original only under ignored build/private.
-_IDENTITY_KEYS = {
-    'incident',
-    'incidentid',
-    'incidentidentifier',
-    'crashreporterkey',
-    'deviceidentifier',
-    'deviceid',
-    'devicename',
-    'udid',
-    'serialnumber',
-    'ecid',
-    'teamid',
-    'teamidentifier',
-    'signingid',
-    'signingidentifier',
-    'bundleid',
-    'bundleidentifier',
-    'cfbundleidentifier',
-    'coalitionname',
-    'userid',
-    'anonymousuuid',
-    'hostname',
-    'username',
-    'appleid',
-}
-
-
-def _identity_key(key: str) -> bool:
-    return re.sub(r'[^a-z0-9]', '', key.lower()) in _IDENTITY_KEYS
-
-
-def _scrub_crash(raw: str, config: LocalConfig, root: Path, context: str = '') -> str:
-    private_values = {config.team_id, config.bundle_id, str(root)}
-    private_values.update(phone.udid for phone in config.phones.values())
-    documents = []
-    decoder = json.JSONDecoder()
-    remaining = raw.lstrip()
-    try:
-        while remaining:
-            document, end = decoder.raw_decode(remaining)
-            documents.append(document)
-            remaining = remaining[end:].lstrip()
-    except ValueError:
-        documents = []
-
-    def collect(value):
-        if isinstance(value, dict):
-            for key, item in value.items():
-                if (
-                    _identity_key(key)
-                    and isinstance(item, (str, int))
-                    and not isinstance(item, bool)
-                ):
-                    private_values.add(str(item))
-                collect(item)
-        elif isinstance(value, list):
-            for item in value:
-                collect(item)
-
-    for document in documents:
-        collect(document)
-    if context:
-        remaining_context = context.lstrip()
-        try:
-            while remaining_context:
-                document, end = decoder.raw_decode(remaining_context)
-                collect(document)
-                remaining_context = remaining_context[end:].lstrip()
-        except ValueError:
-            pass
-
-    def scrub_text(text):
-        for value in sorted(private_values, key=len, reverse=True):
-            if value:
-                text = text.replace(value, '<redacted>')
-        # Paths may contain the phone's app-container identity or the host user's name.
-        return re.sub(r'(?<![A-Za-z0-9])/(?:[^\s"<>]+)', '<redacted-path>', text)
-
-    def scrub(value):
-        if isinstance(value, dict):
-            return {
-                key: '<redacted>' if _identity_key(key) else scrub(item)
-                for key, item in value.items()
-            }
-        if isinstance(value, list):
-            return [scrub(item) for item in value]
-        return scrub_text(value) if isinstance(value, str) else value
-
-    if documents:
-        return ''.join(
-            json.dumps(scrub(document), sort_keys=True, indent=2) + '\n'
-            for document in documents
-        )
-    # Legacy text reports have the same identities as labelled header lines.
-    for line in raw.splitlines():
-        label, separator, value = line.partition(':')
-        if separator and _identity_key(label.strip()):
-            private_values.add(value.strip())
-    raw = re.sub(
-        r'(?im)^((?:Incident Identifier|CrashReporter Key|Device Name|Identifier|'
-        r'Team Identifier|User ID|Anonymous UUID|Serial Number)\s*:).*$',
-        r'\1 <redacted>',
-        raw,
-    )
-    return scrub_text(raw)
-
-
 def _copy_crashes(
     devices,
     phone,
-    config,
-    results,
     folder,
     attempt_id,
     launched,
@@ -219,46 +106,12 @@ def _copy_crashes(
         remaining = deadline - monotonic()
         if remaining > 0:
             sleep(min(5, remaining))
-    private = (
-        results.resolve().parent
-        / 'build/private/sessions'
-        / folder.name
-        / 'crash'
-        / attempt_id
-    )
-    public = folder / 'crash' / attempt_id
+    destination = folder / 'crash' / attempt_id
+    destination.mkdir(parents=True, exist_ok=True)
     copied = False
-    for index, source in enumerate(sources):
-        private.mkdir(parents=True, exist_ok=True)
-        # Device filenames can themselves contain private identities.
-        name = f'{index + 1}.ips'
-        original = private / name
-        if not devices.copy_crash_log(phone.udid, source, original):
-            continue
-        raw = original.read_bytes()
-        scrubbed = _scrub_crash(
-            raw.decode('utf-8', errors='replace'), config, results.resolve().parent
-        )
-        public.mkdir(parents=True, exist_ok=True)
-        (public / name).write_text(scrubbed, encoding='utf-8')
-        source_name = _scrub_crash(
-            Path(source).name,
-            config,
-            results.resolve().parent,
-            context=raw.decode('utf-8', errors='replace'),
-        ).strip()
-        _write_json(
-            (public / name).with_suffix('.provenance.json'),
-            {
-                'attemptID': attempt_id,
-                'source': source_name,
-                'sha256': hashlib.sha256(raw).hexdigest(),
-                'scrubbedSHA256': hashlib.sha256(scrubbed.encode('utf-8')).hexdigest(),
-                'scrubbed': True,
-                'launchedAt': launched.isoformat(),
-            },
-        )
-        copied = True
+    for source in sources:
+        if devices.copy_crash_log(phone.udid, source, destination / Path(source).name):
+            copied = True
     return None if copied else 'matching crash reports were unavailable when copied'
 
 
@@ -462,8 +315,6 @@ def run_session(
                                 crash_issue = _copy_crashes(
                                     devices,
                                     phone,
-                                    config,
-                                    results,
                                     folder,
                                     attempt_id,
                                     launched,

@@ -164,30 +164,25 @@ class SessionTests(unittest.TestCase):
         )
         self.assertEqual(len(self.state().pending_runs()), 2)
 
-    def test_crash_copies_scrubbed_logs_and_preserves_private_original(self):
-        summary = self.run_session(['crash', 'complete'])
+    def test_crash_report_is_copied_without_modifying_its_bytes(self):
+        # Decode/re-encode or redaction must not alter a report copied from the phone.
+        raw = b'{"incident_id":"FICTIONAL-INCIDENT"}\r\n{"frames":[]}\n\xff'
+
+        def copy_crash(udid, source, destination):
+            destination.write_bytes(raw)
+            return True
+
+        with patch.object(self.devices, 'copy_crash_log', side_effect=copy_crash):
+            summary = self.run_session(['crash', 'complete'])
         self.assertEqual((summary.accepted, summary.rejected), (1, 1))
-        copies = list(
-            (self.results / PHONE.key / summary.session_id / 'crash').rglob('*.ips')
-        )
+        folder = self.results / PHONE.key / summary.session_id / 'crash'
+        copies = list(folder.rglob('*.ips'))
         self.assertEqual(len(copies), 1)
-        text = copies[0].read_text()
-        for private in (
-            'FICTIONAL-DEVICE',
-            'FICTIONAL-INCIDENT',
-            'FICTIONAL-REPORTER',
-            'example.fixture.bench',
-            '/private/var',
-        ):
-            self.assertNotIn(private, text)
-        self.assertIn('benchmark', text)
-        originals = list((self.root / 'build/private').rglob('*.ips'))
-        self.assertEqual(len(originals), 1)
-        self.assertIn('FICTIONAL-DEVICE', originals[0].read_text())
+        self.assertEqual(copies[0].read_bytes(), raw)
+        self.assertEqual(copies[0].name, self.devices.crash_source)
         self.assertEqual(self.devices.crash_bounds, [self.clock.now()])
-        provenance = json.loads(copies[0].with_suffix('.provenance.json').read_text())
-        self.assertEqual(provenance['source'], 'SyncBench-fixture.ips')
-        self.assertIn('sha256', provenance)
+        self.assertEqual(list(folder.rglob('*.provenance.json')), [])
+        self.assertFalse((self.root / 'build/private').exists())
 
     def test_crash_report_published_after_two_polls_is_copied(self):
         self.plan = replace(self.plan, runs=self.plan.runs[:1])
@@ -355,13 +350,6 @@ class SessionTests(unittest.TestCase):
         )
         self.assertIsNotNone(summary.stop_reason)
 
-    def test_crash_source_provenance_scrubs_identities_learned_from_the_report(self):
-        self.devices.crash_source = 'SyncBench-FICTIONAL-INCIDENT.ips'
-        summary = self.run_session(['crash', 'complete'])
-        folder = self.results / PHONE.key / summary.session_id
-        for path in folder.rglob('*'):
-            if path.is_file():
-                self.assertNotIn('FICTIONAL-INCIDENT', path.read_text())
 
     def test_locked_phone_stops_and_next_session_resumes(self):
         first = self.run_session(['complete', 'locked'])

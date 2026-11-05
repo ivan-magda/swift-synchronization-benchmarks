@@ -63,7 +63,7 @@ python3 scripts/bench.py check results/<phone>/<session>/<attempt>.jsonl \
 
 To exercise recovery, build `ios26`, then run
 `python3 scripts/bench.py run --phone iphone11 --plan plans/crash-and-hang.json`.
-Expect `crashed` with a sanitized crash report, then `timeout` with process
+Expect `crashed` with the original crash report, then `timeout` with process
 termination after 60 seconds. This diagnostic plan returns exit status 1 because
 both simulated failures remain rejected attempts. Crash publication can take
 several seconds; the runner waits up to 30 seconds for a matching report and
@@ -71,9 +71,10 @@ records a reason if none arrives.
 
 Public result metadata lives under ignored `results/`. Signed apps and profiles
 live under `build/artifacts/`; build metadata contains repository-relative app
-paths. Raw tool output and crash originals stay under `build/private/`.
-Sanitized reports and hash provenance accompany their session under
-`results/<phone>/<session>/crash/<attempt>/`. Keep failed attempts when reviewing
+paths. Raw tool output stays under `build/private/`. Original `.ips` reports are
+copied unchanged, with their original filenames, into
+`results/<phone>/<session>/crash/<attempt>/`. No redaction or extra crash metadata
+is generated. Keep failed attempts when reviewing
 a session. Provisioning profiles expire, so rebuild before the runner's planned
 session window exceeds the profile lifetime.
 

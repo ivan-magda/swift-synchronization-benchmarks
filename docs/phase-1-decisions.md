@@ -76,3 +76,5 @@ Cross-review corrections approved on 2026-11-05: synchronous read timing omits e
 Thermal refusal allowance is per run within each session (initial attempt plus `maxThermalRetries`); all attempts remain recorded and numbered across sessions. A fresh session may retry a cooled phone, and doctor budgets that fresh allowance for each pending run. Ordinary `maxAttempts` remains unchanged.
 
 Run state now separates clean and dev eligibility in addition to plan, phone, and code hash. Legacy state without an eligibility marker remains untouched but receives no progress credit because its eligibility is unknown. Fresh runs are required; guessing eligibility could silently finish a clean campaign using dev work.
+
+Crash-report policy simplified by user request: keep the original `.ips` bytes and filename directly with the failed attempt. Remove identity scrubbing, separate private copies, and crash provenance sidecars. This supersedes the earlier crash-sanitization part of R11; historical acceptance artifacts describe the behavior at their recorded commits.
