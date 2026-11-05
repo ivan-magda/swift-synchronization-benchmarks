@@ -1,6 +1,6 @@
 *.xcodeproj/
 build/
-results/
+/results/
 local.json
 .DS_Store
 __pycache__/
