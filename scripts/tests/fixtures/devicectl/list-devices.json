@@ -1,0 +1,57 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "devices": [
+      {
+        "connectionProperties": {
+          "pairingState": "paired",
+          "transportType": "wired",
+          "tunnelState": "disconnected"
+        },
+        "deviceProperties": {
+          "developerModeStatus": "enabled",
+          "osBuildUpdate": "23G71",
+          "osVersionNumber": "26.6"
+        },
+        "hardwareProperties": {
+          "productType": "iPhone12,5",
+          "udid": "UDID-IPHONE11"
+        },
+        "identifier": "DEVICE-IPHONE11",
+        "properties": {
+          "connection": {
+            "pairingState": "paired",
+            "state": "disconnected",
+            "transportType": "wired"
+          }
+        }
+      },
+      {
+        "connectionProperties": {
+          "pairingState": "paired",
+          "transportType": "wired",
+          "tunnelState": "disconnected"
+        },
+        "deviceProperties": {
+          "developerModeStatus": "enabled",
+          "osBuildUpdate": "23G90",
+          "osVersionNumber": "26.6.2"
+        },
+        "hardwareProperties": {
+          "productType": "iPhone16,2",
+          "udid": "UDID-IPHONE15"
+        },
+        "identifier": "DEVICE-IPHONE15",
+        "properties": {
+          "connection": {
+            "pairingState": "paired",
+            "state": "disconnected",
+            "transportType": "wired"
+          }
+        }
+      }
+    ]
+  }
+}

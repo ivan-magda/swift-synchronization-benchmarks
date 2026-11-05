@@ -1,0 +1,10 @@
+{
+  "info": {
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "DEVICE-IPHONE11",
+    "passcodeRequired": true,
+    "unlockedSinceBoot": true
+  }
+}
