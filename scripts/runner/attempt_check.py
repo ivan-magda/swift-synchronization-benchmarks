@@ -437,7 +437,7 @@ def _check_work(
                 _require(
                     current_block["start"]
                     <= line["start"]
-                    <= line["end"]
+                    < line["end"]
                     <= current_block["end"],
                     "batch timestamps are outside its block",
                 )

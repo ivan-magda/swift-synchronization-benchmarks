@@ -63,6 +63,10 @@ class FakeDevice:
         self.crash_bounds = []
         self.current = None
         self.wait_error = False
+        self.launch_error = False
+        self.launch_elapsed = 0
+        self.launch_timeouts = []
+        self.wait_timeouts = []
         self.wait_elapsed = 0
         self.poll_error = False
         self.copy_error = False
@@ -93,7 +97,9 @@ class FakeDevice:
             raise DeviceControlError('private install failure')
         self.installed.append(app)
 
-    def launch(self, udid, bundle_id, app_arguments):
+    def launch(self, udid, bundle_id, app_arguments, timeout_seconds=60):
+        self.launch_timeouts.append(timeout_seconds)
+        self.clock.seconds += self.launch_elapsed
         self.current = self.outcomes.popleft() if self.outcomes else 'complete'
         if self.current == 'launch-failed':
             raise DeviceControlError('private launch failure')
@@ -109,9 +115,12 @@ class FakeDevice:
             write_attempt(
                 self.folder, make_attempt_lines(request, self.build_id, status, reason)
             )
+        if self.launch_error:
+            raise DeviceControlError('private launch timeout')
         return 321
 
     def await_termination(self, udid, pid, timeout_seconds):
+        self.wait_timeouts.append(timeout_seconds)
         self.clock.seconds += self.wait_elapsed
         if self.interrupt_wait:
             raise KeyboardInterrupt()

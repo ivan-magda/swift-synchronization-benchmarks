@@ -162,7 +162,10 @@ class DeviceControl:
         except (ValueError, KeyError, TypeError, AttributeError):
             raise DeviceControlError(self._failure_message) from None
 
-    def launch(self, udid: str, bundle_id: str, app_arguments: List[str]) -> int:
+    def launch(
+        self, udid: str, bundle_id: str, app_arguments: List[str],
+        timeout_seconds: float = 60,
+    ) -> int:
         payload = self._query(
             [
                 'device',
@@ -174,7 +177,8 @@ class DeviceControl:
                 bundle_id,
                 '--',
             ]
-            + app_arguments
+            + app_arguments,
+            timeout_seconds,
         )
         try:
             process = payload['process']

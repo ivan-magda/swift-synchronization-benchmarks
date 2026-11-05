@@ -152,6 +152,8 @@ def build(
     now: datetime,
 ) -> Dict[str, Any]:
     root = results.resolve().parent
+    if Path.cwd().resolve() != root:
+        raise BuildError('build must run from the repository root')
     scratch = root / 'build' / 'private'
     scratch.mkdir(parents=True, exist_ok=True)
 

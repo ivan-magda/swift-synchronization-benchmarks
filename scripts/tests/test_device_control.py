@@ -54,11 +54,13 @@ class DeviceControlTests(unittest.TestCase):
         device = self.device(['launch'])
         self.assertEqual(
             device.launch(
-                'PRIVATE-UDID', 'example.SyncBench', ['--bench-request', 'encoded']
+                'PRIVATE-UDID', 'example.SyncBench', ['--bench-request', 'encoded'],
+                timeout_seconds=2.5,
             ),
             6323,
         )
-        arguments = self.runner.calls[0][0]
+        arguments, timeout = self.runner.calls[0]
+        self.assertEqual(timeout, 2.5)
         self.assertEqual(
             arguments[arguments.index('--') + 1 :], ['--bench-request', 'encoded']
         )

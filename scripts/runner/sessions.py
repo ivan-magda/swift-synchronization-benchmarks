@@ -54,9 +54,10 @@ def _write_json(path: Path, document: Any) -> None:
     )
 
 
-def _await_exit(devices, phone, bundle_id, pid, seconds, sleep, monotonic) -> bool:
-    # Await and polling share one deadline, including time consumed by a failed await.
-    deadline = monotonic() + seconds
+def _await_exit(devices, phone, bundle_id, pid, deadline, sleep, monotonic) -> bool:
+    # Launch, await and polling share the original monotonic deadline.
+    if monotonic() >= deadline:
+        return False
     try:
         exited, _ = devices.await_termination(
             phone.udid, pid, max(0.001, deadline - monotonic())
@@ -362,15 +363,30 @@ def run_session(
                 verdict = AttemptVerdict('launchFailed', False, None, [])
                 stop = None
                 pid = None
+                deadline = monotonic() + run.time_limit_seconds
                 try:
                     pid = devices.launch(
                         phone.udid,
                         config.bundle_id,
                         ['--bench-request', encode_request(request)],
+                        timeout_seconds=max(0.001, deadline - monotonic()),
                     )
                 except (DeviceControlError, OSError):
                     stop = 'launch failed'
                     verdict.reasons.append(stop)
+                    if monotonic() >= deadline:
+                        verdict = AttemptVerdict(
+                            'timeout', False, None, ['run time limit exceeded']
+                        )
+                        # A timed-out CLI response may have started the app without
+                        # returning its PID. Discover it only for bounded cleanup.
+                        try:
+                            for running_pid in devices.running_pids(
+                                phone.udid, config.bundle_id, timeout_seconds=5
+                            ):
+                                devices.terminate(phone.udid, running_pid)
+                        except (DeviceControlError, OSError):
+                            verdict.reasons.append('timeout cleanup failed')
 
                 if pid is not None:
                     try:
@@ -379,7 +395,7 @@ def run_session(
                             phone,
                             config.bundle_id,
                             pid,
-                            run.time_limit_seconds,
+                            deadline,
                             sleep,
                             monotonic,
                         )

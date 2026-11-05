@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timezone
 from pathlib import Path
 
 from runner.builds import (
+    BuildError,
     build,
     code_hash,
     latest_build,
@@ -98,7 +100,8 @@ class BuildsTests(unittest.TestCase):
     def test_build_info_has_no_personal_values(self):
         with tempfile.TemporaryDirectory() as temporary:
             results = Path(temporary) / 'results'
-            info = build('ios26', CONFIG, PHONE, results, BuildRunner(), NOW)
+            with patch('runner.builds.Path.cwd', return_value=results.parent.resolve()):
+                info = build('ios26', CONFIG, PHONE, results, BuildRunner(), NOW)
             stored = results / 'builds' / info['buildID'] / 'build-info.json'
             document = stored.read_text()
 
@@ -119,6 +122,17 @@ class BuildsTests(unittest.TestCase):
             self.assertEqual(info['settings']['SWIFT_VERSION'], '6.0')
             self.assertEqual(latest_build(results, 'ios26'), info)
             self.assertIsNone(latest_build(results, 'ios18'))
+
+    def test_foreign_cwd_is_rejected_before_commands_or_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch('runner.builds.Path.cwd', return_value=root / 'foreign'):
+                with self.assertRaisesRegex(BuildError, 'repository root'):
+                    build(
+                        'ios26', CONFIG, PHONE, root / 'results',
+                        lambda *args: self.fail('foreign build command ran'), NOW,
+                    )
+            self.assertEqual(list(root.iterdir()), [])
 
     def test_profile_expiry_is_read(self):
         self.assertEqual(

@@ -230,6 +230,39 @@ class SessionTests(unittest.TestCase):
             list((self.results / PHONE.key / summary.session_id).glob('*.check.json'))
         )
 
+    def test_launch_consumes_the_deadline_even_with_completed_files(self):
+        self.plan = replace(self.plan, runs=self.plan.runs[:1])
+        self.devices.launch_elapsed = 300
+        summary = self.run_session(['complete'])
+        self.assertEqual((summary.accepted, summary.rejected), (0, 1))
+        self.assertEqual(self.devices.terminated, [321])
+        self.assertEqual(self.devices.wait_timeouts, [])
+        self.assertEqual(self.devices.launch_timeouts, [300])
+        self.assertEqual(
+            self.state().attempts(self.plan.runs[0].run_id)[0]['status'], 'timeout'
+        )
+
+    def test_expired_launch_command_discovers_and_terminates_started_process(self):
+        self.plan = replace(self.plan, runs=self.plan.runs[:1])
+        self.devices.launch_elapsed = 300
+        self.devices.launch_error = True
+        summary = self.run_session(['hang'])
+        self.assertEqual(self.devices.terminated, [321])
+        self.assertEqual((summary.accepted, summary.rejected), (0, 1))
+        self.assertEqual(
+            self.state().attempts(self.plan.runs[0].run_id)[0]['status'], 'timeout'
+        )
+
+    def test_slow_launch_leaves_only_remaining_time_to_wait(self):
+        self.plan = replace(self.plan, runs=self.plan.runs[:1])
+        self.devices.launch_elapsed = 280
+        summary = self.run_session(['hang'])
+        self.assertEqual(self.devices.wait_timeouts, [20])
+        self.assertEqual(self.devices.launch_timeouts, [300])
+        self.assertEqual(self.devices.terminated, [321])
+        self.assertEqual((summary.accepted, summary.rejected), (0, 1))
+        self.assertEqual(self.clock.seconds, 312)
+
     def test_wait_fallback_detects_exit_and_hang_without_resetting_the_deadline(self):
         self.devices.wait_error = True
         summary = self.run_session(['complete', 'hang'])

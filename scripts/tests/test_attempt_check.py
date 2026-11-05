@@ -223,6 +223,7 @@ class AttemptCheckTests(unittest.TestCase):
             (4, {"start": 129}),
             (4, {"end": 201}),
             (4, {"end": 159}),
+            (4, {"end": 160}),  # Equality is a zero-duration batch.
             (1, {"start": 99}),
             (-2, {"end": 231}),
             (4, {"cpuReadings": [0, 0]}),
@@ -289,7 +290,11 @@ class AttemptCheckTests(unittest.TestCase):
 
     def test_multithread_batches_and_mechanism_specific_counts(self):
         request = deepcopy(REQUEST)
-        request.update(mechanisms=["mutex", "nsLock"], operations=["read", "increment"])
+        request.update(
+            variant="twoThreads",
+            mechanisms=["mutex", "nsLock"],
+            operations=["read", "increment"],
+        )
         request["tunables"].update(
             threads=2, operationsPerBatch={"default": 4, "nsLock": 8}
         )

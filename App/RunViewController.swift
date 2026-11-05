@@ -6,7 +6,7 @@ final class RunViewController: UIViewController {
     private var decodedRequest = false
     private var pendingRequest: RunRequest?
     private var displayLink: CADisplayLink?
-    private var displayedFrames = 0
+    private var launchReadiness = LaunchReadiness()
 
     private let statusLabel: UILabel = {
         let label = UILabel()
@@ -65,15 +65,31 @@ final class RunViewController: UIViewController {
             return
         }
 
+        for name in [
+            UIApplication.didBecomeActiveNotification,
+            UIApplication.willResignActiveNotification,
+            UIScene.didActivateNotification,
+            UIScene.willDeactivateNotification,
+        ] {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(activationChanged), name: name, object: nil
+            )
+        }
+
         let link = CADisplayLink(target: self, selector: #selector(frameDisplayed))
         displayLink = link
         link.add(to: .main, forMode: .common)
     }
 
-    @objc private func frameDisplayed() {
-        displayedFrames += 1
+    @objc private func activationChanged() {
+        launchReadiness.activationChanged()
+    }
 
-        guard displayedFrames == 2 else {
+    @objc private func frameDisplayed() {
+        guard launchReadiness.frameDisplayed(
+            applicationIsActive: UIApplication.shared.applicationState == .active,
+            sceneIsActive: view.window?.windowScene?.activationState == .foregroundActive
+        ) else {
             return
         }
 
