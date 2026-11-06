@@ -20,10 +20,9 @@ enum MechanismID: String, CaseIterable, Codable, Sendable {
     case managedAtomic
     case managedAtomicRelaxed
 
-    /// The 14 mechanisms that implement `StateProtection`.
+    /// The 13 mechanisms that implement `StateProtection`.
     static var stateProtections: [MechanismID] {
         [
-            .unsynchronized,
             .mutex,
             .osAllocatedUnfairLock,
             .osAllocatedUnfairLockAdaptiveSpin,

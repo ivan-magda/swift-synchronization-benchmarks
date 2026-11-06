@@ -18,7 +18,6 @@ func makeIntegerProtection(
     initialValue: Int
 ) -> any StateProtection<Int> {
     switch mechanism {
-    case .unsynchronized: NoProtection(initialValue)
     case .mutex: MutexProtection(initialValue)
     case .osAllocatedUnfairLock: AllocatedUnfairLockProtection(initialValue)
     case .osAllocatedUnfairLockAdaptiveSpin: AdaptiveSpinUnfairLockProtection(initialValue)

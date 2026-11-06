@@ -18,7 +18,7 @@ enum SharedIntegers {
     ) -> Visitor.Output {
         switch mechanism {
         case .unsynchronized:
-            return visitor.visitSynchronous(ProtectedInteger(NoProtection(initialValue)))
+            return visitor.visitSynchronous(UnsynchronizedInteger(initialValue))
         case .mutex:
             return visitor.visitSynchronous(ProtectedInteger(MutexProtection(initialValue)))
         case .osAllocatedUnfairLock:
