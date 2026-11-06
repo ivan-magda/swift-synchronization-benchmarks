@@ -172,6 +172,7 @@ def make_attempt_lines(
     async_code = request["experiment"] == "asyncCode"
     transactional_store = request["experiment"] == "transactionalStore"
     hot_flag = request["experiment"] == "hotFlag"
+    creation_cost = request["experiment"] == "creationCost"
     request_registry = request["experiment"] == "requestRegistry"
     priority_inversion = request["experiment"] == "priorityInversion"
 
@@ -334,6 +335,12 @@ def make_attempt_lines(
                 metric="readGroupTime", unit="ticks",
                 values=[3] * (tunables["measuredBatches"] * (operations // 100)),
             ))
+        if creation_cost and operation == "create":
+            for kind, unit in (("Blocks", "blocks"), ("Bytes", "bytes")):
+                for edge in ("BeforeCreate", "AfterCreate", "AfterDestroy"):
+                    lines.append(dict(type="samples", block=position,
+                                      metric="malloc" + kind + edge, unit=unit,
+                                      values=[3] * (tunables["warmupBatches"] + tunables["measuredBatches"])))
         if transactional_store:
             writes = operations // 50
             read_metric = "hundredReadsTime" if operation == "singleRecord" else "readTime"
@@ -365,6 +372,8 @@ def make_attempt_lines(
             check_name = "requestRegistry." + operation
         elif transactional_store:
             check_name = "transactionalStore." + operation
+        elif creation_cost:
+            check_name = "creationCost." + operation
         elif hot_flag:
             check_name = "hotFlag." + operation
         elif async_code:

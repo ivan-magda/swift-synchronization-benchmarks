@@ -247,6 +247,44 @@ def _transactional_store_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str]
     return blocks
 
 
+CREATION_COST_MECHANISMS = frozenset({
+    "unsynchronized", "mutex", "osAllocatedUnfairLock", "osUnfairLock", "nsLock",
+    "nsRecursiveLock", "pthreadMutex", "pthreadReadWriteLock", "serialQueue",
+    "barrierQueueSyncWrite", "dispatchSemaphore", "actor", "mainActor", "atomic", "managedAtomic",
+})
+
+
+def _creation_cost_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+    tunables = request["tunables"]
+    if request["variant"] != "default":
+        raise ValueError("request.variant must be default for creationCost")
+    if tunables["threads"] != 1:
+        raise ValueError("request.tunables.threads must be 1 for creationCost")
+    for field, allowed in (("mechanisms", CREATION_COST_MECHANISMS), ("operations", {"create", "destroy"})):
+        values = request[field]
+        if not values or len(set(values)) != len(values) or not set(values) <= allowed:
+            raise ValueError("request." + field + " must be nonempty, unique creationCost entries")
+    blocks = {}
+    for mechanism in request["mechanisms"]:
+        counts = tunables["operationsPerBatch"]
+        count = counts.get(mechanism, counts["default"])
+        for operation in request["operations"]:
+            samples = ()
+            if operation == "create":
+                samples = tuple(
+                    ExpectedSamples("malloc" + kind + edge, unit, False, 1,
+                                    tunables["warmupBatches"] + tunables["measuredBatches"], False)
+                    for kind, unit in (("Blocks", "blocks"), ("Bytes", "bytes"))
+                    for edge in ("BeforeCreate", "AfterCreate", "AfterDestroy")
+                )
+            blocks[(mechanism, operation)] = ExpectedBlock(
+                mechanism, operation, 1, tunables["qos"], count,
+                tunables["warmupBatches"] + tunables["measuredBatches"],
+                samples, 0, "creationCost." + operation,
+            )
+    return blocks
+
+
 HOLDER_QOS = {"utilityHolder": "utility", "backgroundHolder": "background"}
 
 
@@ -426,6 +464,10 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
         measured = tunables["measuredBatches"]
     elif request["experiment"] == "transactionalStore":
         blocks = _transactional_store_blocks(request)
+        warmup = tunables["warmupBatches"]
+        measured = tunables["measuredBatches"]
+    elif request["experiment"] == "creationCost":
+        blocks = _creation_cost_blocks(request)
         warmup = tunables["warmupBatches"]
         measured = tunables["measuredBatches"]
     elif request["experiment"] == "asyncCode":

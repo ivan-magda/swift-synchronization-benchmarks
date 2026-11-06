@@ -106,6 +106,42 @@ Every block writes ordinary warm-up and measured batch lines plus two measured-o
 
 Each block has one `transactionalStore.<operation>` check with integer `violations`, counting reads that saw different versions within a group. A passing check requires zero violations, every group's final version equal to its write count across all lists, a matching final value sum and valid batch sums. Detail follows `violations 0; groups 10000 with expected versions` (500 groups for `twentyRecords`). Checks and sample encoding happen after all workers and asynchronous writes finish.
 
+### Creation cost (experiment 9)
+
+Variant `default` runs the requested mechanisms × operations on one thread. Mechanisms are
+`unsynchronized`, `mutex`, `osAllocatedUnfairLock`, `osUnfairLock`, `nsLock`,
+`nsRecursiveLock`, `pthreadMutex`, `pthreadReadWriteLock`, `serialQueue`,
+`barrierQueueSyncWrite`, `dispatchSemaphore`, `actor`, `mainActor`, `atomic`, and
+`managedAtomic`. Operations are `create` and `destroy`. Selections are nonempty and unique;
+requests require `threads` 1 and representable object storage. Both operations emit the usual
+warm-up and measured `batch` lines, using the requested QoS and object count. The main-actor
+row creates and destroys on the main thread, with a ten-second deadline per batch.
+An untimed readiness signal ensures caller submission buffers have been released before
+the main thread reads malloc statistics. For worker batches, main parks for at most one
+second, and a missed park deadline fails completion even if the worker later finishes.
+
+Only `create` emits samples: six lines per block, with no `thread`, `cpuAtStart` or
+`cpuAtEnd`. Metrics `mallocBlocksBeforeCreate`, `mallocBlocksAfterCreate` and
+`mallocBlocksAfterDestroy` use unit `blocks`; `mallocBytesBeforeCreate`,
+`mallocBytesAfterCreate` and `mallocBytesAfterDestroy` use unit `bytes`. Each line has
+`warmupBatches + measuredBatches` values in batch order, warm-up first. These are allocator-reported blocks
+and bytes (including allocator cache accounting), read outside creation/destruction timing while other harness threads are idle.
+
+Each block has one `creationCost.<operation>` check. The deinit counter must equal all
+created objects, including warm-up. Every object retained in a measured create batch must have nonzero `malloc_size`,
+checked outside timing after the after-create snapshot. Aggregate xzone statistics can
+include cached free slots, so creation need not add one reported block per object. Return and growth checks use a separate untimed enumeration of
+`MALLOC_PTR_IN_USE_RANGE_TYPE`, counting allocated pointers while excluding cached free
+slots. After destruction, these live blocks above that batch’s baseline must be at most
+`operationsPerBatch / 100`; any later increase above an earlier post-destruction count has
+the same allowance. Enumeration errors fail the check. Enumeration uses the supported
+self-reader with allocation-free callbacks and no manual zone locking; Nano may allocate
+transient scratch memory internally. Unrelated framework activity can still change
+process-wide counts. Detail gives deinit counts, completion, the three raw block counts,
+enumerated live before/after-destruction counts and post-destruction growth. A missed
+main-thread deadline fails completion; executor-owned storage is read only after successful
+completion. `destroy` checks deinit accounting and completion without malloc samples.
+
 ### Async code (experiment 7)
 
 The variant picks a table of operations; each operation lists the mechanisms measured with it
@@ -171,11 +207,11 @@ the main thread equals that number for `templateDefaults` and 0 for the other tw
 `calls 1200/1200; on main thread 1200, expected 1200`.
 
 The attempt checker stores the required name in each `ExpectedBlock.check`:
-`baseComparison.<operation>`, `requestRegistry.addAndRemove`, `hotFlag.<operation>`, `transactionalStore.<operation>`, `asyncCode.<operation>`,
+`baseComparison.<operation>`, `requestRegistry.addAndRemove`, `hotFlag.<operation>`, `transactionalStore.<operation>`, `creationCost.<operation>`, `asyncCode.<operation>`,
 `priorityInversion.<operation>`, or the fixed calibration name `calibration.samples`.
 `ExpectedAttempt.blocks` maps each (mechanism, operation) pair to its expected work,
 including batch, samples and trial line counts. `ExpectedAttempt.run_checks` is
-empty for all four implemented experiments.
+empty for all implemented experiments.
 
 ### Priority inversion (experiment 8B)
 

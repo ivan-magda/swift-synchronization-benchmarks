@@ -73,6 +73,10 @@ enum ExperimentRegistry {
             return try TransactionalStore(request: request)
         }
 
+        if request.experiment == "creationCost" {
+            return try CreationCost(request: request)
+        }
+
         if request.experiment == "asyncCode" {
             return try AsyncCode(request: request)
         }

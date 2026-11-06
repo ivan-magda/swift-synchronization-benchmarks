@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "name": "acceptance-creation-cost",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "objects-10000",
+      "experiment": "creationCost",
+      "variant": "default",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "unsynchronized",
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "dispatchSemaphore",
+        "actor",
+        "mainActor",
+        "atomic",
+        "managedAtomic"
+      ],
+      "operations": [
+        "create",
+        "destroy"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "objects-100000",
+      "experiment": "creationCost",
+      "variant": "default",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "unsynchronized",
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "dispatchSemaphore",
+        "actor",
+        "mainActor",
+        "atomic",
+        "managedAtomic"
+      ],
+      "operations": [
+        "create",
+        "destroy"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 100000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}

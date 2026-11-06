@@ -146,7 +146,7 @@ One JSON Lines file per attempt (one launch), raw values only; the app computes 
 - `batch`: block reference, threads, QoS, warm-up or measured, operation count, ticks, CPU readings (start, inside, end; executor side where it differs).
 - `samples`: block reference, metric (for example `wait`, `frame_gap`), unit, an array of raw values.
 - `trial` (8B): one line per trial: holder QoS; timestamps of load start and stop, holder acquire and release, main arrival and acquire; holder CPU readings; valid or censored.
-- `memory` (9): malloc statistics before and after, per mechanism and object count.
+- `samples` (9): six block-level malloc statistics lines for all `create` batches, warm-up first: blocks and bytes before creation, after creation and after destruction; no `thread` or CPU readings. Destruction blocks have no samples lines. Separate untimed allocated-pointer enumeration checks live-memory return without counting allocator-cached free slots; errors fail correctness.
 - Last line, `end`: status (`completed`; `refused` with a reason; `failed` with a reason), correctness results including the violation counters, the numbers of blocks and batches written, conditions at end, thermal changes during the run.
 
 A file without an `end` line is an incomplete attempt. Times are integer ticks; the analysis converts them to nanoseconds.
