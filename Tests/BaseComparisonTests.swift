@@ -58,10 +58,10 @@ import Testing
         request.tunables.warmupBatches = 0
         request.tunables.measuredBatches = 1
         request.tunables.operationsPerBatch = ["default": 4_294_967_295]
-        _ = try BaseComparison(request: request)
+        _ = try BaseComparisonRequest.blocks(for: request)
 
         request.tunables.operationsPerBatch = ["default": 4_294_967_296]
-        #expect(throws: RequestError.self) { try BaseComparison(request: request) }
+        #expect(throws: RequestError.self) { try BaseComparisonRequest.blocks(for: request) }
     }
 
     // An earlier value from any writer cannot stand in for its final write.
@@ -111,7 +111,7 @@ import Testing
     @Test(arguments: InvalidBaseRequest.all)
     fileprivate func invalidRequests(_ invalid: InvalidBaseRequest) {
         do {
-            _ = try BaseComparison(request: invalid.request)
+            _ = try BaseComparisonRequest.blocks(for: invalid.request)
             Issue.record("Accepted invalid \(invalid.field)")
         } catch {
             #expect(error.message.contains(invalid.field))
@@ -135,7 +135,7 @@ import Testing
             request.tunables.measuredBatches = 2
         }
 
-        #expect(throws: RequestError.self) { try BaseComparison(request: request) }
+        #expect(throws: RequestError.self) { try BaseComparisonRequest.blocks(for: request) }
     }
 
     // All concrete rows must execute every operation, warm-up and measured work through the registry.

@@ -35,38 +35,3 @@ protocol AsyncSharedInteger: Sendable {
 
     func finalValue() async -> Int
 }
-
-/// Reads use shared access; mutations follow the protection's write contract.
-struct ProtectedInteger<Protection: StateProtection>: SharedInteger where Protection.State == Int {
-    private let protection: Protection
-
-    init(_ protection: Protection) {
-        self.protection = protection
-    }
-
-    func read() -> Int {
-        protection.withSharedAccess {
-            $0
-        }
-    }
-
-    func write(_ value: Int) {
-        protection.write(value) { state, value in
-            state = value
-        }
-    }
-
-    func increment() {
-        protection.write(1) { state, increment in
-            state &+= increment
-        }
-    }
-
-    func waitForPendingWrites() {
-        protection.waitForPendingWrites()
-    }
-
-    func recordExecutorCPU(into slot: CPUReadingSlot) {
-        protection.recordExecutorCPU(into: slot)
-    }
-}

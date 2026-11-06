@@ -37,4 +37,10 @@ final class BarrierQueueAsyncWriteInteger: SharedInteger, @unchecked Sendable {
             slot.store(CPU.current())
         }
     }
+    #if DEBUG
+    /// Lets a test hold a real queue reader while observing async submission.
+    func withQueueAccess(_ body: @Sendable () -> Void) {
+        queue.sync(execute: body)
+    }
+    #endif
 }

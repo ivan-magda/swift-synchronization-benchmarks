@@ -102,4 +102,56 @@ enum BaseComparisonChecks {
             violations: violations
         )
     }
+
+    static func firstValue(
+        thread: Int,
+        batch: Int,
+        subBatch: Int,
+        count: Int,
+        block: BlockContext
+    ) -> Int {
+        valueWritten(
+            byThread: thread,
+            operation: batch * block.layout.operationsPerBatch + subBatch * count
+        )
+    }
+
+    static func checks(
+        operation: BaseComparison.Operation,
+        finalValue: Int,
+        logs: [ThreadLog],
+        block: BlockContext
+    ) -> [CheckResult] {
+        let operationsPerThread = block.layout.operationsPerWorker
+
+        switch operation {
+        case .read:
+            return [
+                checkReads(
+                    finalValue: finalValue,
+                    batchSums: logs.checkValues(batches: block.layout.totalBatches),
+                    operationsPerBatch: block.layout.operationsPerBatch,
+                    block: block.position
+                )
+            ]
+        case .write:
+            return [
+                checkWrites(
+                    finalValue: finalValue,
+                    threads: block.description.threads,
+                    operationsPerThread: operationsPerThread,
+                    block: block.position
+                )
+            ]
+        case .increment:
+            return [
+                checkIncrements(
+                    finalValue: finalValue,
+                    threads: block.description.threads,
+                    operationsPerThread: operationsPerThread,
+                    block: block.position
+                )
+            ]
+        }
+    }
 }

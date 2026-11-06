@@ -1,3 +1,5 @@
+import Dispatch
+
 actor ActorInteger: AsyncSharedInteger {
     private var value: Int
 
@@ -29,6 +31,15 @@ actor ActorInteger: AsyncSharedInteger {
 
 @MainActor
 final class MainActorInteger: AsyncSharedInteger {
+    /// Call from the run pthread while the main thread remains available.
+    nonisolated static func makeOnMainThread(_ initialValue: Int) -> MainActorInteger {
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                MainActorInteger(initialValue)
+            }
+        }
+    }
+
     private var value: Int
 
     init(_ initialValue: Int) {
