@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, FrozenSet, List, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -12,7 +12,7 @@ class ExpectedSamples:
     unit: str
     per_thread: bool  # one line per thread (with "thread"), or one line for the block (no "thread")
     lines: int
-    values_per_line: int
+    values_per_line: Optional[int]  # None requires a positive, variable count
     cpu_readings: bool  # cpuAtStart and cpuAtEnd present
 
 
@@ -254,6 +254,42 @@ CREATION_COST_MECHANISMS = frozenset({
 })
 
 
+def _main_thread_cache_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+    tunables = request["tunables"]
+    cache = tunables.get("mainThreadCache")
+    if not isinstance(cache, dict):
+        raise ValueError("request.tunables.mainThreadCache is required")
+    fields = {"frames", "warmupFrames", "scrollPointsPerSecond", "decodeIterations", "writeIntervalMicroseconds"}
+    if set(cache) != fields or any(type(value) is not int for value in cache.values()):
+        raise ValueError("mainThreadCache requires integer tunables")
+    if (cache["frames"] < 1 or cache["warmupFrames"] < 0
+            or not 1 <= cache["scrollPointsPerSecond"] <= 20000
+            or not 1 <= cache["decodeIterations"] <= 2**63 - 1
+            or not 0 <= cache["writeIntervalMicroseconds"] <= 2**32 - 1):
+        raise ValueError("mainThreadCache tunable outside range")
+    frames = cache["frames"] + cache["warmupFrames"]
+    if (frames * 50000000 + 5000000000 > 2**63 - 1
+            or (frames * cache["scrollPointsPerSecond"] + frames) * 128 > 2**63 - 1):
+        raise ValueError("mainThreadCache storage or frame duration overflow")
+    if request["variant"] != "default" or not 2 <= tunables["threads"] <= 4:
+        raise ValueError("mainThreadCache requires default variant and 2...4 writers")
+    for field, allowed in (("mechanisms", TRANSACTIONAL_STORE_MECHANISMS | {"mainActor"}),
+                           ("operations", {"scroll"})):
+        values = request[field]
+        if not values or len(set(values)) != len(values) or not set(values) <= allowed:
+            raise ValueError("request." + field + " must be nonempty, unique mainThreadCache entries")
+    samples = (
+        ExpectedSamples("readTime", "ticks", False, 1, None, False),
+        ExpectedSamples("frameStart", "ticks", False, 1, cache["frames"], False),
+        ExpectedSamples("frameInterval", "nanoseconds", False, 1, cache["frames"], False),
+    )
+    counts = tunables["operationsPerBatch"]
+    return {(mechanism, "scroll"): ExpectedBlock(
+        mechanism, "scroll", tunables["threads"], tunables["qos"],
+        counts.get(mechanism, counts["default"]), 0, samples, 0, "mainThreadCache.scroll",
+    ) for mechanism in request["mechanisms"]}
+
+
 def _creation_cost_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
     tunables = request["tunables"]
     if request["variant"] != "default":
@@ -466,6 +502,10 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
         blocks = _transactional_store_blocks(request)
         warmup = tunables["warmupBatches"]
         measured = tunables["measuredBatches"]
+    elif request["experiment"] == "mainThreadCache":
+        blocks = _main_thread_cache_blocks(request)
+        warmup = 0
+        measured = 0
     elif request["experiment"] == "creationCost":
         blocks = _creation_cost_blocks(request)
         warmup = tunables["warmupBatches"]

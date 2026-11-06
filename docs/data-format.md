@@ -6,7 +6,7 @@ Schema 1 uses UTF-8 JSON Lines: one object per line, with a final newline. Keys 
 
 `run`: `type` (`run`), `schema` (1), `request` (the request as decoded), `build`, `phone`, `conditions`.
 
-The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `variant`, `seed`, `smoke`, optional `simulation`, `mechanisms`, `operations`, `tunables`, optional `traced` (`true` only in requests from a traced plan; omitted otherwise). Tunables contain `threads`, `qos`, `warmupBatches`, `measuredBatches`, `subBatches`, `operationsPerBatch` (mechanism ID to operations count, with a `default` fallback), `referenceLoopIterations`, optional calibration `repeats`, optional `asyncCode`, optional `priorityInversion`, optional `requestRegistry`. `asyncCode` (experiment 7, path `fromManyTasks`) has `callsPerTask` (timed calls per task) and `warmupCallsPerTask` (untimed calls per task before the timed ones). `priorityInversion` (experiment 8B) has `holderWorkIterations` (`referenceLoop` iterations the holder runs under the lock), `loadQoS`, `loadMilliseconds`, `mainDelayMicroseconds`, `pauseMilliseconds`, `warmupTrials`, `trials`. QoS is `userInteractive`, `userInitiated`, `default`, `utility`, or `background`. Simulation is `crash` or `hang`, only in smoke runs.
+The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `variant`, `seed`, `smoke`, optional `simulation`, `mechanisms`, `operations`, `tunables`, optional `traced` (`true` only in requests from a traced plan; omitted otherwise). Tunables contain `threads`, `qos`, `warmupBatches`, `measuredBatches`, `subBatches`, `operationsPerBatch` (mechanism ID to operations count, with a `default` fallback), `referenceLoopIterations`, optional calibration `repeats`, optional `asyncCode`, optional `priorityInversion`, optional `requestRegistry`, optional `mainThreadCache`. `asyncCode` (experiment 7, path `fromManyTasks`) has `callsPerTask` (timed calls per task) and `warmupCallsPerTask` (untimed calls per task before the timed ones). `priorityInversion` (experiment 8B) has `holderWorkIterations` (`referenceLoop` iterations the holder runs under the lock), `loadQoS`, `loadMilliseconds`, `mainDelayMicroseconds`, `pauseMilliseconds`, `warmupTrials`, `trials`. QoS is `userInteractive`, `userInitiated`, `default`, `utility`, or `background`. Simulation is `crash` or `hang`, only in smoke runs.
 
 `build`: `buildID`, `commit`, `dirty`, `target` (`ios26` or `ios18`), `minimumOS`, `configuration` (`Release` or `Debug`). The build script embeds metadata before signing. An Xcode build without script metadata uses `unknown` for build ID and commit.
 
@@ -106,7 +106,15 @@ Every block writes ordinary warm-up and measured batch lines plus two measured-o
 
 Each block has one `transactionalStore.<operation>` check with integer `violations`, counting reads that saw different versions within a group. A passing check requires zero violations, every group's final version equal to its write count across all lists, a matching final value sum and valid batch sums. Detail follows `violations 0; groups 10000 with expected versions` (500 groups for `twentyRecords`). Checks and sample encoding happen after all workers and asynchronous writes finish.
 
-### Creation cost (experiment 9)
+### Main-thread image cache (experiment 8A)
+
+`mainThreadCache` requests use variant `default`, operation `scroll`, and 2…4 writer threads. The required `tunables.mainThreadCache` group contains `warmupFrames` (at least 0), `frames` (at least 1), `scrollPointsPerSecond` (1…20,000), `decodeIterations` (at least 1) and `writeIntervalMicroseconds` (0…4,294,967,295). Frame duration and sample storage arithmetic must fit a signed integer before allocation. The fourteen mechanisms are the thirteen transactional-store rows plus `mainActor`.
+
+Blocks use sample-only recording, with no `batch` lines and no CPU arrays. Exactly three `samples` lines carry `block` and omit `thread`: `readTime` uses unit `ticks` and any positive number of values; `frameStart` uses unit `ticks` and exactly `frames` values; `frameInterval` uses unit `nanoseconds` and exactly `frames` values. All values exclude warm-up. The variable read count applies only to this experiment's `readTime`; transactional-store read samples and every other sample group retain exact counts. Frame starts are Clock.now readings; intervals are `targetTimestamp - timestamp` from CADisplayLink. Read durations bracket the actual cache lookup inside the UIKit cell callback.
+
+Every block has one `mainThreadCache.scroll` check: frames completed before `(warmupFrames + frames) × 50 ms + 5 s`, at least one measured read, no missing entry or mismatched image/index pair, no fixed-buffer overflow and at least one completed store by every writer. Writers stop and pending writes drain before their counters are inspected. The detail reports measured frames, measured reads, all writes (including warm-up), violations, overflow and the consumed decode checksum.
+
+## Creation cost (experiment 9)
 
 Variant `default` runs the requested mechanisms × operations on one thread. Mechanisms are
 `unsynchronized`, `mutex`, `osAllocatedUnfairLock`, `osUnfairLock`, `nsLock`,
@@ -207,7 +215,7 @@ the main thread equals that number for `templateDefaults` and 0 for the other tw
 `calls 1200/1200; on main thread 1200, expected 1200`.
 
 The attempt checker stores the required name in each `ExpectedBlock.check`:
-`baseComparison.<operation>`, `requestRegistry.addAndRemove`, `hotFlag.<operation>`, `transactionalStore.<operation>`, `creationCost.<operation>`, `asyncCode.<operation>`,
+`baseComparison.<operation>`, `requestRegistry.addAndRemove`, `hotFlag.<operation>`, `transactionalStore.<operation>`, `creationCost.<operation>`, `mainThreadCache.scroll`, `asyncCode.<operation>`,
 `priorityInversion.<operation>`, or the fixed calibration name `calibration.samples`.
 `ExpectedAttempt.blocks` maps each (mechanism, operation) pair to its expected work,
 including batch, samples and trial line counts. `ExpectedAttempt.run_checks` is

@@ -360,6 +360,14 @@ def _request_registry_tunables(value: Any, name: str) -> None:
              name + ".sampleEvery must be positive and even")
 
 
+def _main_thread_cache_tunables(value: Any, name: str) -> None:
+    _fields(value, name, {
+        "warmupFrames": _unsigned, "frames": _unsigned,
+        "scrollPointsPerSecond": _unsigned, "decodeIterations": _unsigned,
+        "writeIntervalMicroseconds": _uint32,
+    })
+
+
 def _completed_request(request: Dict[str, Any]) -> None:
     """Completed work needs valid tunables; failed invalidRequest files do not."""
     _fields(
@@ -397,6 +405,7 @@ def _completed_request(request: Dict[str, Any]) -> None:
             "asyncCode": _async_code_tunables,
             "priorityInversion": _priority_inversion_tunables,
             "requestRegistry": _request_registry_tunables,
+            "mainThreadCache": _main_thread_cache_tunables,
         },
     )
     tunables = request["tunables"]
@@ -655,7 +664,8 @@ def _check_work(
             for sample in group_samples:
                 _require(
                     sample["unit"] == group.unit
-                    and len(sample["values"]) == group.values_per_line,
+                    and (len(sample["values"]) > 0 if group.values_per_line is None
+                         else len(sample["values"]) == group.values_per_line),
                     "samples unit or value count differs from request",
                 )
                 readings = {"cpuAtStart", "cpuAtEnd"}

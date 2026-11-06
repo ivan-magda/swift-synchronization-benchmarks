@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "name": "acceptance-main-thread-cache",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "two-writers",
+      "experiment": "mainThreadCache",
+      "variant": "default",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "mainActor"
+      ],
+      "operations": [
+        "scroll"
+      ],
+      "tunables": {
+        "threads": 2,
+        "qos": "userInitiated",
+        "warmupBatches": 0,
+        "measuredBatches": 1,
+        "subBatches": 1,
+        "operationsPerBatch": {
+          "default": 1
+        },
+        "referenceLoopIterations": 1000000,
+        "mainThreadCache": {
+          "warmupFrames": 60,
+          "frames": 600,
+          "scrollPointsPerSecond": 3000,
+          "decodeIterations": 10000,
+          "writeIntervalMicroseconds": 20000
+        }
+      }
+    },
+    {
+      "name": "four-writers",
+      "experiment": "mainThreadCache",
+      "variant": "default",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "mainActor"
+      ],
+      "operations": [
+        "scroll"
+      ],
+      "tunables": {
+        "threads": 4,
+        "qos": "userInitiated",
+        "warmupBatches": 0,
+        "measuredBatches": 1,
+        "subBatches": 1,
+        "operationsPerBatch": {
+          "default": 1
+        },
+        "referenceLoopIterations": 1000000,
+        "mainThreadCache": {
+          "warmupFrames": 60,
+          "frames": 600,
+          "scrollPointsPerSecond": 3000,
+          "decodeIterations": 10000,
+          "writeIntervalMicroseconds": 20000
+        }
+      }
+    }
+  ]
+}

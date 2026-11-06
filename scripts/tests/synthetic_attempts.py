@@ -174,6 +174,7 @@ def make_attempt_lines(
     hot_flag = request["experiment"] == "hotFlag"
     creation_cost = request["experiment"] == "creationCost"
     request_registry = request["experiment"] == "requestRegistry"
+    main_thread_cache = request["experiment"] == "mainThreadCache"
     priority_inversion = request["experiment"] == "priorityInversion"
 
     # These are the six measurements specified by Calibration, independently of the checker.
@@ -245,6 +246,8 @@ def make_attempt_lines(
         lines.append(block)
         tick += 10
         for thread in range(threads):
+            if main_thread_cache:
+                continue
             if priority_inversion:
                 trials = tunables["priorityInversion"]
                 for number in range(trials["warmupTrials"] + trials["trials"]):
@@ -335,6 +338,11 @@ def make_attempt_lines(
                 metric="readGroupTime", unit="ticks",
                 values=[3] * (tunables["measuredBatches"] * (operations // 100)),
             ))
+        if main_thread_cache:
+            for metric, unit, count in (("readTime", "ticks", 17),
+                                        ("frameStart", "ticks", tunables["mainThreadCache"]["frames"]),
+                                        ("frameInterval", "nanoseconds", tunables["mainThreadCache"]["frames"])):
+                lines.append(dict(type="samples", block=position, metric=metric, unit=unit, values=[3] * count))
         if creation_cost and operation == "create":
             for kind, unit in (("Blocks", "blocks"), ("Bytes", "bytes")):
                 for edge in ("BeforeCreate", "AfterCreate", "AfterDestroy"):
@@ -368,6 +376,8 @@ def make_attempt_lines(
             check_name = "calibration.samples"
         elif priority_inversion:
             check_name = "priorityInversion." + operation
+        elif main_thread_cache:
+            check_name = "mainThreadCache.scroll"
         elif request_registry:
             check_name = "requestRegistry." + operation
         elif transactional_store:

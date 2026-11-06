@@ -139,6 +139,16 @@ def _request_registry_tunables(value: Any) -> None:
         raise PlanError(prefix + "sampleEvery must be even")
 
 
+def _main_thread_cache_tunables(value: Any) -> None:
+    value = _object(value, "tunables.mainThreadCache")
+    prefix = "tunables.mainThreadCache."
+    _integer(value.get("warmupFrames"), prefix + "warmupFrames")
+    _integer(value.get("frames"), prefix + "frames", 1)
+    _integer(value.get("scrollPointsPerSecond"), prefix + "scrollPointsPerSecond", 1, 20000)
+    _integer(value.get("decodeIterations"), prefix + "decodeIterations", 1)
+    _integer(value.get("writeIntervalMicroseconds"), prefix + "writeIntervalMicroseconds", 0, 2**32 - 1)
+
+
 def _tunables(value: Any) -> Dict[str, Any]:
     if not isinstance(value, dict):
         raise PlanError("tunables must be an object")
@@ -169,6 +179,8 @@ def _tunables(value: Any) -> Dict[str, Any]:
         _priority_inversion_tunables(value["priorityInversion"])
     if "requestRegistry" in value:
         _request_registry_tunables(value["requestRegistry"])
+    if "mainThreadCache" in value:
+        _main_thread_cache_tunables(value["mainThreadCache"])
     return deepcopy(value)
 
 

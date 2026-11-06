@@ -35,6 +35,7 @@ struct Tunables: Codable, Equatable, Sendable {
     var asyncCode: AsyncCodeTunables?
     var priorityInversion: PriorityInversionTunables?
     var requestRegistry: RequestRegistryTunables?
+    var mainThreadCache: MainThreadCacheTunables?
 }
 
 /// Tunables of experiment 7, path "fromManyTasks".
@@ -65,6 +66,15 @@ struct RequestRegistryTunables: Codable, Equatable, Sendable {
     var pauseMicroseconds: Int
     var cancelAllEvery: Int
     var sampleEvery: Int
+}
+
+/// Frame count and background image-decoding load for the scrolling cache.
+struct MainThreadCacheTunables: Codable, Equatable, Sendable {
+    var warmupFrames: Int
+    var frames: Int
+    var scrollPointsPerSecond: Int
+    var decodeIterations: Int
+    var writeIntervalMicroseconds: Int
 }
 
 struct RunRequest: Codable, Equatable, Sendable {
@@ -220,6 +230,10 @@ struct RunRequest: Codable, Equatable, Sendable {
             guard registry.pauseMicroseconds <= Int(UInt32.max) else {
                 throw RequestError(message: "requestRegistry.pauseMicroseconds must fit UInt32")
             }
+        }
+
+        if let cache = tunables.mainThreadCache {
+            try MainThreadCacheRequest.validate(cache)
         }
 
         guard simulation == nil || smoke else {
