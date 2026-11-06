@@ -153,6 +153,38 @@ unfair-lock trial sides. Reader order identifies operations before plumbing.
 The [device acceptance record](../phase-2-acceptance.md#readable-experiments-and-optimizer-fixes-2026-11-06)
 records the four plans on both phones, signed-build provenance and final tests.
 
+## Later dead-helper cleanup
+
+The later `Remove unused block timing wrappers` commit removes only the unused
+`BlockContext.timeBatchesOnThreads` / `timeBatchesInTasks` APIs, their two exclusive
+tests and their test fixture. The used layout/check helpers remain. Real timer
+bodies, experiment timing call sites and compiler settings are unchanged. Device
+acceptance still identifies clean source `a1647c675def`; no device acceptance was
+rerun for this cleanup.
+
+Fresh unsigned builds use new `final-ios26` and `final-ios18` derived-data
+directories under `build/private/readable-experiments/`, with the same commands
+and settings above, substituting `final` for `task6` in output paths. Default
+comparisons of the accepted `task6` executables against these new executables
+exit 0: 785 kept for iOS 26 and 870 for iOS 18, zero missing and zero added.
+Supplementing the default filters with `timeBatchesOnThreads`,
+`timeBatchesInTasks`, `timeBatchesOnIsolation`, `operationsPerWorker` and
+`checkValues` also finds zero missing/added: 791 / 876 kept. Reports are named
+`final-vs-task6-ios{26,18}-{default,supplemental}.json`; the supplemental command
+is saved as `final-compare-supplemental.py` in the same private directory.
+Normalization is unchanged. This is instruction-region inventory evidence,
+with the comparator's limits above, rather than whole-program equivalence.
+
+| Final executable | SHA-256 |
+| --- | --- |
+| iOS 26 | `55dfeebfba1a1312c99c49e0230fc400c6f5ae093a7538467759e8615587c23c` |
+| iOS 18 | `ab4cef5e7c11eee0b5c81c0e8b52f9a052168e68679c870ffdebc3054b6ee69d` |
+
+The Task 1 baseline and Task 6 executable hashes were checked before and after
+and are unchanged. Their directories were not build destinations. The complete
+original-baseline difference inventory below remains unchanged: 653 / 738 kept,
+141 missing and 132 added per target, with the same aliases and explanations.
+
 ## Complete difference inventory
 
 The following grouped inventories account for all 141 missing hashes and all

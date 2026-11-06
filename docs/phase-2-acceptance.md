@@ -370,3 +370,27 @@ and profiles remain under ignored `build/artifacts/`. Comparison reports, test
 bundles, CLI logs and independent rechecks remain under ignored
 `build/private/readable-experiments/`; the runner's private device/build
 diagnostics remain in their existing `build/private/` locations.
+
+### Later dead-helper cleanup verification
+
+The later `Remove unused block timing wrappers` commit deletes the unused
+`BlockContext` timing wrappers and their two exclusive tests. Device acceptance
+above remains for clean revision `a1647c675def`; it was not rerun, and its signed
+artifacts, session history and original inventory remain unchanged. Fresh unsigned
+`final-ios26` / `final-ios18` builds preserve every selected instruction region
+of the accepted Task 6 executables: default 785 / 870 kept, supplemental 791 / 876
+kept, zero missing or added for either target. The [build check](build-checks/2026-11-readable-experiments.md#later-dead-helper-cleanup)
+records the comparison scope and limits.
+
+The final Simulator command uses the same destination as above, with
+`-enableCodeCoverage YES`, result bundle
+`build/private/readable-experiments/final-simulator.xcresult` and unfiltered log
+`final-simulator.log` in that directory. It exits 0: 66 tests / 180 executions,
+zero failures, skips and runtime warnings. The two-count reduction removes only
+the deleted wrapper tests. Coverage reports all retained layout/check-value,
+request-validation and real `BatchTimer` helper lines executed. The same three
+SDK telemetry `invalidDigitCount(94232)` messages remain visible. They originate
+in Xcode's `IDESchemeActionSDKRecord`; this repository cleanup does not repair
+that external telemetry subsystem, suppress messages or filter errors. The
+151-test Python results above remain the Task 6 results; no Python source changed
+in this cleanup.
