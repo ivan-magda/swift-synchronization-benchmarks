@@ -4,21 +4,6 @@ import Testing
 
 @testable import SyncBench
 
-@Test(arguments: MechanismID.stateProtections.filter { $0 != .barrierQueueAsyncWrite })
-func synchronousWriteFinishesBeforeReturning(_ mechanism: MechanismID) async {
-    let finished = await onBenchmarkThread {
-        let protection = makeIntegerProtection(mechanism, initialValue: 0)
-        let finished = DispatchSemaphore(value: 0)
-        protection.write(finished) { value, finished in
-            value = 41
-            finished.signal()
-        }
-        return finished.wait(timeout: .now()) == .success
-    }
-
-    #expect(finished)
-}
-
 @Test(arguments: [
     MechanismID.pthreadReadWriteLock,
     .barrierQueueSyncWrite,

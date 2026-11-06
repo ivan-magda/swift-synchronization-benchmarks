@@ -202,3 +202,129 @@ func batchEdgesAreReportedAroundEveryBatch() async {
     #expect(edges.map(\.batch) == [0, 0, 1, 1, 2, 2])
     #expect(edges.map(\.edge) == [.start, .end, .start, .end, .start, .end])
 }
+
+// Catches skipping warm-up batches or recording only one worker's timed work.
+@Test(.timeLimit(.minutes(1)))
+func timeBatchesOnThreadsRecordsEveryBatch() async {
+    let observation = await onBenchmarkThread {
+        let block = makeTimingBlock()
+        let logs = block.timeBatchesOnThreads { _, _, _, count in count }
+        let times = logs.flatMap { log in
+            (0..<3).map { (log.start(ofBatch: $0), log.end(ofBatch: $0)) }
+        }
+        return (times, logs.checkValues(batches: 3), block.layout.operationsPerWorker)
+    }
+
+    #expect(observation.0.count == 6)
+    #expect(observation.0.allSatisfy { $0.0 < $0.1 })
+    #expect(observation.1 == [[4, 4, 4], [4, 4, 4]])
+    #expect(observation.2 == 12)
+}
+
+// Catches reading the final state before every worker has finished its last batch.
+@Test(.timeLimit(.minutes(1)))
+func timeBatchesInTasksReturnsTheFinalValue() async {
+    let observation = await onBenchmarkThread {
+        let block = makeTimingBlock()
+        let counter = Mutex(0)
+        let finalReads = Mutex(0)
+        let result = block.timeBatchesInTasks(
+            recordExecutorCPU: { _ in },
+            operations: { _, _, _, count in
+                for _ in 0..<count {
+                    counter.withLock { $0 += 1 }
+                }
+                return count
+            },
+            finalValue: {
+                finalReads.withLock { $0 += 1 }
+                return counter.withLock { $0 }
+            }
+        )
+        return (result.finalValue, result.logs.checkValues(batches: 3), finalReads.withLock { $0 })
+    }
+
+    #expect(observation.0 == 24)
+    #expect(observation.1 == [[4, 4, 4], [4, 4, 4]])
+    #expect(observation.2 == 1)
+}
+
+@Test(arguments: [true, false])
+func requireUniqueSelectionRejectsDuplicates(duplicateMechanisms: Bool) {
+    var request = RunRequest.golden
+    if duplicateMechanisms {
+        request.mechanisms = ["mutex", "mutex"]
+    } else {
+        request.operations = ["increment", "increment"]
+    }
+
+    #expect(throws: RequestError.self) {
+        try request.requireUniqueSelection(mechanisms: nil, operations: nil)
+    }
+}
+
+@Test(arguments: [true, false])
+func requireUniqueSelectionRejectsEmptyAndUnknownValues(checkMechanisms: Bool) throws {
+    var request = RunRequest.golden
+    let mechanisms: Set<String> = ["mutex"]
+    let operations: Set<String> = ["increment"]
+
+    if checkMechanisms {
+        request.mechanisms = []
+    } else {
+        request.operations = []
+    }
+    #expect(throws: RequestError.self) {
+        try request.requireUniqueSelection(mechanisms: mechanisms, operations: operations)
+    }
+
+    if checkMechanisms {
+        request.mechanisms = ["unknown"]
+    } else {
+        request.operations = ["unknown"]
+    }
+    #expect(throws: RequestError.self) {
+        try request.requireUniqueSelection(mechanisms: mechanisms, operations: operations)
+    }
+
+    // A nil allowlist leaves experiment-specific membership validation to the caller.
+    try request.requireUniqueSelection(mechanisms: nil, operations: nil)
+    try RunRequest.golden.requireUniqueSelection(mechanisms: mechanisms, operations: operations)
+}
+
+// Catches validating the request's default count instead of the selected block's count.
+@Test func validatedLayoutRejectsInvalidBlockCounts() throws {
+    let request = RunRequest.golden
+
+    #expect(throws: RequestError.self) {
+        try request.validatedLayout(operationsPerBatch: 3, threads: 2)
+    }
+    #expect(throws: RequestError.self) {
+        try request.validatedLayout(operationsPerBatch: 4, threads: 0)
+    }
+    #expect(throws: RequestError.self) {
+        try request.validatedLayout(operationsPerBatch: Int.max - 1, threads: 2)
+    }
+    #expect(try request.validatedLayout(operationsPerBatch: 8, threads: 2) == BatchLayout(
+        warmupBatches: 1,
+        measuredBatches: 2,
+        operationsPerBatch: 8,
+        subBatches: 2
+    ))
+}
+
+private func makeTimingBlock() -> BlockContext {
+    BlockContext(
+        position: 0,
+        description: BlockDescription(
+            mechanism: "mutex",
+            operation: "increment",
+            threads: 2,
+            qos: .userInitiated,
+            operationsPerBatch: 4
+        ),
+        layout: BatchLayout(warmupBatches: 1, measuredBatches: 2, operationsPerBatch: 4, subBatches: 2),
+        request: .golden,
+        lines: ResultLineBuffer()
+    )
+}
