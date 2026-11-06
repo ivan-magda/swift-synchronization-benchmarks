@@ -144,3 +144,28 @@ class CodegenCompareTests(unittest.TestCase):
         )
         candidate = codegen_compare.measured_units(changed, '', names, ('Counter',))
         self.assertEqual(len(codegen_compare.compare(baseline, candidate).missing), 1)
+
+    def test_multi_destination_and_status_writes_end_page_provenance(self):
+        names = {'_counter': 'Counter.increment'}
+        for instruction in (
+            'ldadd x0, x8, [x1]',
+            'ldpsw x0, x8, [x1]',
+            'stxr w8, x0, [x1]',
+        ):
+            with self.subTest(instruction=instruction):
+                source = (
+                    '_counter:\n'
+                    '1000: adrp x8, 111\n'
+                    '1004: ' + instruction + '\n'
+                    '1008: ldr x9, [x8, #0x10]\n'
+                    '100c: ret\n'
+                )
+                baseline = codegen_compare.measured_units(
+                    source, '', names, ('Counter',),
+                )
+                candidate = codegen_compare.measured_units(
+                    source.replace('#0x10', '#0x18'), '', names, ('Counter',),
+                )
+                self.assertEqual(
+                    codegen_compare.compare(baseline, candidate).missing, baseline,
+                )

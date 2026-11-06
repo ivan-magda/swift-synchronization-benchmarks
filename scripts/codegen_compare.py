@@ -152,14 +152,13 @@ def measured_units(disassembly: str, indirect_symbols: str,
                 )
             elif branch or mnemonic in ('br', 'ret'):
                 page_registers.clear()
-            elif not mnemonic.startswith('st') and mnemonic not in (
-                'cmp', 'cmn', 'tst',
-            ):
-                destinations = operands.split(',')[
-                    :2 if mnemonic == 'ldp' else 1
-                ]
-                for register in destinations:
-                    register = register.strip()
+            elif mnemonic not in ('cmp', 'cmn', 'tst'):
+                # Register results can be second operands (LSE atomics,
+                # paired loads) or store status operands. Conservatively drop
+                # every explicit non-memory register, including read operands,
+                # rather than maintaining an incomplete destination table.
+                registers = re.findall(r'\b[wx]\d+\b', operands.split('[', 1)[0])
+                for register in registers:
                     page_registers.discard(re.sub(r'^w', 'x', register))
             writeback = re.search(r'\[(x\d+)[^\]]*\](?:!|,)', operands)
             if writeback:
