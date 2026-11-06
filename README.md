@@ -111,6 +111,13 @@ Run the runner tests:
 python3 -m unittest discover -s scripts/tests -t scripts
 ```
 
+Compare measured code in two unsigned Release executables with
+`python3 scripts/codegen_compare.py BASELINE_EXECUTABLE CANDIDATE_EXECUTABLE --report OUT.json`.
+The comparator uses Xcode's inspection tools to hash normalized loops and async
+continuations, ignoring function renames and relocated addresses. The JSON report
+lists missing and added units with their function names and the number kept; a
+missing baseline unit returns exit status 1. Added units are informational.
+
 Generate the Xcode project and run the tests on the Simulator:
 
 ```bash

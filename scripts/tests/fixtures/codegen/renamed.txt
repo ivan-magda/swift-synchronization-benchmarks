@@ -1,0 +1,18 @@
+(__TEXT,__text) section
+_renamed:
+2000: stp x29, x30, [sp, #-0x10]!
+2004: adrp x8, 255 ; 0xff000
+2008: ldr x9, 0x9000
+200c: bl 0x7000
+2010: ldr x8, [x0]
+2014: add x8, x8, #0x1
+2018: bl 0x8000
+201c: subs x1, x1, #0x1
+2020: b.ne 0x2004
+2024: ret
+_otherHelper:
+7000: ret
+_otherResume:
+a000: adrp x1, 99 ; 0x63000
+a004: mov x2, #0x0
+a008: b 0x8018

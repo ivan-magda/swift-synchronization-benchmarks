@@ -1,0 +1,8 @@
+Indirect symbols for (__TEXT,__stubs) 6 entries
+address            index name
+0x0000000000005000 1 _os_unfair_lock_lock
+0x000000000000500c 2 _swift_beginAccess
+0x0000000000005018 3 _swift_task_switch
+0x0000000000008000 1 _os_unfair_lock_lock
+0x000000000000800c 2 _swift_beginAccess
+0x0000000000008018 3 _swift_task_switch

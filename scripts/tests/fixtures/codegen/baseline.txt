@@ -1,0 +1,21 @@
+(__TEXT,__text) section
+_loop:
+_loopAlias:
+1000: stp x29, x30, [sp, #-0x10]!
+1004: adrp x8, 127 ; 0x80000
+1008: ldr x9, 0x4000
+100c: bl 0x3000
+1010: ldr x8, [x0]
+1014: add x8, x8, #0x1
+1018: bl 0x5000 ; deliberately misleading comment
+101c: subs x1, x1, #0x1
+1020: b.ne 0x1004
+1024: ret
+_helper:
+3000: ret
+_resume:
+6000: adrp x1, 43 ; 0x31000
+6004: mov x2, #0x0
+6008: b 0x5018 ; symbol stub for: _swift_task_switch
+_ignored:
+7000: ret
