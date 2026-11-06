@@ -60,9 +60,11 @@ enum BaseComparisonLoops {
     static func incrementLoopAsync<Integer: AsyncSharedInteger>(
         _ integer: Integer,
         count: Int
-    ) async {
+    ) async -> Int {
+        var sum = 0
         for _ in 0..<count {
-            await integer.increment()
+            sum += await integer.increment()
         }
+        return sum
     }
 }

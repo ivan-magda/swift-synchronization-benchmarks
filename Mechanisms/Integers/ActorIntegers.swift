@@ -13,8 +13,9 @@ actor ActorInteger: AsyncSharedInteger {
         self.value = value
     }
 
-    func increment() {
+    func increment() -> Int {
         value &+= 1
+        return value
     }
 
     func executorCPU() -> Int {
@@ -42,8 +43,9 @@ final class MainActorInteger: AsyncSharedInteger {
         self.value = value
     }
 
-    func increment() {
+    func increment() -> Int {
         value &+= 1
+        return value
     }
 
     func executorCPU() -> Int {

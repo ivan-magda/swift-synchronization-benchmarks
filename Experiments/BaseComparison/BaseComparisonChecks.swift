@@ -25,6 +25,40 @@ enum BaseComparisonChecks {
         )
     }
 
+    /// Divide an even factor before multiplying so every representable sum is accepted.
+    static func incrementSum(totalOperations: Int) -> Int? {
+        guard totalOperations >= 0 else { return nil }
+        let (sum, overflow) = totalOperations.isMultiple(of: 2)
+            ? (totalOperations / 2).multipliedReportingOverflow(by: totalOperations + 1)
+            : totalOperations.multipliedReportingOverflow(by: totalOperations / 2 + 1)
+        return overflow ? nil : sum
+    }
+
+    static func checkAsyncIncrements(
+        finalValue: Int,
+        batchSums: [[Int]],
+        threads: Int,
+        operationsPerThread: Int,
+        block: Int
+    ) -> CheckResult {
+        let (total, totalOverflow) = threads.multipliedReportingOverflow(by: operationsPerThread)
+        let expectedSum = totalOverflow ? nil : incrementSum(totalOperations: total)
+        var sum = 0
+        var sumOverflow = false
+        for batchSum in batchSums.joined() {
+            let (next, overflow) = sum.addingReportingOverflow(batchSum)
+            sum = next
+            sumOverflow = sumOverflow || overflow
+        }
+        return CheckResult(
+            name: "baseComparison.increment",
+            block: block,
+            passed: !totalOverflow && finalValue == total && !sumOverflow && expectedSum == sum,
+            detail: "Final value \(finalValue); expected \(threads) × \(operationsPerThread); returned-value sum \(sum); expected \(expectedSum.map(String.init) ?? "unrepresentable")",
+            violations: nil
+        )
+    }
+
     static func checkWrites(
         finalValue: Int,
         threads: Int,

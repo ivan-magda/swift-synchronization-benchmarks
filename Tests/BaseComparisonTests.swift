@@ -25,6 +25,45 @@ import Testing
         #expect(!lostIncrement.passed)
     }
 
+    // A correct final value cannot hide discarded, stale or overflowing return-value sums.
+    @Test(arguments: [
+        (20, [[55, 155]], true),
+        (19, [[55, 155]], false),
+        (20, [[55, 154]], false),
+        (20, [[Int.max, 1]], false),
+    ])
+    func asyncIncrementCheck(_ finalValue: Int, _ sums: [[Int]], _ passed: Bool) {
+        let result = BaseComparisonChecks.checkAsyncIncrements(
+            finalValue: finalValue,
+            batchSums: sums,
+            threads: 2,
+            operationsPerThread: 10,
+            block: 3
+        )
+
+        #expect(result.passed == passed)
+        #expect(result.name == "baseComparison.increment")
+        #expect(result.block == 3)
+    }
+
+    // The product may overflow before division even when the triangular sum fits Int.
+    @Test(arguments: ["actor", "mainActor"])
+    func validatesAsyncIncrementSumBeforeRunning(_ mechanism: String) throws {
+        #expect(BaseComparisonChecks.incrementSum(totalOperations: 4_294_967_295) == 9_223_372_034_707_292_160)
+        #expect(BaseComparisonChecks.incrementSum(totalOperations: Int.max) == nil)
+
+        var request = RunRequest.golden
+        request.mechanisms = [mechanism]
+        request.tunables.subBatches = 1
+        request.tunables.warmupBatches = 0
+        request.tunables.measuredBatches = 1
+        request.tunables.operationsPerBatch = ["default": 4_294_967_295]
+        _ = try BaseComparison(request: request)
+
+        request.tunables.operationsPerBatch = ["default": 4_294_967_296]
+        #expect(throws: RequestError.self) { try BaseComparison(request: request) }
+    }
+
     // An earlier value from any writer cannot stand in for its final write.
     @Test(arguments: [
         (10, true),

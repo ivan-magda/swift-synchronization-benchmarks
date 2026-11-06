@@ -14,11 +14,16 @@ func concurrentIncrementsAreExact(_ mechanism: MechanismID) async {
     let values = await task.value
 
     #expect(values.actual == values.expected)
+    if let sum = values.returnedValueSum {
+        // The 8,000 returned new values must sum to 1 + ... + 8,000.
+        #expect(sum == 32_004_000)
+    }
 }
 
 private struct IncrementResult: Sendable {
     let actual: Int
     let expected: Int
+    let returnedValueSum: Int?
 }
 
 private struct ConcurrentIncrementsVisitor: SharedIntegerVisitor {
@@ -38,7 +43,9 @@ private struct ConcurrentIncrementsVisitor: SharedIntegerVisitor {
         }
 
         let finalValue = integer.finalValue()
-        return Task.detached { IncrementResult(actual: finalValue, expected: 20_000) }
+        return Task.detached {
+            IncrementResult(actual: finalValue, expected: 20_000, returnedValueSum: nil)
+        }
     }
 
     func visitAsynchronous<Integer: AsyncSharedInteger>(_ integer: Integer) -> Task<IncrementResult, Never> {
@@ -48,17 +55,18 @@ private struct ConcurrentIncrementsVisitor: SharedIntegerVisitor {
             let tasks = (0..<8).map { _ in
                 Task.detached {
                     await start.arriveAndWait()
-                    for _ in 0..<1_000 {
-                        await integer.increment()
-                    }
+                    return await BaseComparisonLoops.incrementLoopAsync(integer, count: 1_000)
                 }
             }
 
+            var sum = 0
             for task in tasks {
-                await task.value
+                sum += await task.value
             }
 
-            return IncrementResult(actual: await integer.finalValue(), expected: 8_000)
+            return IncrementResult(
+                actual: await integer.finalValue(), expected: 8_000, returnedValueSum: sum
+            )
         }
     }
 }

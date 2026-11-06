@@ -27,7 +27,8 @@ extension SharedInteger {
 protocol AsyncSharedInteger: Sendable {
     func read() async -> Int
     func write(_ value: Int) async
-    func increment() async
+    /// Increments the value and returns its new value on the same executor.
+    func increment() async -> Int
 
     /// Reads the CPU number on the integer's executor.
     func executorCPU() async -> Int

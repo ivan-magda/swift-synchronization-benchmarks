@@ -62,6 +62,14 @@ struct BaseComparison: Experiment {
             // Layout validation proves cumulative per-thread and aggregate work fit Int.
             let operationsPerThread = layout.totalBatches * operations
 
+            if request.operations.contains(Operation.increment.rawValue),
+                mechanism == MechanismID.actor.rawValue || mechanism == MechanismID.mainActor.rawValue
+            {
+                guard BaseComparisonChecks.incrementSum(totalOperations: threads * operationsPerThread) != nil else {
+                    throw RequestError(message: "operationsPerBatch[\(mechanism)] increment sum overflow")
+                }
+            }
+
             if request.operations.contains(Operation.read.rawValue) {
                 let (_, overflow) = Self.valueForReads.multipliedReportingOverflow(by: operations)
                 guard !overflow else {
@@ -171,7 +179,7 @@ private struct BaseComparisonVisitor: SharedIntegerVisitor {
                             )
                         )
                     case .increment:
-                        await BaseComparisonLoops.incrementLoopAsync(integer, count: count)
+                        return await BaseComparisonLoops.incrementLoopAsync(integer, count: count)
                     }
                     return 0
                 }
@@ -186,7 +194,21 @@ private struct BaseComparisonVisitor: SharedIntegerVisitor {
             }
         }
 
-        return checks(finalValue: finalValue.withLock { $0 }, logs: logs)
+        let value = finalValue.withLock { $0 }
+        if operation == .increment {
+            return [
+                BaseComparisonChecks.checkAsyncIncrements(
+                    finalValue: value,
+                    batchSums: logs.map { log in
+                        (0..<block.layout.totalBatches).map { log.checkValue(ofBatch: $0) }
+                    },
+                    threads: block.description.threads,
+                    operationsPerThread: block.layout.totalBatches * block.layout.operationsPerBatch,
+                    block: block.position
+                )
+            ]
+        }
+        return checks(finalValue: value, logs: logs)
     }
 
     private func firstValue(thread: Int, batch: Int, subBatch: Int, count: Int) -> Int {
