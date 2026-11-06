@@ -18,8 +18,8 @@ and checks before pointing to the source:
 The harness also implements calibration. The
 [remaining-experiment Release checks](docs/build-checks/2026-11-remaining-experiments.md)
 record the new rows' compiler work and consumers. Their
-[device acceptance is pending](docs/phase-3-acceptance.md) at the phone-preparation
-handoff. Earlier physical-phone results remain in
+[device acceptance](docs/phase-3-acceptance.md) passed on both phones, including
+calibration and the iOS 18 hot-flag rows. Earlier physical-phone results remain in
 [phase 1 acceptance](docs/phase-1-acceptance.md) and
 [phase 2 acceptance](docs/phase-2-acceptance.md); the
 [readable-experiment checks](docs/build-checks/2026-11-readable-experiments.md)

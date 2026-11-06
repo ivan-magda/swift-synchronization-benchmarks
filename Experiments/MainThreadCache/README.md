@@ -40,7 +40,7 @@ A coordinator starts the display loop only after the writers are ready. Installa
 
 `mainThreadCache.scroll` requires all measured frames before the deadline, at least one measured read, no read-buffer overflow, at least one store by every writer and no missing or inconsistent entry. Every measured read checks that its UIImage is identical to `images[imageIndex]`, with index bounds checked first. Detail includes `frames 600/600; reads 950, writes 50, violations 0`, overflow and the decode checksum.
 
-Requests require `frames >= 1`, `warmupFrames >= 0`, scroll speed 1…20,000 points per second, positive decode work and a pause fitting UInt32 microseconds. Frame duration and storage arithmetic must fit before allocation. The acceptance plan includes two and four writers, 60 warm-up and 600 measured frames. These are acceptance inputs checked on the Simulator; acceptance on both phones remains pending with pinned iOS builds.
+Requests require `frames >= 1`, `warmupFrames >= 0`, scroll speed 1…20,000 points per second, positive decode work and a pause fitting UInt32 microseconds. Frame duration and storage arithmetic must fit before allocation. The acceptance plan includes two and four writers, 60 warm-up and 600 measured frames. These acceptance inputs passed on the Simulator and on both phones with pinned iOS builds; the pilot still sets performance tunables.
 
 ## Read the code in this order
 

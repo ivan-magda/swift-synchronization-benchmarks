@@ -1,6 +1,6 @@
 # Remaining-experiment Release checks, 2026-11-06
 
-Task 8 Steps 1–2 cover clean source `9b6c5f6`. Physical-phone acceptance remains [pending](../phase-3-acceptance.md). The initial plan commit `99f20ce` and Task 1 baselines remain intact. This checkpoint changes documentation only.
+Task 8 Steps 1–2 cover clean source `9b6c5f6`. The later [physical-phone acceptance](../phase-3-acceptance.md) passed on both phones. The initial plan commit `99f20ce` and Task 1 baselines remain intact. This checkpoint changes documentation only.
 
 ## Reproduction and retained evidence
 
@@ -162,7 +162,7 @@ Read counts cover measured frames; write counts include startup and warm-up. A l
 
 Each new README has these seven headings: Question, Rows, One operation, How it is timed, What is checked, Read the code in this order, Compiler notes. Each operation excerpt matches actual Swift statements after indentation normalization. Main files: HotFlag 112 lines, RequestRegistry 89, TransactionalStore 111, CreationCost 125, MainThreadCache 113. All are about the requested 120-line screen. This audit corrected compiler-record links and clarified that cache acceptance inputs await phone verification.
 
-No Swift, Python, plans or build settings changed in this checkpoint. Task 7 records the last complete verification: 90 Swift test functions / 225 configuration runs and 172 Python tests on both default Python and Xcode Python 3.9. The subsequent cache-drain fix passed its focused 4-function / 11-run suite. These are prior test results, not reruns for Task 8. Task 8 Step 5 remains pending after device acceptance, with CreationCost isolated. Fresh verification here comprises both Release builds, original-baseline comparisons, missing-unit classification, dumps, per-row work/consumer inspection and documentation checks.
+No Swift, Python, plans or build settings changed in this checkpoint. Task 7 records the last complete verification: 90 Swift test functions / 225 configuration runs and 172 Python tests on both default Python and Xcode Python 3.9. The subsequent cache-drain fix passed its focused 4-function / 11-run suite. These are prior test results, not reruns for Task 8. At the pre-device checkpoint, Task 8 Step 5 remained pending after device acceptance, with CreationCost isolated. The later acceptance record distinguishes its fresh Python result from the full Simulator rerun waived by the user. Fresh verification here comprises both Release builds, original-baseline comparisons, missing-unit classification, dumps, per-row work/consumer inspection and documentation checks.
 
 ## Missing-hash appendix
 
