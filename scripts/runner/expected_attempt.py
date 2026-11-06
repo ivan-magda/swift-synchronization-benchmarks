@@ -54,7 +54,8 @@ _CALIBRATION_BLOCKS = (
 )
 
 # Experiment 7: variant -> operation -> mechanisms measured with it.
-# Must equal `AsyncCode.rows` in Experiments/AsyncCode/AsyncCode.swift.
+# Must equal AsyncCode.rows; AsyncCodeRequest validates this matrix separately
+# in Experiments/AsyncCode/AsyncCodeRequest.swift.
 ASYNC_CODE_ROWS: Dict[str, Dict[str, List[str]]] = {
     "callerPaths": {
         "onActor": ["actor"],
@@ -86,7 +87,8 @@ GROUP_SIZE = 100
 # Operations whose blocks also write the main thread's CPU time at each batch edge.
 _MAIN_THREAD_CPU_OPERATIONS = ("fromMainActor", "toMainActor", "callFromMainActor")
 
-# Experiment 8B: the locks, queues and actor in `ContendedLocks.mechanisms`.
+# Experiment 8B: ContendedLocks.mechanisms is defined in
+# Experiments/PriorityInversion/PriorityInversion.swift, beside the trial steps.
 PRIORITY_INVERSION_MECHANISMS = frozenset({
     "mutex",
     "osAllocatedUnfairLock",

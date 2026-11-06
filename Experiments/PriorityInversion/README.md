@@ -50,6 +50,8 @@ Every holder must compute the reference result, every main-side observation must
 2. `ContendedLocks.swift`, `ContendedQueues.swift` and `ContendedActor.swift`: each mechanism's `hold` and `touch`.
 3. `PriorityInversionRequest.swift`, `PriorityInversionChecks.swift` and `TrialSupport.swift`: validation, classification and coordination, which you may skip.
 
+The 227-line entry file exceeds the approximate one-screen target so the five trial steps, protocol and fourteen-row switch remain visible together. TrialSupport holds the bookkeeping.
+
 ## Compiler notes
 
-Each mechanism keeps its ordinary critical-section statements and timestamp positions; `touch` stays on the main actor. The Release comparison covers `hold`, `touch`, their closures and continuations, as well as the other experiments' measured units. Moving these declarations changes file-name lengths and line numbers embedded in executor-check diagnostics; those metadata-only hash differences retain the same instructions and calls. No new inline or exclusivity attributes are needed. See the [operation-preservation build-check method](../../docs/build-checks/2026-11-operation-preservation.md#build-and-inspection-method).
+Each mechanism keeps its ordinary critical-section statements and timestamp positions; `touch` stays on the main actor. The Release comparison covers `hold`, `touch`, their closures and continuations, as well as the other experiments' measured units. Moving these declarations changes file-name lengths and line numbers embedded in executor-check diagnostics; those metadata-only hash differences retain the same instructions and calls. No new inline or exclusivity attributes are needed. See the [readable-experiment build check](../../docs/build-checks/2026-11-readable-experiments.md#reasons-and-measurement-boundaries) for the three exact diagnostic differences.

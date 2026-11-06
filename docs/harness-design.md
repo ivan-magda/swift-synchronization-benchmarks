@@ -51,8 +51,9 @@ local.example.json template for local.json (team ID, bundle ID prefix, phone nam
                    and UDIDs); local.json itself is not committed
 App/               app shell: launch arguments, run controller, minimal UI
 Harness/           timing, threads, conditions, result writer, calibration
-Mechanisms/        one wrapper per mechanism with the operations the experiments need
 Experiments/       one folder per experiment, named after it (BaseComparison/, HotFlag/, ...)
+  <Experiment>/    README.md; <Experiment>.swift; concrete mechanism files;
+                   <Experiment>Request.swift; <Experiment>Checks.swift; plumbing
 IsolationProbe/    one source file compiled into IsolationProbeTemplate and
                    IsolationProbeSwift6 static libraries (experiment 7C)
 scripts/bench.py   the Mac script
@@ -61,14 +62,16 @@ results/           raw data and run state; not in git (see "Open")
 docs/              method notes, this design, notes from the build checks
 ```
 
-`App/`, `Harness/`, `Mechanisms/` and `Experiments/` are one module, the app target. So the measured loop and the lock wrapper compile together, as in a typical app. Only the two experiment-7C libraries have different settings, on purpose.
+`App/`, `Harness/` and `Experiments/` are one module, the app target. So the measured loop and the lock wrapper compile together, as in a typical app. Only the two experiment-7C libraries have different settings, on purpose.
+
+Every experiment folder follows the [readable-experiment structure](superpowers/plans/2026-11-06-readable-experiments.md): a one-page README with the question, rows, real operation, timing, checks, reading order and compiler notes; a main file showing selection and measured operations (about 120 lines); small concrete mechanism types; separate request validation and checks; and plumbing a reader can skip. The [build-check record](build-checks/2026-11-readable-experiments.md#rejected-preservation-probes-and-folder-deviations) explains preservation exceptions: separate queue files, explicit timers and the 227-line priority-inversion entry file that exposes all five trial steps.
 
 ## The app
 
 Build:
 - One app target, UIKit life cycle, iPhone only. Release, `-O`, whole-module. Exclusivity checking stays at its Release default; never `-Ounchecked`.
 - Measure ordinary Swift application code with standard Release exclusivity enforcement. Do not use `@exclusivity(unchecked)`. Harness wrappers must not add costs absent from ordinary code using the same mechanism. Base comparison uses concrete queue counters with direct `read`, `write`, and `increment` bodies inside queue closures, never a generic `body(&state)` for their integer storage.
-- Each experiment owns its wrapper declarations. The existing `Mechanisms/` wrappers are base-comparison-owned; future experiments must declare their state wrappers in their own experiment directories. Do not instantiate a base-comparison generic wrapper with dictionaries or other state types for another experiment: its stored property declaration is shared across specializations, which can change exclusivity optimization even for the existing Int row. Common clocks, thread infrastructure, and result types remain shared.
+- Each experiment owns its concrete wrapper declarations in its experiment directory. BaseComparison owns its Int locks, queues, atomics and actors; experiments 7 and 8B own their counters and trial mechanisms. Do not share a generic wrapper with another experiment's state type: its stored property declaration is shared across specializations, which can change exclusivity optimization even for an existing Int row. Common clocks, thread infrastructure, and result types remain shared.
 - App module: Swift 6 language mode, default isolation `nonisolated`, Approachable Concurrency off. Isolation is written in the code (`nonisolated`, `@MainActor`, `@concurrent`, `Task.detached`), so hop counts do not depend on inference.
 - UIKit types (`UIViewController`, `UIView`, the app and scene delegates) are `@MainActor`. Code inside them runs on the main thread, and a `Task {}` written there inherits the main actor. So experiment code lives in the harness's own nonisolated types, and a run leaves the main thread explicitly: on its own pthread or in `Task.detached`.
 - Experiment 7C: the same source file in `IsolationProbe/` compiles into the static libraries `IsolationProbeTemplate` (Swift 5 mode, Approachable Concurrency, default isolation `MainActor`, the other template settings listed in `docs/experiments.md`) and `IsolationProbeSwift6` (the app module's Swift 6 settings). The `@concurrent` variant lives in `IsolationProbeTemplate`. Never pass `SWIFT_*` settings on the `xcodebuild` command line: they would override both libraries. The build script records each library's settings in `build-info.json`. For the template library, `SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT` and `SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES` remain unset and appear as `""` in that file because `-showBuildSettings` omits their derived defaults. They follow `SWIFT_APPROACHABLE_CONCURRENCY`; the compiler enables both features.

@@ -34,6 +34,8 @@ Reads must return the initial value and leave it unchanged. A write must leave o
 2. `LockIntegers.swift`, the `QueueIntegers/` files, `AtomicIntegers.swift`, `ActorIntegers.swift` and `UnsynchronizedInteger.swift`: concrete operations.
 3. The rest: `SharedInteger.swift`, request validation, checks and timing plumbing, which you may skip.
 
+The entry file has 125 lines. Queue types keep three separate source files and timing keeps explicit `BatchTimer` calls because merging files or adopting callback helpers changed measured code.
+
 ## Compiler notes
 
-The single-thread floor uses separate relaxed atomic loads and stores so the compiler cannot fold the loop away; this does not make its increment safe for concurrent callers. Measured loops keep `@inline(never)` so their Release disassembly remains identifiable. Concrete queue storage avoids the extra exclusivity checks introduced by generic inout callbacks. See the [operation-preservation build check](../../docs/build-checks/2026-11-operation-preservation.md).
+The single-thread floor uses separate relaxed atomic loads and stores so the compiler cannot fold the loop away; this does not make its increment safe for concurrent callers. Measured loops keep `@inline(never)` so their Release disassembly remains identifiable. Concrete queue storage avoids the extra exclusivity checks introduced by generic inout callbacks. See the [operation-preservation build check](../../docs/build-checks/2026-11-operation-preservation.md) and the [readable-experiment comparison](../../docs/build-checks/2026-11-readable-experiments.md), which records the permitted concrete-lock layout and merging differences.

@@ -246,3 +246,127 @@ Raw tool logs and independent validation records remain private under ignored
 `build/private/operation-preservation-acceptance/`; signed apps and provisioning
 profiles remain under ignored `build/artifacts/`, and session results under
 ignored `results/iphone15/<session ID>/`.
+
+## Readable experiments and optimizer fixes (2026-11-06)
+
+Clean source `a1647c675def` passed the four requested acceptance plans on both
+physical phones. The [readable-experiment build check](build-checks/2026-11-readable-experiments.md)
+records the original-baseline comparison, permitted concrete-lock differences,
+source-diagnostic constants and rejected helper/file-merge probes. It also ties
+the fresh unsigned candidates to the signed artifacts: all 785 / 870 selected
+units match for iOS 26 / iOS 18 respectively. This adds acceptance for the
+[three optimizer fixes](build-checks/2026-11-operation-preservation.md) on both
+phones; it does not establish a performance ranking.
+
+All unsigned builds, signed builds and device runs preceded Task 6's tracked
+documentation/comment edits. Both signed build records have `dirty: false`.
+The existing runner built them with these commands; the profile in each app
+covers both configured phones, so each target uses one artifact on both phones:
+
+```sh
+python3 scripts/bench.py build --target ios26 --phone iphone11
+python3 scripts/bench.py build --target ios18 --phone iphone15
+```
+
+Both signed apps pass `codesign --verify --strict`. Build metadata retains
+arm64, Swift 6, `-O`, whole-module compilation, nonisolated default isolation,
+Approachable Concurrency NO, both isolation-inference flags NO and default
+exclusivity enforcement. No `SWIFT_*` command-line overrides were supplied;
+the two 7C libraries retain their distinct template/Swift 6 settings.
+
+| Target | Build ID | Stripped-executable SHA-256 / codeHash |
+| --- | --- | --- |
+| 26.0 | `a1647c675def-clean-ios26-20261106T070633Z` | `ecdcc9ed2fae1a48fa92d79e53e835b3c2f40207beffd025b73f7840e4f75c10` |
+| 18.0 | `a1647c675def-clean-ios18-20261106T070654Z` | `c9054914c87117529b4c0624d39103fada9837f0e590645bf07be45bc3ca655c` |
+
+Phones retain iOS 26.6.0 (`23G71`, iphone11) and iOS 26.6.2 (`23G90`, iphone15).
+The iOS 18 label describes the app deployment target. No phone reboot or OS
+update took place. The initial iphone11 calibration installed the app but iOS
+denied launch at the developer-certificate Trust gate. The user trusted the
+certificate and opened SyncBench once; the unchanged artifact then passed.
+
+The failed pre-app attempt remains in session
+`20261106T070659Z.calibration.81cdba37`, attempt
+`calibration.calibration.1.attempt1.20261106T070717Z.4c93f92b`, with
+`launchFailed` and no completed JSONL result. The runner retains that rejection;
+it is separate from the completed app results below. No result/state history
+was removed or rewritten.
+
+### Fresh calibration and sessions
+
+`bench.py calibrate --phone PHONE` ran before that phone's acceptance plans.
+The runner retained the accepted attempt ID in each priority-inversion session.
+Both calibrations identify performance CPUs `[4, 5]`, efficiency CPUs
+`[0, 1, 2, 3]` and a 125/3 ns timebase. They target 5 ms of idle performance-core
+holder work; loaded trials need not hold for exactly 5 ms.
+
+| Phone | Accepted calibration attempt | 100,000-iteration median ticks | Usable samples | Holder work iterations |
+| --- | --- | ---: | ---: | ---: |
+| iphone11 | `calibration.calibration.1.attempt2.20261106T071638Z.c96f553c` | 5,454 | 199/200 | 2,200,220 |
+| iphone15 | `calibration.calibration.1.attempt1.20261106T070721Z.1e4b828f` | 3,810 | 200/200 | 3,149,606 |
+
+The accepted calibration and acceptance sessions follow. For each acceptance
+plan, the runner used
+`python3 scripts/bench.py run --phone PHONE --plan plans/PLAN.json`:
+
+| Phone | Plan | Session ID | Outcome |
+| --- | --- | --- | --- |
+| iphone11 | `calibration` | `20261106T071624Z.calibration.4fabf97b` | 1 accepted |
+| iphone11 | `acceptance-base-comparison` | `20261106T071716Z.acceptance-base-comparison.c65349f9` | 4 accepted |
+| iphone11 | `acceptance-base-comparison-ios18` | `20261106T072227Z.acceptance-base-comparison-ios18.d2ba98f9` | 4 accepted |
+| iphone11 | `acceptance-async-code` | `20261106T072504Z.acceptance-async-code.80a8b633` | 3 accepted |
+| iphone11 | `acceptance-priority-inversion` | `20261106T072706Z.acceptance-priority-inversion.beedbec2` | 1 accepted |
+| iphone15 | `calibration` | `20261106T070659Z.calibration.4a2482c2` | 1 accepted |
+| iphone15 | `acceptance-base-comparison` | `20261106T070812Z.acceptance-base-comparison.0b92c355` | 4 accepted |
+| iphone15 | `acceptance-base-comparison-ios18` | `20261106T071046Z.acceptance-base-comparison-ios18.9318e99e` | 4 accepted |
+| iphone15 | `acceptance-async-code` | `20261106T071319Z.acceptance-async-code.44005f4c` | 3 accepted |
+| iphone15 | `acceptance-priority-inversion` | `20261106T071518Z.acceptance-priority-inversion.e212a27e` | 1 accepted |
+
+The eight acceptance sessions have 24 accepted attempts, zero rejected/refused
+attempts and no stop reason. Including the two successful calibrations gives
+26 completed JSONL/marker pairs. Independent reconstruction of each request,
+including the calibrated holder work, passed the checker with the recorded
+clean build ID and installed OS build; marker byte counts and SHA-256 checks
+also pass. The 688 correctness checks include 339 acceptance checks and five
+calibration checks per phone. Both endpoints report active application state,
+nominal thermal state and no debugger.
+
+Both iOS 26 base campaigns pass the floor's three checks and all eight
+actor/MainActor increment blocks. Independent arithmetic confirms final
+`N = threads × 3 batches × operationsPerBatch` and returned-value checksum
+`N × (N + 1) / 2` for those blocks. The iOS 18 campaigns cover the prescribed
+Mutex / Atomic / ManagedAtomic subset at 1, 2, 6 and 12 threads.
+
+Both async campaigns pass caller paths, batching and isolation settings.
+`onActor` finishes at 6,000 increments; each isolation row counts 1,200 calls,
+all on main for template defaults and none on main for Swift 6 or
+`@concurrent`. The build check preserves the noninlined operation on the same
+actor; these results do not count executor handoffs per operation. Each 8B
+attempt passes 28 block checks and retains 308 trials (28 warm-ups and 280
+measured). Censored and invalid outcomes follow the existing correctness rule
+and remain in the raw output. No trace campaign ran for this repeat.
+
+### Final local verification
+
+```sh
+python3 -m unittest discover -s scripts/tests -t scripts
+/usr/bin/python3 -m unittest discover -s scripts/tests -t scripts
+xcodebuild test -project SyncBench.xcodeproj -scheme SyncBench \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -resultBundlePath build/private/readable-experiments/task6-simulator.xcresult \
+  -quiet
+```
+
+Python passes 151 tests on the default interpreter and Xcode's Python 3.9.6.
+The Simulator passes 68 tests / 182 executions, with zero failures, skips or
+runtime warnings. Its log retains the three pre-existing SDK telemetry
+`invalidDigitCount(94232)` messages; no Swift diagnostics occur. The three
+experiment READMEs have the required seven headings and source-matching Swift
+snippets. The build note documents the entry-file sizes and preservation
+exceptions.
+
+Session JSONL, markers and state remain under ignored `results/`. Signed apps
+and profiles remain under ignored `build/artifacts/`. Comparison reports, test
+bundles, CLI logs and independent rechecks remain under ignored
+`build/private/readable-experiments/`; the runner's private device/build
+diagnostics remain in their existing `build/private/` locations.

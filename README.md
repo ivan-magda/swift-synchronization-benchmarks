@@ -3,6 +3,14 @@
 This repository contains an iOS harness for comparing Swift synchronization mechanisms on real iPhones.
 It records raw samples and run conditions so the measurements can be checked and reproduced.
 
+Start with the experiment pages: [base comparison](Experiments/BaseComparison/README.md),
+[async code](Experiments/AsyncCode/README.md) and
+[priority inversion](Experiments/PriorityInversion/README.md). Each explains its
+question, operations, timing and checks before pointing to the source.
+The [readable-experiment checks](docs/build-checks/2026-11-readable-experiments.md)
+and [latest device acceptance](docs/phase-2-acceptance.md#readable-experiments-and-optimizer-fixes-2026-11-06)
+record the compiler differences and the four acceptance plans on both phones.
+
 The harness implements calibration, the base comparison, async code (experiment 7),
 and priority inversion (experiment 8B). Phase 1 checked calibration and the base
 comparison on physical iPhones.
