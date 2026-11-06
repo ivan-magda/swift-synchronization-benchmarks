@@ -6,7 +6,7 @@ Schema 1 uses UTF-8 JSON Lines: one object per line, with a final newline. Keys 
 
 `run`: `type` (`run`), `schema` (1), `request` (the request as decoded), `build`, `phone`, `conditions`.
 
-The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `variant`, `seed`, `smoke`, optional `simulation`, `mechanisms`, `operations`, `tunables`, optional `traced` (`true` only in requests from a traced plan; omitted otherwise). Tunables contain `threads`, `qos`, `warmupBatches`, `measuredBatches`, `subBatches`, `operationsPerBatch` (mechanism ID to operations count, with a `default` fallback), `referenceLoopIterations`, optional calibration `repeats`, optional `asyncCode`, optional `priorityInversion`. `asyncCode` (experiment 7, path `fromManyTasks`) has `callsPerTask` (timed calls per task) and `warmupCallsPerTask` (untimed calls per task before the timed ones). `priorityInversion` (experiment 8B) has `holderWorkIterations` (`referenceLoop` iterations the holder runs under the lock), `loadQoS`, `loadMilliseconds`, `mainDelayMicroseconds`, `pauseMilliseconds`, `warmupTrials`, `trials`. QoS is `userInteractive`, `userInitiated`, `default`, `utility`, or `background`. Simulation is `crash` or `hang`, only in smoke runs.
+The request contains `schema`, `runID`, `attemptID`, `attempt`, `experiment`, `variant`, `seed`, `smoke`, optional `simulation`, `mechanisms`, `operations`, `tunables`, optional `traced` (`true` only in requests from a traced plan; omitted otherwise). Tunables contain `threads`, `qos`, `warmupBatches`, `measuredBatches`, `subBatches`, `operationsPerBatch` (mechanism ID to operations count, with a `default` fallback), `referenceLoopIterations`, optional calibration `repeats`, optional `asyncCode`, optional `priorityInversion`, optional `requestRegistry`. `asyncCode` (experiment 7, path `fromManyTasks`) has `callsPerTask` (timed calls per task) and `warmupCallsPerTask` (untimed calls per task before the timed ones). `priorityInversion` (experiment 8B) has `holderWorkIterations` (`referenceLoop` iterations the holder runs under the lock), `loadQoS`, `loadMilliseconds`, `mainDelayMicroseconds`, `pauseMilliseconds`, `warmupTrials`, `trials`. QoS is `userInteractive`, `userInitiated`, `default`, `utility`, or `background`. Simulation is `crash` or `hang`, only in smoke runs.
 
 `build`: `buildID`, `commit`, `dirty`, `target` (`ios26` or `ios18`), `minimumOS`, `configuration` (`Release` or `Debug`). The build script embeds metadata before signing. An Xcode build without script metadata uses `unknown` for build ID and commit.
 
@@ -77,6 +77,16 @@ The final division uses Python floating-point arithmetic and `round` returns an 
 `"holderWorkIterations": "fromCalibration"` is replaced with this integer before
 launch; the session records `calibrationAttemptID` in `session.json`, and stops
 before installation when the file or its `priorityInversion` is missing.
+
+### Request registry (experiment 2)
+
+`requestRegistry` requests use operation `addAndRemove`, variant `normal` or `burst`, four or eight threads, and a required `tunables.requestRegistry` group: `inFlightPerThread`, `workIterations`, `pauseMicroseconds`, `cancelAllEvery`, `sampleEvery`. The first two values and `cancelAllEvery` are at least one; pauses are 0…4,294,967,295 microseconds and must be positive in normal and zero in burst. `sampleEvery` is even and at least two. Each sub-batch contains an even number of calls divisible by `sampleEvery` and `cancelAllEvery`. Storage sizes and total add counts must fit a signed integer.
+
+The ten mechanisms are `mutex`, `osAllocatedUnfairLock`, `osAllocatedUnfairLockAdaptiveSpin`, `osUnfairLock`, `nsLock`, `nsRecursiveLock`, `pthreadMutex`, `serialQueue`, `dispatchSemaphore`, `objcSync`. Every worker alternates removal of its oldest download and addition of its next preallocated download. The dictionary reserves `threads × inFlightPerThread` capacity before the block. Each worker allocates one extra ring item before the block, fills its initial in-flight entries before batches, then removes all its remaining entries after batches. An operation includes one registry call and `referenceLoop(workIterations)` outside the lock. Normal batch times include the pause after each operation. Thread 0 also cancels every registered download and clears the dictionary under the lock every `cancelAllEvery` operations.
+
+Blocks emit ordinary warm-up and measured batch lines. Measured batches additionally emit `callStart` and `callTime` samples on every thread, each containing `measuredBatches × operationsPerBatch / sampleEvery` values. For measured operation `k`, the sampled call satisfies `k % sampleEvery == (k / sampleEvery) % 2`; samples alternate between removals and additions. Calls are bracketed by `Clock.now()` without outside work or pauses. Thread 0's cancel-all calls produce two block-level samples lines (no `thread`): `cancelAllStart` and `cancelAllTime`, each with `measuredBatches × operationsPerBatch / cancelAllEvery` values. Starts are absolute ticks; times are elapsed ticks. All four metrics use unit `ticks`, have no CPU arrays, and exclude warm-up.
+
+Each block has one `requestRegistry.addAndRemove` check. It requires an empty dictionary, `added == removed + cancelled`, matching per-download atomic cancellation counts, and the expected outside-work checksum in every batch. Detail follows `added 8000, removed 7936, cancelled 64, left 0`.
 
 ### Hot flag (experiment 3)
 
@@ -151,7 +161,7 @@ the main thread equals that number for `templateDefaults` and 0 for the other tw
 `calls 1200/1200; on main thread 1200, expected 1200`.
 
 The attempt checker stores the required name in each `ExpectedBlock.check`:
-`baseComparison.<operation>`, `asyncCode.<operation>`,
+`baseComparison.<operation>`, `requestRegistry.addAndRemove`, `hotFlag.<operation>`, `asyncCode.<operation>`,
 `priorityInversion.<operation>`, or the fixed calibration name `calibration.samples`.
 `ExpectedAttempt.blocks` maps each (mechanism, operation) pair to its expected work,
 including batch, samples and trial line counts. `ExpectedAttempt.run_checks` is
@@ -193,7 +203,7 @@ trial lines, and fails the check even if their `violations` count is zero.
 
 ## Request validation
 
-Every validation error names the field. `schema` is 1. `runID` and `attemptID` match `^[A-Za-z0-9._-]{1,128}$`. `attempt` is at least 1; `seed` is below 2^53. `threads` is 1…64; `warmupBatches` is at least 0; `measuredBatches` and `subBatches` are at least 1. `operationsPerBatch` has a `default` key and every value is a multiple of `subBatches` and at least `subBatches`. `referenceLoopIterations` is at least 1. When `asyncCode` is present, `callsPerTask` is at least 1 and `warmupCallsPerTask` at least 0. When `priorityInversion` is present, `holderWorkIterations`, `loadMilliseconds` and `trials` are at least 1, `mainDelayMicroseconds`, `pauseMilliseconds` and `warmupTrials` at least 0, and `warmupTrials + trials` fits a signed 64-bit integer. Experiments add their own rules. `simulation` appears only in smoke requests. Decoding does not validate, allowing an invalid decoded request to be included in a failure result.
+Every validation error names the field. `schema` is 1. `runID` and `attemptID` match `^[A-Za-z0-9._-]{1,128}$`. `attempt` is at least 1; `seed` is below 2^53. `threads` is 1…64; `warmupBatches` is at least 0; `measuredBatches` and `subBatches` are at least 1. `operationsPerBatch` has a `default` key and every value is a multiple of `subBatches` and at least `subBatches`. `referenceLoopIterations` is at least 1. When `asyncCode` is present, `callsPerTask` is at least 1 and `warmupCallsPerTask` at least 0. When `priorityInversion` is present, `holderWorkIterations`, `loadMilliseconds` and `trials` are at least 1, `mainDelayMicroseconds`, `pauseMilliseconds` and `warmupTrials` at least 0, and `warmupTrials + trials` fits a signed 64-bit integer. When `requestRegistry` is present, its minima and even sampling interval follow the experiment 2 rules above. Experiments add their own rules. `simulation` appears only in smoke requests. Decoding does not validate, allowing an invalid decoded request to be included in a failure result.
 
 SplitMix64 and descending Fisher–Yates determine seeded order: for each index from count − 1 to 1, swap with `next() % (index + 1)`.
 

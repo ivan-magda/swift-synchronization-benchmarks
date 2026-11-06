@@ -62,6 +62,29 @@ func invalidRequestNamesTheField(_ invalidCase: InvalidRequestCase) {
         warmupTrials: 1,
         trials: 3
     )
+    request.tunables.requestRegistry = RequestRegistryTunables(inFlightPerThread: 1, workIterations: 1,
+        pauseMicroseconds: 0, cancelAllEvery: 1, sampleEvery: 2)
+    try request.validate()
     let encoded = try JSONEncoder().encode(request)
     #expect(try JSONDecoder().decode(RunRequest.self, from: encoded) == request)
+}
+
+@Suite struct RequestRegistryTunablesTests {
+    // Every minimum is checked even on another experiment's request.
+    @Test(arguments: ["inFlightPerThread", "workIterations", "pauseMicroseconds", "cancelAllEvery", "sampleEvery"])
+    func requestRegistryTunablesRejectValuesBelowMinimum(_ field: String) throws {
+        let request = try RunRequest.requestRegistrySmoke()
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as! [String: Any]
+        var tunables = json["tunables"] as! [String: Any]
+        var registry: [String: Int] = [
+            "inFlightPerThread": 1, "workIterations": 1, "pauseMicroseconds": 0,
+            "cancelAllEvery": 1, "sampleEvery": 2,
+        ]
+        registry[field] = field == "pauseMicroseconds" ? -1 : 0
+        tunables["requestRegistry"] = registry
+        json["tunables"] = tunables
+        let invalid = try JSONDecoder().decode(RunRequest.self, from: JSONSerialization.data(withJSONObject: json))
+        let error = #expect(throws: RequestError.self) { try invalid.validate() }
+        #expect(error?.message.contains("requestRegistry." + field) == true)
+    }
 }

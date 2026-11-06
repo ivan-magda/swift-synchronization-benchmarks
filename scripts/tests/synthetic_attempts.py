@@ -66,6 +66,26 @@ def hot_flag_request():
     return request
 
 
+def request_registry_request(variant="burst"):
+    """Ten registries, four workers and two measured batches of 1,024 calls."""
+    request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
+    request.update(
+        experiment="requestRegistry", variant=variant,
+        mechanisms=[
+            "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
+            "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
+            "serialQueue", "dispatchSemaphore", "objcSync",
+        ], operations=["addAndRemove"],
+    )
+    request["tunables"].update(threads=4, operationsPerBatch={"default": 1024})
+    request["tunables"]["requestRegistry"] = dict(
+        inFlightPerThread=16, workIterations=10,
+        pauseMicroseconds=1 if variant == "normal" else 0,
+        cancelAllEvery=256, sampleEvery=64,
+    )
+    return request
+
+
 def priority_inversion_request():
     """Two reference mechanisms and both holder priorities, with one warm-up trial."""
     request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
@@ -142,6 +162,7 @@ def make_attempt_lines(
     calibration = request["experiment"] == "calibration"
     async_code = request["experiment"] == "asyncCode"
     hot_flag = request["experiment"] == "hotFlag"
+    request_registry = request["experiment"] == "requestRegistry"
     priority_inversion = request["experiment"] == "priorityInversion"
 
     # These are the six measurements specified by Calibration, independently of the checker.
@@ -303,12 +324,26 @@ def make_attempt_lines(
                 metric="readGroupTime", unit="ticks",
                 values=[3] * (tunables["measuredBatches"] * (operations // 100)),
             ))
+        if request_registry:
+            registry = tunables["requestRegistry"]
+            for metric, per_thread, field in (
+                ("callStart", True, "sampleEvery"), ("callTime", True, "sampleEvery"),
+                ("cancelAllStart", False, "cancelAllEvery"), ("cancelAllTime", False, "cancelAllEvery"),
+            ):
+                for thread in range(threads if per_thread else 1):
+                    sample = dict(type="samples", block=position, metric=metric, unit="ticks",
+                                  values=[3] * (tunables["measuredBatches"] * operations // registry[field]))
+                    if per_thread:
+                        sample["thread"] = thread
+                    lines.append(sample)
         block["end"] = tick
         tick += 10
         if calibration:
             check_name = "calibration.samples"
         elif priority_inversion:
             check_name = "priorityInversion." + operation
+        elif request_registry:
+            check_name = "requestRegistry." + operation
         elif hot_flag:
             check_name = "hotFlag." + operation
         elif async_code:

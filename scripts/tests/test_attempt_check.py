@@ -21,6 +21,7 @@ from tests.synthetic_attempts import (
     GOLDEN,
     async_code_request,
     hot_flag_request,
+    request_registry_request,
     make_attempt_lines,
     priority_inversion_request,
     trial_line,
@@ -72,6 +73,21 @@ class AttemptCheckTests(unittest.TestCase):
         self.assertTrue(verdict.reasons)
         if reason:
             self.assertIn(reason, " ".join(verdict.reasons))
+
+    def test_request_registry_attempt_requires_each_sample_group(self):
+        for variant in ("normal", "burst"):
+            request = request_registry_request(variant)
+            lines = make_attempt_lines(request, BUILD_ID)
+            self.assertTrue(self.verdict(lines, request).accepted)
+            for metric in ("callStart", "callTime", "cancelAllStart", "cancelAllTime"):
+                with self.subTest(variant=variant, metric=metric):
+                    broken = deepcopy(lines)
+                    sample = next(line for line in broken if line.get("metric") == metric)
+                    sample["values"].pop()
+                    self.assert_invalid(broken, request)
+            broken_request = deepcopy(request)
+            broken_request["tunables"]["requestRegistry"]["workIterations"] = 0
+            self.assert_invalid(make_attempt_lines(broken_request, BUILD_ID), broken_request)
 
     def test_golden_file_is_accepted(self):
         result, marker = write_attempt(self.path, GOLDEN_LINES)

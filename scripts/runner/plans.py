@@ -128,6 +128,17 @@ def _priority_inversion_tunables(value: Any) -> None:
     _integer(value.get("trials"), prefix + "trials", 1)
 
 
+def _request_registry_tunables(value: Any) -> None:
+    value = _object(value, "tunables.requestRegistry")
+    prefix = "tunables.requestRegistry."
+    for field in ("inFlightPerThread", "workIterations", "cancelAllEvery"):
+        _integer(value.get(field), prefix + field, 1)
+    _integer(value.get("pauseMicroseconds"), prefix + "pauseMicroseconds", 0, 2**32 - 1)
+    sample_every = _integer(value.get("sampleEvery"), prefix + "sampleEvery", 2)
+    if sample_every % 2:
+        raise PlanError(prefix + "sampleEvery must be even")
+
+
 def _tunables(value: Any) -> Dict[str, Any]:
     if not isinstance(value, dict):
         raise PlanError("tunables must be an object")
@@ -156,6 +167,8 @@ def _tunables(value: Any) -> Dict[str, Any]:
         _async_code_tunables(value["asyncCode"])
     if "priorityInversion" in value:
         _priority_inversion_tunables(value["priorityInversion"])
+    if "requestRegistry" in value:
+        _request_registry_tunables(value["requestRegistry"])
     return deepcopy(value)
 
 

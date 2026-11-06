@@ -21,6 +21,7 @@ from tests.synthetic_attempts import (
     GOLDEN,
     async_code_request,
     hot_flag_request,
+    request_registry_request,
 )
 
 ASYNC_CODE_SWIFT = (
@@ -70,6 +71,23 @@ class ExpectedAttemptTests(unittest.TestCase):
                 (ExpectedSamples("readGroupTime", "ticks", True, 1, 20, False),)
                 if block.operation == "readGroups" else (),
             )
+
+    def test_request_registry_requires_measured_calls_and_cancel_all_samples(self):
+        for variant in ("normal", "burst"):
+            with self.subTest(variant=variant):
+                expected = expected_attempt(request_registry_request(variant), cpu_count=6)
+                self.assertEqual(len(expected.blocks), 10)
+                for block in expected.blocks.values():
+                    self.assertEqual(
+                        (block.threads, block.batch_lines, block.check),
+                        (4, 12, "requestRegistry.addAndRemove"),
+                    )
+                    self.assertEqual(block.samples, (
+                        ExpectedSamples("callStart", "ticks", True, 4, 32, False),
+                        ExpectedSamples("callTime", "ticks", True, 4, 32, False),
+                        ExpectedSamples("cancelAllStart", "ticks", False, 1, 8, False),
+                        ExpectedSamples("cancelAllTime", "ticks", False, 1, 8, False),
+                    ))
 
     def test_calibration_blocks_keep_their_thread_and_sample_rules(self):
         expected = expected_attempt(calibration_request(repeats=200), cpu_count=6)

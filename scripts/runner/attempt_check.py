@@ -348,6 +348,18 @@ def _priority_inversion_tunables(value: Any, name: str) -> None:
     )
 
 
+def _request_registry_tunables(value: Any, name: str) -> None:
+    _fields(value, name, {
+        "inFlightPerThread": _unsigned, "workIterations": _unsigned,
+        "pauseMicroseconds": _uint32, "cancelAllEvery": _unsigned,
+        "sampleEvery": _unsigned,
+    })
+    for field in ("inFlightPerThread", "workIterations", "cancelAllEvery"):
+        _require(value[field] >= 1, name + "." + field + " must be at least 1")
+    _require(value["sampleEvery"] >= 2 and value["sampleEvery"] % 2 == 0,
+             name + ".sampleEvery must be positive and even")
+
+
 def _completed_request(request: Dict[str, Any]) -> None:
     """Completed work needs valid tunables; failed invalidRequest files do not."""
     _fields(
@@ -384,6 +396,7 @@ def _completed_request(request: Dict[str, Any]) -> None:
             "repeats": _unsigned,
             "asyncCode": _async_code_tunables,
             "priorityInversion": _priority_inversion_tunables,
+            "requestRegistry": _request_registry_tunables,
         },
     )
     tunables = request["tunables"]

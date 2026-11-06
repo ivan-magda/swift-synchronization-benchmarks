@@ -116,6 +116,61 @@ HOT_FLAG_MECHANISMS = frozenset({
 })
 
 
+REQUEST_REGISTRY_MECHANISMS = frozenset({
+    "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
+    "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
+    "serialQueue", "dispatchSemaphore", "objcSync",
+})
+
+
+def _request_registry_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+    tunables = request["tunables"]
+    registry = tunables.get("requestRegistry")
+    if registry is None:
+        raise ValueError("request.tunables.requestRegistry is required")
+    if request["variant"] not in ("normal", "burst"):
+        raise ValueError("request.variant must be normal or burst for requestRegistry")
+    pause = registry["pauseMicroseconds"]
+    if (request["variant"] == "normal" and pause < 1
+            or request["variant"] == "burst" and pause != 0):
+        raise ValueError("requestRegistry.pauseMicroseconds must match variant")
+    if tunables["threads"] not in (4, 8):
+        raise ValueError("request.tunables.threads must be 4 or 8 for requestRegistry")
+    for field, allowed in (("mechanisms", REQUEST_REGISTRY_MECHANISMS),
+                           ("operations", {"addAndRemove"})):
+        values = request[field]
+        if not values or len(set(values)) != len(values) or not set(values) <= allowed:
+            raise ValueError("request." + field + " must be nonempty, unique requestRegistry entries")
+    blocks = {}
+    for mechanism in request["mechanisms"]:
+        counts = tunables["operationsPerBatch"]
+        count = counts.get(mechanism, counts["default"])
+        sub_count = count // tunables["subBatches"]
+        if sub_count % 2:
+            raise ValueError("request.tunables.operationsPerBatch must be even per sub-batch")
+        for field in ("sampleEvery", "cancelAllEvery"):
+            if registry[field] < 1 or sub_count % registry[field]:
+                raise ValueError("requestRegistry." + field + " must divide operations per sub-batch")
+        if registry["sampleEvery"] % 2:
+            raise ValueError("requestRegistry.sampleEvery must be even")
+        measured = tunables["measuredBatches"] * count
+        threads = tunables["threads"]
+        samples = tuple(
+            ExpectedSamples(metric, "ticks", per_thread, threads if per_thread else 1,
+                            measured // registry[field], False)
+            for metric, per_thread, field in (
+                ("callStart", True, "sampleEvery"), ("callTime", True, "sampleEvery"),
+                ("cancelAllStart", False, "cancelAllEvery"), ("cancelAllTime", False, "cancelAllEvery"),
+            )
+        )
+        blocks[(mechanism, "addAndRemove")] = ExpectedBlock(
+            mechanism, "addAndRemove", threads, tunables["qos"], count,
+            threads * (tunables["warmupBatches"] + tunables["measuredBatches"]),
+            samples, 0, "requestRegistry.addAndRemove",
+        )
+    return blocks
+
+
 def _hot_flag_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
     """One reader with batches and, for readGroups, measured 100-read durations."""
     tunables = request["tunables"]
@@ -323,6 +378,10 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
                 0,
                 "calibration.samples",
             )
+    elif request["experiment"] == "requestRegistry":
+        blocks = _request_registry_blocks(request)
+        warmup = tunables["warmupBatches"]
+        measured = tunables["measuredBatches"]
     elif request["experiment"] == "hotFlag":
         blocks = _hot_flag_blocks(request)
         warmup = tunables["warmupBatches"]

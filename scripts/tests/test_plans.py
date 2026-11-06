@@ -36,6 +36,7 @@ class PlanTests(unittest.TestCase):
             {
                 "acceptance-async-code.json",
                 "acceptance-hot-flag.json",
+                "acceptance-request-registry.json",
                 "acceptance-hot-flag-ios18.json",
                 "acceptance-priority-inversion.json",
                 "traced-async-code.json",
@@ -45,6 +46,20 @@ class PlanTests(unittest.TestCase):
         for path in paths:
             with self.subTest(plan=path.name):
                 load_plan(path)
+
+    def test_request_registry_group_rejects_each_bad_minimum(self):
+        for field, value in (
+            ("inFlightPerThread", 0), ("workIterations", 0),
+            ("pauseMicroseconds", -1), ("cancelAllEvery", 0), ("sampleEvery", 0), ("sampleEvery", 1), ("sampleEvery", 3),
+        ):
+            with self.subTest(field=field):
+                document = json.loads(SMOKE_PLAN.read_text())
+                group = dict(inFlightPerThread=1, workIterations=1,
+                             pauseMicroseconds=0, cancelAllEvery=1, sampleEvery=2)
+                group[field] = value
+                document["runs"][0]["tunables"]["requestRegistry"] = group
+                with self.assertRaisesRegex(PlanError, "requestRegistry." + field):
+                    self.load_document(document)
 
     def test_run_id_and_seed(self):
         run_id = make_run_id("smoke-base-comparison", "one-thread", 1)

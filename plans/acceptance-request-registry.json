@@ -1,0 +1,172 @@
+{
+  "schema": 1,
+  "name": "acceptance-request-registry",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "normal-4-threads",
+      "experiment": "requestRegistry",
+      "variant": "normal",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "serialQueue",
+        "dispatchSemaphore",
+        "objcSync"
+      ],
+      "operations": [
+        "addAndRemove"
+      ],
+      "tunables": {
+        "threads": 4,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 16384
+        },
+        "referenceLoopIterations": 1000000,
+        "requestRegistry": {
+          "inFlightPerThread": 16,
+          "workIterations": 200,
+          "pauseMicroseconds": 50,
+          "cancelAllEvery": 4096,
+          "sampleEvery": 64
+        }
+      }
+    },
+    {
+      "name": "normal-8-threads",
+      "experiment": "requestRegistry",
+      "variant": "normal",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "serialQueue",
+        "dispatchSemaphore",
+        "objcSync"
+      ],
+      "operations": [
+        "addAndRemove"
+      ],
+      "tunables": {
+        "threads": 8,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 16384
+        },
+        "referenceLoopIterations": 1000000,
+        "requestRegistry": {
+          "inFlightPerThread": 16,
+          "workIterations": 200,
+          "pauseMicroseconds": 50,
+          "cancelAllEvery": 4096,
+          "sampleEvery": 64
+        }
+      }
+    },
+    {
+      "name": "burst-4-threads",
+      "experiment": "requestRegistry",
+      "variant": "burst",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "serialQueue",
+        "dispatchSemaphore",
+        "objcSync"
+      ],
+      "operations": [
+        "addAndRemove"
+      ],
+      "tunables": {
+        "threads": 4,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 16384
+        },
+        "referenceLoopIterations": 1000000,
+        "requestRegistry": {
+          "inFlightPerThread": 16,
+          "workIterations": 200,
+          "pauseMicroseconds": 0,
+          "cancelAllEvery": 4096,
+          "sampleEvery": 64
+        }
+      }
+    },
+    {
+      "name": "burst-8-threads",
+      "experiment": "requestRegistry",
+      "variant": "burst",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "serialQueue",
+        "dispatchSemaphore",
+        "objcSync"
+      ],
+      "operations": [
+        "addAndRemove"
+      ],
+      "tunables": {
+        "threads": 8,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 16384
+        },
+        "referenceLoopIterations": 1000000,
+        "requestRegistry": {
+          "inFlightPerThread": 16,
+          "workIterations": 200,
+          "pauseMicroseconds": 0,
+          "cancelAllEvery": 4096,
+          "sampleEvery": 64
+        }
+      }
+    }
+  ]
+}

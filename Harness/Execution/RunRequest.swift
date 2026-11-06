@@ -34,6 +34,7 @@ struct Tunables: Codable, Equatable, Sendable {
     var repeats: Int?
     var asyncCode: AsyncCodeTunables?
     var priorityInversion: PriorityInversionTunables?
+    var requestRegistry: RequestRegistryTunables?
 }
 
 /// Tunables of experiment 7, path "fromManyTasks".
@@ -55,6 +56,15 @@ struct PriorityInversionTunables: Codable, Equatable, Sendable {
     var pauseMilliseconds: Int
     var warmupTrials: Int
     var trials: Int
+}
+
+/// Work and sampling for the shared download registry.
+struct RequestRegistryTunables: Codable, Equatable, Sendable {
+    var inFlightPerThread: Int
+    var workIterations: Int
+    var pauseMicroseconds: Int
+    var cancelAllEvery: Int
+    var sampleEvery: Int
 }
 
 struct RunRequest: Codable, Equatable, Sendable {
@@ -195,6 +205,20 @@ struct RunRequest: Codable, Equatable, Sendable {
             )
             guard !overflow else {
                 throw RequestError(message: "priorityInversion.warmupTrials + priorityInversion.trials overflows")
+            }
+        }
+
+        if let registry = tunables.requestRegistry {
+            try Self.require(registry.inFlightPerThread, atLeast: 1, "requestRegistry.inFlightPerThread")
+            try Self.require(registry.workIterations, atLeast: 1, "requestRegistry.workIterations")
+            try Self.require(registry.pauseMicroseconds, atLeast: 0, "requestRegistry.pauseMicroseconds")
+            try Self.require(registry.cancelAllEvery, atLeast: 1, "requestRegistry.cancelAllEvery")
+            try Self.require(registry.sampleEvery, atLeast: 2, "requestRegistry.sampleEvery")
+            guard registry.sampleEvery.isMultiple(of: 2) else {
+                throw RequestError(message: "requestRegistry.sampleEvery must be even")
+            }
+            guard registry.pauseMicroseconds <= Int(UInt32.max) else {
+                throw RequestError(message: "requestRegistry.pauseMicroseconds must fit UInt32")
             }
         }
 
