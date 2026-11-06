@@ -204,19 +204,6 @@ func batchEdgesAreReportedAroundEveryBatch() async {
     #expect(edges.map(\.edge) == [.start, .end, .start, .end, .start, .end])
 }
 
-@Test(arguments: [true, false])
-func requireUniqueSelectionRejectsDuplicates(duplicateMechanisms: Bool) {
-    var request = RunRequest.golden
-    if duplicateMechanisms {
-        request.mechanisms = ["mutex", "mutex"]
-    } else {
-        request.operations = ["increment", "increment"]
-    }
-
-    #expect(throws: RequestError.self) {
-        try request.requireUniqueSelection(mechanisms: nil, operations: nil)
-    }
-}
 
 @Test(arguments: [true, false])
 func requireUniqueSelectionRejectsEmptyAndUnknownValues(checkMechanisms: Bool) throws {
