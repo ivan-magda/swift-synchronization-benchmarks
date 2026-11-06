@@ -13,6 +13,9 @@ actor CounterActor {
     }
 
     /// For path "onActor": an async method of the same actor, awaited from inside it.
+    /// Keep a real await to the actor's own method for every operation instead of
+    /// letting the optimizer inline it and fold the batch into one addition.
+    @inline(never)
     func incrementAsync() async {
         value &+= 1
     }
