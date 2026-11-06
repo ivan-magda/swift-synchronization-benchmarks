@@ -10,13 +10,15 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Tuple
 
 
 DEFAULT_FILTERS = (
     'BaseComparison', 'SharedInteger', 'Integer', 'Protection', 'AsyncCode',
     'CallerPaths', 'Batching', 'IsolationSettings', 'Counter', 'IsolationProbe',
     'Contended', 'Holder', 'Trial', 'LoadThreads', 'referenceLoop', 'BatchTimer',
+    'RequestRegistry', 'Registry', 'HotFlag', 'Flag', 'TransactionalStore',
+    'Store', 'MainThreadCache', 'ImageCache', 'CreationCost', 'Object',
 )
 INSTRUCTION = re.compile(r'^([0-9a-fA-F]+):\s+(\S+)(?:\s+(.*))?$')
 ADDRESS = re.compile(r'(?<![#\w])0x([0-9a-fA-F]+)')
@@ -30,10 +32,11 @@ class CodegenReport:
     kept: int
 
 
-def measured_units(disassembly: str, indirect_symbols: str,
-                   demangled: Dict[str, str],
-                   name_filters: Sequence[str]) -> Dict[str, List[str]]:
-    """Hash each backward-branch region, or the full body when there is none.
+def _normalized_units(disassembly: str, indirect_symbols: str,
+                      demangled: Dict[str, str], name_filters: Sequence[str],
+                      local_names: bool = False,
+                      ) -> List[Tuple[List[str], List[str]]]:
+    """Normalize each backward-branch region, or the full body when there is none.
 
     Aliases share a body and all matching names are retained for diagnostics.
     Async continuations often tail-call swift_task_switch instead of branching
@@ -68,7 +71,11 @@ def measured_units(disassembly: str, indirect_symbols: str,
         symbol: body[0][0]
         for symbols, body in functions for symbol in symbols
     }
-    units = {}
+    address_names = {
+        body[0][0]: sorted({demangled.get(symbol, symbol) for symbol in symbols})
+        for symbols, body in functions
+    }
+    units = []
     for symbols, body in functions:
         names = sorted({demangled.get(symbol, symbol) for symbol in symbols
                         if any(value in demangled.get(symbol, symbol)
@@ -112,6 +119,8 @@ def measured_units(disassembly: str, indirect_symbols: str,
                         regions.append((indices[destination], index + 1))
                 else:
                     replacement = 'LOCAL'
+                    if local_names and destination in address_names:
+                        replacement += ':' + ' | '.join(address_names[destination])
                 if target:
                     operands = (
                         operands[:target.start()] + replacement
@@ -199,11 +208,25 @@ def measured_units(disassembly: str, indirect_symbols: str,
         if not regions:
             regions = [(0, len(body))]
         for first, last in regions:
-            digest = hashlib.sha256(
-                '\n'.join(normalized[first:last]).encode()
-            ).hexdigest()
-            units.setdefault(digest, set()).update(names)
-    return {digest: sorted(names) for digest, names in sorted(units.items())}
+            units.append((names, normalized[first:last]))
+    return units
+
+
+def _hash_units(units: Sequence[Tuple[List[str], List[str]]]
+                ) -> Dict[str, List[str]]:
+    hashes = {}
+    for names, instructions in units:
+        digest = hashlib.sha256('\n'.join(instructions).encode()).hexdigest()
+        hashes.setdefault(digest, set()).update(names)
+    return {digest: sorted(names) for digest, names in sorted(hashes.items())}
+
+
+def measured_units(disassembly: str, indirect_symbols: str,
+                   demangled: Dict[str, str],
+                   name_filters: Sequence[str]) -> Dict[str, List[str]]:
+    return _hash_units(_normalized_units(
+        disassembly, indirect_symbols, demangled, name_filters,
+    ))
 
 
 def compare(baseline: Dict[str, List[str]],
@@ -222,7 +245,8 @@ def compare(baseline: Dict[str, List[str]],
     )
 
 
-def _inspect(executable: Path) -> Dict[str, List[str]]:
+def _inspect(executable: Path, local_names: bool = False,
+             ) -> List[Tuple[List[str], List[str]]]:
     symbols = subprocess.check_output(['xcrun', 'nm', str(executable)], text=True)
     pretty = subprocess.check_output(
         ['xcrun', 'swift-demangle'], input=symbols, text=True,
@@ -240,7 +264,9 @@ def _inspect(executable: Path) -> Dict[str, List[str]]:
     indirect = subprocess.check_output([
         'xcrun', 'llvm-objdump', '--macho', '--indirect-symbols', str(executable),
     ], text=True)
-    units = measured_units(disassembly, indirect, demangled, DEFAULT_FILTERS)
+    units = _normalized_units(
+        disassembly, indirect, demangled, DEFAULT_FILTERS, local_names,
+    )
     if not units:
         raise ValueError('No measured units found in ' + str(executable))
     return units
@@ -248,13 +274,32 @@ def _inspect(executable: Path) -> Dict[str, List[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('baseline_executable', type=Path)
-    parser.add_argument('candidate_executable', type=Path)
-    parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('baseline_executable', nargs='?', type=Path)
+    parser.add_argument('candidate_executable', nargs='?', type=Path)
+    parser.add_argument('--report', type=Path)
+    parser.add_argument(
+        '--dump', type=Path, metavar='EXECUTABLE',
+        help='print selected function names and normalized instructions',
+    )
     arguments = parser.parse_args()
+    if arguments.dump is not None:
+        if any(value is not None for value in (
+            arguments.baseline_executable, arguments.candidate_executable,
+            arguments.report,
+        )):
+            parser.error('--dump cannot be combined with executables or --report')
+    elif any(value is None for value in (
+        arguments.baseline_executable, arguments.candidate_executable,
+        arguments.report,
+    )):
+        parser.error('comparison requires two executables and --report')
     try:
-        baseline = _inspect(arguments.baseline_executable)
-        candidate = _inspect(arguments.candidate_executable)
+        if arguments.dump is not None:
+            for names, instructions in _inspect(arguments.dump, local_names=True):
+                print('\n'.join(names + instructions) + '\n')
+            return 0
+        baseline = _hash_units(_inspect(arguments.baseline_executable))
+        candidate = _hash_units(_inspect(arguments.candidate_executable))
         report = compare(baseline, candidate)
         arguments.report.parent.mkdir(parents=True, exist_ok=True)
         arguments.report.write_text(

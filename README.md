@@ -125,6 +125,9 @@ The comparator uses Xcode's inspection tools to hash normalized loops and async
 continuations, ignoring function renames and relocated addresses. The JSON report
 lists missing and added units with their function names and the number kept; a
 missing baseline unit returns exit status 1. Added units are informational.
+Use `python3 scripts/codegen_compare.py --dump EXECUTABLE` to print each selected
+unit’s function names and normalized instructions, including imported symbols and
+demangled local call targets.
 
 Generate the Xcode project and run the tests on the Simulator:
 

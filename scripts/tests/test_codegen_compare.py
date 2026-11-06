@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from contextlib import redirect_stderr, redirect_stdout
 import hashlib
+import io
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 import codegen_compare
 
@@ -30,6 +33,62 @@ class CodegenCompareTests(unittest.TestCase):
             DEMANGLED,
             filters,
         )
+
+    def test_dump_lists_imports_of_each_loop(self):
+        # Exercise the CLI with the real parser; only Xcode's external output
+        # is substituted so this test also runs without an installed SDK.
+        symbols = '\n'.join('0000 T ' + symbol for symbol in DEMANGLED)
+        readable = '\n'.join('0000 T ' + name for name in DEMANGLED.values())
+        output = io.StringIO()
+        with patch('sys.argv', ['codegen_compare.py', '--dump', 'fixture']), \
+                patch('subprocess.check_output', side_effect=[
+                    symbols, readable,
+                    (FIXTURES / 'baseline.txt').read_text(),
+                    (FIXTURES / 'indirect.txt').read_text(),
+                ]), redirect_stdout(output):
+            self.assertEqual(codegen_compare.main(), 0)
+        self.assertEqual(output.getvalue(), (
+            'BaseComparison.alias()\n'
+            'BaseComparison.original()\n'
+            'adrp x8, ADDR\n'
+            'ldr x9, ADDR\n'
+            'bl LOCAL:helper()\n'
+            'ldr x8, [x0]\n'
+            'add x8, x8, #0x1\n'
+            'bl IMPORT:_os_unfair_lock_lock\n'
+            'subs x1, x1, #0x1\n'
+            'b.ne OFFSET:+0x4\n\n'
+            'AsyncCode.original() resume partial function\n'
+            'adrp x1, ADDR\n'
+            'mov x2, #0x0\n'
+            'b IMPORT:_swift_task_switch\n\n'
+        ))
+
+    def test_default_filters_select_new_experiments(self):
+        for name in (
+            'RequestRegistry', 'Registry', 'HotFlag', 'Flag',
+            'TransactionalStore', 'Store', 'MainThreadCache', 'ImageCache',
+            'CreationCost', 'Object',
+        ):
+            with self.subTest(name=name):
+                self.assertIn(name, codegen_compare.DEFAULT_FILTERS)
+
+    def test_cli_rejects_invalid_modes_and_empty_selection(self):
+        for arguments in (
+            [], ['baseline'], ['baseline', 'candidate'],
+            ['--dump', 'fixture', 'candidate', '--report', 'out.json'],
+            ['--dump', 'fixture', '--report', 'out.json'],
+        ):
+            with self.subTest(arguments=arguments), \
+                    patch('sys.argv', ['codegen_compare.py'] + arguments), \
+                    redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as error:
+                    codegen_compare.main()
+                self.assertEqual(error.exception.code, 2)
+        with patch('sys.argv', ['codegen_compare.py', '--dump', 'fixture']), \
+                patch('subprocess.check_output', side_effect=['', '', '', '']), \
+                redirect_stderr(io.StringIO()):
+            self.assertEqual(codegen_compare.main(), 2)
 
     def test_renamed_function_with_same_loop_is_kept(self):
         baseline = self.units('baseline.txt')
