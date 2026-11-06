@@ -1,3 +1,4 @@
+import Synchronization
 import Testing
 import UIKit
 
@@ -27,6 +28,34 @@ import UIKit
             #expect((reads["values"] as? [Int])?.isEmpty == false)
             #expect(reads["unit"] as? String == "ticks")
         }
+    }
+
+    // Moving the final drain after runOnThreads exports an end tick before queued work ends.
+    @Test(.timeLimit(.minutes(1)))
+    func asynchronousWritesDrainInsideTheExportedBlock() async throws {
+        var request = RunRequest.mainThreadCacheSmoke
+        request.mechanisms = ["barrierQueueAsyncWrite"]
+        request.tunables.mainThreadCache!.warmupFrames = 1
+        request.tunables.mainThreadCache!.frames = 4
+        let experiment = try MainThreadCache(request: request)
+        let cache = DrainRecordingImageCache()
+        let observation = await onBenchmarkThread { [request] in
+            let lines = ResultLineBuffer()
+            let description = experiment.blocks[0]
+            let block = BlockContext(position: 0, description: description,
+                layout: BatchLayout(warmupBatches: 1, measuredBatches: 2,
+                    operationsPerBatch: 4, subBatches: 2), request: request, lines: lines)
+            let checks = experiment.measure(cache, block)
+            return (lines.data, cache.drain, checks.allSatisfy(\.passed))
+        }
+        let first = try #require(observation.0.split(separator: 0x0A).first)
+        let block = try #require(JSONSerialization.jsonObject(with: Data(first)) as? [String: Any])
+        let start = try #require(block["start"] as? UInt64)
+        let end = try #require(block["end"] as? UInt64)
+        #expect(observation.2)
+        #expect(observation.1.count == 2) // Prefill drain, then the final writer drain.
+        #expect(start < observation.1.tick)
+        #expect(observation.1.tick <= end)
     }
 
     // A torn image/index pair must fail the check even though the lookup found an entry.
@@ -59,6 +88,30 @@ import UIKit
         default: preconditionFailure("Test case")
         }
         #expect(throws: RequestError.self) { try ExperimentRegistry.makeExperiment(for: request) }
+    }
+}
+
+/// Wraps the real asynchronous cache and records when each actual drain returns.
+private final class DrainRecordingImageCache: ImageCache {
+    struct Drain: Sendable {
+        var count = 0
+        var tick: UInt64 = 0
+    }
+
+    private let cache = BarrierQueueAsyncWriteImageCache()
+    private let state = Mutex(Drain())
+
+    var drain: Drain { state.withLock { $0 } }
+
+    func image(for key: String) -> CachedImage? { cache.image(for: key) }
+    func store(_ entry: CachedImage, for key: String) { cache.store(entry, for: key) }
+
+    func waitForPendingWrites() {
+        cache.waitForPendingWrites()
+        state.withLock { drain in
+            drain.count += 1
+            drain.tick = Clock.now()
+        }
     }
 }
 

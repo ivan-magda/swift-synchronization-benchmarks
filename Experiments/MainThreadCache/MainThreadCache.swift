@@ -31,7 +31,7 @@ struct MainThreadCache: Experiment {
         }
     }
 
-    private func measure(_ cache: some ImageCache, _ block: BlockContext) -> [CheckResult] {
+    func measure(_ cache: some ImageCache, _ block: BlockContext) -> [CheckResult] {
         let session = CacheSession(block: block)
         guard let images = session.prepare(read: { key in cache.image(for: key) }, fill: { images in
             for (index, key) in images.keys.enumerated() {
@@ -45,9 +45,10 @@ struct MainThreadCache: Experiment {
             barrier.arriveAndWait()
             if index == 0 { session.ready.store(true, ordering: .relaxed) }
             writeLoop(cache, writer: writers[index], session: session)
+            barrier.arriveAndWait()
+            if index == 0 { cache.waitForPendingWrites() }
             writers[index].finished.store(true, ordering: .releasing)
         }
-        cache.waitForPendingWrites()
         coordinator.join()
         session.appendSamples(to: block)
         return [session.check(writers: writers)]
