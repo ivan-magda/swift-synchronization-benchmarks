@@ -64,6 +64,10 @@ def measured_units(disassembly: str, indirect_symbols: str,
     if body:
         functions.append((symbols, body))
 
+    symbol_addresses = {
+        symbol: body[0][0]
+        for symbols, body in functions for symbol in symbols
+    }
     units = {}
     for symbols, body in functions:
         names = sorted({demangled.get(symbol, symbol) for symbol in symbols
@@ -76,14 +80,30 @@ def measured_units(disassembly: str, indirect_symbols: str,
         indices = {
             instruction[0]: index for index, instruction in enumerate(body)
         }
+        branch_targets = set()
+        for _, mnemonic, operands in body:
+            if BRANCH.fullmatch(mnemonic):
+                target = ADDRESS.search(operands.split(';', 1)[0])
+                if target:
+                    branch_targets.add(int(target[1], 16))
         normalized = []
         regions = []
+        page_registers = set()
         for index, (address, mnemonic, operands) in enumerate(body):
+            # A join may arrive along a path where ADRP never ran. Keep this
+            # straight-line analysis conservative rather than erasing work.
+            if address in branch_targets:
+                page_registers.clear()
             operands = operands.split(';', 1)[0].strip()
             branch = BRANCH.fullmatch(mnemonic) is not None
             target = ADDRESS.search(operands)
-            if target and (branch or mnemonic == 'bl'):
+            symbolic_target = operands.rsplit(',', 1)[-1].strip()
+            destination = None
+            if target:
                 destination = int(target[1], 16)
+            elif symbolic_target in symbol_addresses:
+                destination = symbol_addresses[symbolic_target]
+            if destination is not None and (branch or mnemonic == 'bl'):
                 if destination in imports:
                     replacement = 'IMPORT:' + imports[destination]
                 elif branch and start <= destination <= end:
@@ -92,10 +112,13 @@ def measured_units(disassembly: str, indirect_symbols: str,
                         regions.append((indices[destination], index + 1))
                 else:
                     replacement = 'LOCAL'
-                operands = (
-                    operands[:target.start()] + replacement
-                    + operands[target.end():]
-                )
+                if target:
+                    operands = (
+                        operands[:target.start()] + replacement
+                        + operands[target.end():]
+                    )
+                else:
+                    operands = operands[:-len(symbolic_target)] + replacement
             elif mnemonic in ('adr', 'adrp'):
                 # Mach-O prints page deltas as decimal operands, with the
                 # resolved address in a comment; neither identifies loop work.
@@ -104,6 +127,45 @@ def measured_units(disassembly: str, indirect_symbols: str,
                 # Literal loads contain bare addresses; numeric immediates
                 # such as #0x1 remain part of the measured instruction.
                 operands = ADDRESS.sub('ADDR', operands)
+
+            page_add = re.fullmatch(
+                r'(x\d+), (x\d+), #(?:0x[\da-fA-F]+|\d+)', operands,
+            )
+            if mnemonic == 'add' and page_add and page_add[2] in page_registers:
+                operands = operands.rsplit(',', 1)[0] + ', ADDR'
+            if mnemonic.startswith(('ld', 'st')):
+                page_load = re.search(
+                    r'\[(x\d+)(?:, #(?:0x[\da-fA-F]+|\d+))?\]$', operands,
+                )
+                if page_load and page_load[1] in page_registers:
+                    operands = (
+                        operands[:page_load.start()] + '['
+                        + page_load[1] + ', ADDR]'
+                    )
+
+            # Only an unmodified ADRP result denotes a page. Loading a pointer
+            # or forming its full address consumes that provenance; subsequent
+            # field offsets and arithmetic must remain visible.
+            if mnemonic in ('bl', 'blr'):
+                page_registers.difference_update(
+                    {'x' + str(number) for number in range(19)} | {'x30'}
+                )
+            elif branch or mnemonic in ('br', 'ret'):
+                page_registers.clear()
+            elif not mnemonic.startswith('st') and mnemonic not in (
+                'cmp', 'cmn', 'tst',
+            ):
+                destinations = operands.split(',')[
+                    :2 if mnemonic == 'ldp' else 1
+                ]
+                for register in destinations:
+                    register = register.strip()
+                    page_registers.discard(re.sub(r'^w', 'x', register))
+            writeback = re.search(r'\[(x\d+)[^\]]*\](?:!|,)', operands)
+            if writeback:
+                page_registers.discard(writeback[1])
+            if mnemonic == 'adrp':
+                page_registers.add(operands.split(',', 1)[0])
             operands = re.sub(r'\s+', ' ', operands)
             normalized.append(mnemonic + (' ' + operands if operands else ''))
 

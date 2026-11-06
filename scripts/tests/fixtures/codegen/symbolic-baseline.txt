@@ -1,0 +1,8 @@
+_old:
+1000: bl _helper
+1004: b _tail
+_helper:
+2000: ret
+_tail:
+3000: cbnz x0, _tail
+3004: ret

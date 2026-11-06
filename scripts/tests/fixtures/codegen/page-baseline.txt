@@ -1,0 +1,38 @@
+_metadata:
+1000: adrp x0, 90 ; 0x5a000
+1004: add x0, x0, #0xa60
+1008: bl 0x5000
+100c: mov x1, #0x0
+1010: ret
+_literal:
+2000: adrp x16, 111
+2004: ldr x16, [x16, #0x1a8] ; literal pool symbol address: ___chkstk_darwin
+2008: blr x16
+200c: adrp x8, 77
+2010: ldr d8, [x8, #0xf20]
+2014: adrp x8, 111
+2018: ldr x9, [x8, #0x1a0] ; literal pool symbol address: __NSConcreteStackBlock
+201c: ret
+_ordinary:
+3000: add x0, x0, #0xa60
+3004: ldr x1, [x2, #0x1a8]
+3008: adrp x8, 111
+300c: ldr x8, [x8, #0x1a0]
+3010: ldr x9, [x8, #0x10]
+3014: adrp x10, 111
+3018: mov x10, x2
+301c: ldr x11, [x10, #0x20]
+3020: adrp x12, 111
+3024: blr x16
+3028: ldr x13, [x12, #0x30]
+302c: adrp x14, 111
+3030: add x14, x14, #0xa60
+3034: ldr x15, [x14, #0x40]
+3038: cbz x0, 0x3044
+303c: adrp x15, 111
+3040: nop
+3044: ldr x9, [x15, #0x50]
+3048: adrp x16, 111
+304c: ldr x17, [x16, #0x20]!
+3050: ldr x18, [x16, #0x60]
+3054: ret

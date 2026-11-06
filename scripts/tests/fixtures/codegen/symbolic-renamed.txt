@@ -1,0 +1,8 @@
+_new:
+4000: bl _renamedHelper
+4004: b _renamedTail
+_renamedHelper:
+5000: ret
+_renamedTail:
+6000: cbnz x0, _renamedTail
+6004: ret

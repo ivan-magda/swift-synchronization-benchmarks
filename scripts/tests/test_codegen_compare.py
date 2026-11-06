@@ -86,3 +86,61 @@ class CodegenCompareTests(unittest.TestCase):
             self.units('baseline.txt', ('AsyncCode',)),
             {expected_hash: ['AsyncCode.original() resume partial function']},
         )
+
+    def test_page_relative_addresses_relocate_without_changing_units(self):
+        names = {'_metadata': 'Counter.metadata', '_literal': 'Counter.literal'}
+        baseline = codegen_compare.measured_units(
+            (FIXTURES / 'page-baseline.txt').read_text(), '', names, ('Counter',),
+        )
+        candidate = codegen_compare.measured_units(
+            (FIXTURES / 'page-relocated.txt').read_text(), '', names, ('Counter',),
+        )
+        report = codegen_compare.compare(baseline, candidate)
+        self.assertEqual(report.missing, {})
+        self.assertEqual(report.added, {})
+        self.assertEqual(report.kept, 2)
+
+    def test_ordinary_immediates_survive_page_address_normalization(self):
+        # Page provenance ends when a register is loaded, overwritten, or
+        # clobbered by a call. These offsets describe work and must be retained.
+        source = (FIXTURES / 'page-baseline.txt').read_text()
+        names = {'_ordinary': 'Counter.ordinary'}
+        baseline = codegen_compare.measured_units(source, '', names, ('Counter',))
+        for old, new in (
+            ('3000: add x0, x0, #0xa60', '3000: add x0, x0, #0x9a0'),
+            ('3004: ldr x1, [x2, #0x1a8]', '3004: ldr x1, [x2, #0x1b8]'),
+            ('3010: ldr x9, [x8, #0x10]', '3010: ldr x9, [x8, #0x18]'),
+            ('301c: ldr x11, [x10, #0x20]', '301c: ldr x11, [x10, #0x28]'),
+            ('3028: ldr x13, [x12, #0x30]', '3028: ldr x13, [x12, #0x38]'),
+            ('3034: ldr x15, [x14, #0x40]', '3034: ldr x15, [x14, #0x48]'),
+            ('3044: ldr x9, [x15, #0x50]', '3044: ldr x9, [x15, #0x58]'),
+            ('3050: ldr x18, [x16, #0x60]', '3050: ldr x18, [x16, #0x68]'),
+        ):
+            with self.subTest(instruction=old):
+                candidate = codegen_compare.measured_units(
+                    source.replace(old, new), '', names, ('Counter',),
+                )
+                self.assertEqual(
+                    codegen_compare.compare(baseline, candidate).missing, baseline,
+                )
+
+    def test_symbolic_local_calls_and_branches_ignore_renames(self):
+        names = {
+            '_old': 'Counter.old', '_new': 'Counter.new',
+            '_tail': 'Counter.tail', '_renamedTail': 'Counter.renamedTail',
+        }
+        baseline = codegen_compare.measured_units(
+            (FIXTURES / 'symbolic-baseline.txt').read_text(), '', names, ('Counter',),
+        )
+        candidate = codegen_compare.measured_units(
+            (FIXTURES / 'symbolic-renamed.txt').read_text(), '', names, ('Counter',),
+        )
+        self.assertEqual(codegen_compare.compare(baseline, candidate).missing, {})
+        expected_loop = hashlib.sha256(b'cbnz x0, OFFSET:+0x0').hexdigest()
+        self.assertEqual(baseline[expected_loop], ['Counter.tail'])
+        # Calls and tail branches stay distinct after local names disappear.
+        changed = (FIXTURES / 'symbolic-renamed.txt').read_text().replace(
+            '4000: bl _renamedHelper', '4000: b _renamedHelper',
+        )
+        candidate = codegen_compare.measured_units(changed, '', names, ('Counter',))
+        self.assertEqual(len(codegen_compare.compare(baseline, candidate).missing), 1)
