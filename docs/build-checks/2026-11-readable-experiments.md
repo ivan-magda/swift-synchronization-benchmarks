@@ -156,11 +156,17 @@ records the four plans on both phones, signed-build provenance and final tests.
 ## Complete difference inventory
 
 The following grouped inventories account for all 141 missing hashes and all
-132 added hashes per target. Hashes are full normalized SHA-256 values; symbol
+132 added hashes per target: 142 missing and 134 added hashes across both
+targets. Hashes are full normalized SHA-256 values; symbol
 names omit only the module prefixes `SyncBench.` and `Swift.` and private
 32-digit discriminator suffixes for readability. All aliases remain listed.
-Missing hashes and aliases match across targets. Added target differences are
-marked below; the rest match. The category heading supplies each entry's reason.
+One missing region has target-specific hashes, with the same alias:
+`TrialRunner.runTrials` is `28b681ec…` on iOS 26 and `f22ed5a0…` on iOS 18.
+Its saved normalized baseline bodies differ only in seven acquire-byte loads,
+`ldaprb` versus `ldarb`, in trial coordination. These are existing
+deployment-target lowering differences in the removed controller region.
+Missing and added target differences are marked below; the rest match.
+The category heading supplies each entry's reason.
 Two added regions have target-specific hashes: `BaseComparison.run` uses `ldapr`
 (iOS 26) versus `ldar` (iOS 18) for a final acquire load; `runOneTrial` uses five
 `ldaprb` versus `ldarb` acquire-byte loads in controller coordination. Normalized
@@ -389,8 +395,9 @@ existing deployment-target lowering differences, separate from refactor changes.
 
 | Hash | Symbol aliases |
 | --- | --- |
-| `28b681ec14dfafcb8a5f29f3d893e10409de02f910f38b32c0243de10f70c905` | `TrialRunner.runTrials(block: Int) -> (trials: [TrialLine], timedOut: Bool)` |
+| `28b681ec14dfafcb8a5f29f3d893e10409de02f910f38b32c0243de10f70c905` (iOS 26 only) | `TrialRunner.runTrials(block: Int) -> (trials: [TrialLine], timedOut: Bool)` |
 | `852a248a783991d5150ad910da9ab670b36a6f283aa29c06414c6d77b7dd31c3` | `TrialRunner.runTrials(block: Int) -> (trials: [TrialLine], timedOut: Bool)` |
+| `f22ed5a07ae8341d4e8f831143be71329bf87de076305b6961663353e7310dc3` (iOS 18 only) | `TrialRunner.runTrials(block: Int) -> (trials: [TrialLine], timedOut: Bool)` |
 | `f42aac1b0a368ae03ec2632319b863965069a12e4cd3300b900d89acd2d70a61` | `TrialRunner.runTrials(block: Int) -> (trials: [TrialLine], timedOut: Bool)` |
 
 ### Added: concrete lock loops (measured layout/merging exceptions)
