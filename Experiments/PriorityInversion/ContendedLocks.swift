@@ -4,48 +4,6 @@ import ObjectiveC
 import Synchronization
 import os
 
-enum ContendedLocks {
-    /// The fourteen mechanisms of experiment 8B.
-    static let mechanisms: [MechanismID] = [
-        .mutex,
-        .osAllocatedUnfairLock,
-        .osAllocatedUnfairLockAdaptiveSpin,
-        .osUnfairLock,
-        .nsLock,
-        .nsRecursiveLock,
-        .pthreadMutex,
-        .pthreadReadWriteLock,
-        .objcSync,
-        .serialQueue,
-        .barrierQueueSyncWrite,
-        .barrierQueueAsyncWrite,
-        .dispatchSemaphore,
-        .actor,
-    ]
-
-    /// One new lock for the mechanism; the actor row needs the holder's QoS for its task priority.
-    static func make(_ mechanism: MechanismID, holderQoS: QoS) -> any ContendedLock {
-        switch mechanism {
-        case .mutex: ContendedMutex()
-        case .osAllocatedUnfairLock: ContendedAllocatedUnfairLock()
-        case .osAllocatedUnfairLockAdaptiveSpin: ContendedAdaptiveSpinUnfairLock()
-        case .osUnfairLock: ContendedUnfairLock()
-        case .nsLock: ContendedNSLock()
-        case .nsRecursiveLock: ContendedNSRecursiveLock()
-        case .pthreadMutex: ContendedPthreadMutex()
-        case .pthreadReadWriteLock: ContendedPthreadReadWriteLock()
-        case .objcSync: ContendedObjcSync()
-        case .serialQueue: ContendedSerialQueue()
-        case .barrierQueueSyncWrite: ContendedBarrierQueueSyncWrite()
-        case .barrierQueueAsyncWrite: ContendedBarrierQueueAsyncWrite()
-        case .dispatchSemaphore: ContendedSemaphore()
-        case .actor: ContendedActorLock(holderPriority: holderQoS.taskPriority)
-        default:
-            preconditionFailure("Experiment 8B has no row for \(mechanism)")
-        }
-    }
-}
-
 // Each row protects the trial index the holder last wrote; -1 means no holder has written yet.
 
 final class ContendedMutex: ContendedLock {

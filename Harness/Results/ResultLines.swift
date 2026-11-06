@@ -99,12 +99,6 @@ struct SamplesLine: Encodable {
     let cpuAtEnd: [Int]?
 }
 
-enum TrialOutcome: String, Codable, Sendable {
-    case valid
-    case censored
-    case invalid
-}
-
 /// One trial of experiment 8B.
 struct TrialLine: Encodable, Sendable {
     let type = "trial"

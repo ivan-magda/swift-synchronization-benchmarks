@@ -42,7 +42,7 @@ import Testing
                 holder.shutDown()
                 loadThreads.shutDown()
             }
-            let runner = TrialRunner(
+            let setup = TrialSetup(
                 lock: lock,
                 holder: holder,
                 timestamps: timestamps,
@@ -52,7 +52,7 @@ import Testing
                 mainSide: mainSide
             )
             let start = Clock.now()
-            let result = runner.runTrials(block: 0)
+            let result = setup.runTrials()
             return (result.timedOut, result.trials.count, Clock.now() - start)
         }
 

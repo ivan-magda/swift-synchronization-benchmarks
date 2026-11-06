@@ -1,85 +1,24 @@
 import Darwin
+import Dispatch
 import Synchronization
 
-/// A low-priority holder, CPU load, and a main-thread lock attempt (experiment 8B).
+/// Experiment 8B: priority inversion on the main thread.
+///
+/// Question: how long does the main thread wait when a low-QoS holder works under
+/// a lock while higher-QoS load keeps every CPU busy? Compare fourteen mechanisms
+/// with both utility and background holders, using os_unfair_lock and a semaphore
+/// as the priority-donating and non-donating references.
+///
+/// One trial starts the holder, starts CPU load after acquire, and schedules the
+/// main thread to arrive 1 ms after acquire. It records both sides' timestamps,
+/// CPU observations and the protected trial index; every wait has a deadline.
 struct PriorityInversion: Experiment {
     let blocks: [BlockDescription]
     private let tunables: PriorityInversionTunables
 
     init(request: RunRequest) throws(RequestError) {
-        try request.validate()
-
-        guard request.variant == "default" else {
-            throw RequestError(message: "variant must be default for priorityInversion")
-        }
-
-        guard request.tunables.threads == 1 else {
-            throw RequestError(message: "threads must be 1 for priorityInversion")
-        }
-
-        guard let tunables = request.tunables.priorityInversion else {
-            throw RequestError(message: "priorityInversion tunables are required")
-        }
-
-        guard tunables.mainDelayMicroseconds <= 1_000_000 else {
-            throw RequestError(
-                message: "priorityInversion.mainDelayMicroseconds must be at most 1000000"
-            )
-        }
-
-        try TrialDeadline.validateDuration(
-            tunables.loadMilliseconds,
-            nanosecondsPerUnit: 1_000_000,
-            field: "loadMilliseconds"
-        )
-        try TrialDeadline.validateDuration(
-            tunables.mainDelayMicroseconds,
-            nanosecondsPerUnit: 1_000,
-            field: "mainDelayMicroseconds"
-        )
-
-        guard UInt64(tunables.pauseMilliseconds) <= UInt64(useconds_t.max) / 1_000 else {
-            throw RequestError(
-                message: "priorityInversion.pauseMilliseconds must fit useconds_t microseconds"
-            )
-        }
-
-        let mechanisms = Set(ContendedLocks.mechanisms.map(\.rawValue))
-        guard !request.mechanisms.isEmpty,
-            Set(request.mechanisms).count == request.mechanisms.count,
-            request.mechanisms.allSatisfy({ mechanisms.contains($0) })
-        else {
-            throw RequestError(
-                message: "mechanisms must be nonempty, unique priorityInversion mechanisms"
-            )
-        }
-
-        let holderQoS: [String: QoS] = [
-            "utilityHolder": .utility,
-            "backgroundHolder": .background
-        ]
-
-        guard !request.operations.isEmpty,
-            Set(request.operations).count == request.operations.count,
-            request.operations.allSatisfy({ holderQoS[$0] != nil })
-        else {
-            throw RequestError(
-                message: "operations must be nonempty, unique utilityHolder or backgroundHolder"
-            )
-        }
-
-        blocks = request.mechanisms.flatMap { mechanism in
-            request.operations.map { operation in
-                BlockDescription(
-                    mechanism: mechanism,
-                    operation: operation,
-                    threads: 1,
-                    qos: holderQoS[operation]!,
-                    operationsPerBatch: request.operationsPerBatch(for: mechanism)
-                )
-            }
-        }
-        self.tunables = tunables
+        blocks = try PriorityInversionRequest.blocks(for: request)
+        tunables = request.tunables.priorityInversion!
     }
 
     func run(_ block: BlockContext) -> [CheckResult] {
@@ -100,14 +39,15 @@ struct PriorityInversion: Experiment {
             work: work,
             timestamps: timestamps
         )
-        let runner = TrialRunner(
+        let setup = TrialSetup(
             lock: lock,
             holder: holder,
             timestamps: timestamps,
             tunables: tunables,
             loadThreads: loadThreads,
             acquireTimeoutTicks: TrialDeadline.ticks(nanoseconds: 2_000_000_000),
-            mainSide: mainSide
+            mainSide: mainSide,
+            block: block.position
         )
 
         let result = Mutex<(trials: [TrialLine], timedOut: Bool)>(([], false))
@@ -115,7 +55,7 @@ struct PriorityInversion: Experiment {
             recording: .samplesOnly,
             workerQoS: block.request.tunables.qos
         ) { _, _, _ in
-            let completed = runner.runTrials(block: block.position)
+            let completed = setup.runTrials()
             result.withLock { $0 = completed }
         }
 
@@ -132,5 +72,156 @@ struct PriorityInversion: Experiment {
                 block: block.position
             )
         ]
+    }
+}
+
+enum ContendedLocks {
+    /// The fourteen mechanisms of experiment 8B.
+    static let mechanisms: [MechanismID] = [
+        .mutex,
+        .osAllocatedUnfairLock,
+        .osAllocatedUnfairLockAdaptiveSpin,
+        .osUnfairLock,
+        .nsLock,
+        .nsRecursiveLock,
+        .pthreadMutex,
+        .pthreadReadWriteLock,
+        .objcSync,
+        .serialQueue,
+        .barrierQueueSyncWrite,
+        .barrierQueueAsyncWrite,
+        .dispatchSemaphore,
+        .actor,
+    ]
+
+    /// One new lock for the mechanism; the actor row needs the holder's QoS for its task priority.
+    static func make(_ mechanism: MechanismID, holderQoS: QoS) -> any ContendedLock {
+        switch mechanism {
+        case .mutex: ContendedMutex()
+        case .osAllocatedUnfairLock: ContendedAllocatedUnfairLock()
+        case .osAllocatedUnfairLockAdaptiveSpin: ContendedAdaptiveSpinUnfairLock()
+        case .osUnfairLock: ContendedUnfairLock()
+        case .nsLock: ContendedNSLock()
+        case .nsRecursiveLock: ContendedNSRecursiveLock()
+        case .pthreadMutex: ContendedPthreadMutex()
+        case .pthreadReadWriteLock: ContendedPthreadReadWriteLock()
+        case .objcSync: ContendedObjcSync()
+        case .serialQueue: ContendedSerialQueue()
+        case .barrierQueueSyncWrite: ContendedBarrierQueueSyncWrite()
+        case .barrierQueueAsyncWrite: ContendedBarrierQueueAsyncWrite()
+        case .dispatchSemaphore: ContendedSemaphore()
+        case .actor: ContendedActorLock(holderPriority: holderQoS.taskPriority)
+        default:
+            preconditionFailure("Experiment 8B has no row for \(mechanism)")
+        }
+    }
+}
+
+/// What the holder and the main thread share in one trial.
+protocol ContendedLock: AnyObject, Sendable {
+    /// Holder side, called on the holder thread. Takes the lock, calls `markAcquired`,
+    /// runs `work`, stores `trial` as the protected value, calls `markReleased`, releases.
+    /// The async `.barrier` row and the actor return after submitting; their work runs later.
+    func hold(trial: Int, work: HolderWork, timestamps: HolderTimestamps)
+
+    /// Main side, called on the main thread. Takes the lock (the read side where there is one),
+    /// reads the protected value and calls `done` with the acquire tick and that value.
+    /// Synchronous mechanisms call `done` before returning; the actor calls it from a main-actor task.
+    @MainActor
+    func touch(done: @escaping @Sendable (_ acquired: UInt64, _ observedTrial: Int) -> Void)
+}
+
+extension PriorityInversion {
+    /// One trial: the holder takes the lock, the load starts, the main thread
+    /// arrives 1 ms after the holder's acquire and waits; returns nil on a timeout.
+    static func runOneTrial(_ trial: Int, warmup: Bool, setup: TrialSetup) -> TrialLine? {
+        let holder = setup.holder
+        let timestamps = setup.timestamps
+        let loadThreads = setup.loadThreads
+        let mainSide = setup.mainSide
+
+        // 1. Start the holder while CPUs are free; never reset an unfinished trial.
+        // No holder may still mark these timestamps: either no trial has started, or the
+        // preceding holder release and main-side touch completed before we reach this reset.
+        timestamps.reset()
+        mainSide.reset()
+        holder.start(trial: trial)
+
+        let (acquireDeadline, acquireOverflow) = Clock.now().addingReportingOverflow(
+            setup.acquireTimeoutTicks
+        )
+        guard !acquireOverflow, timestamps.waitAcquired(until: acquireDeadline) else {
+            return nil
+        }
+
+        // 2. Keep the CPUs busy for the fixed load interval.
+        let loadStart = Clock.now()
+        let (loadStop, loadOverflow) = loadStart.addingReportingOverflow(setup.loadTicks)
+        guard !loadOverflow else {
+            return nil
+        }
+
+        loadThreads.start(until: loadStop)
+
+        // 3. The main thread targets acquire + 1 ms (the request may tune the delay).
+        let (arrivalTarget, arrivalOverflow) = timestamps.acquire.addingReportingOverflow(
+            setup.mainDelayTicks
+        )
+        guard !arrivalOverflow else {
+            return nil
+        }
+
+        let lock = setup.lock
+
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                mach_wait_until(arrivalTarget)
+                let mainArrival = Clock.now()
+                lock.touch { mainAcquire, observedTrial in
+                    mainSide.store(
+                        arrival: mainArrival,
+                        acquire: mainAcquire,
+                        cpu: CPU.current(),
+                        observed: observedTrial
+                    )
+                    mainSide.signalDone()
+                }
+            }
+        }
+
+        // 4. All completion waits share load stop + five seconds.
+        let (deadline, finishOverflow) = loadStop.addingReportingOverflow(setup.finishAllowanceTicks)
+        guard !finishOverflow,
+            mainSide.waitDone(until: deadline),
+            timestamps.waitReleased(until: deadline),
+            loadThreads.waitStopped(until: deadline)
+        else {
+            return nil
+        }
+
+        // 5. Keep every completed trial, including censored and invalid arrivals.
+        return TrialLine(
+            block: setup.block,
+            trial: trial,
+            warmup: warmup,
+            holderQoS: holder.qos,
+            loadStart: loadStart,
+            loadStop: loadStop,
+            holderAcquire: timestamps.acquire,
+            holderRelease: timestamps.release,
+            mainArrival: mainSide.arrival,
+            mainAcquire: mainSide.acquire,
+            holderCPUReadings: timestamps.cpuReadings,
+            mainCPU: mainSide.cpu,
+            holderResultCorrect: timestamps.resultCorrect,
+            mainObservedTrial: mainSide.observed,
+            outcome: .classify(
+                holderAcquire: timestamps.acquire,
+                holderRelease: timestamps.release,
+                mainArrival: mainSide.arrival,
+                mainAcquire: mainSide.acquire,
+                loadStop: loadStop
+            )
+        )
     }
 }

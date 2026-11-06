@@ -29,6 +29,8 @@ targets:
         optional: true
       - path: Experiments
         optional: true
+        excludes:
+          - "**/*.md"
     dependencies:
       - package: swift-atomics
         product: Atomics
