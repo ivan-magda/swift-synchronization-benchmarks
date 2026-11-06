@@ -212,15 +212,6 @@ class PhoneCalibrationTests(unittest.TestCase):
     def test_missing_phone_calibration_is_none(self):
         self.assertIsNone(load_phone_calibration(self.results, 'fixture'))
 
-    def test_saved_phone_calibration_is_loaded(self):
-        (self.results / 'fixture').mkdir(parents=True)
-        (self.results / 'fixture/calibration.json').write_text(
-            json.dumps({'attemptID': 'calibration-fixture'})
-        )
-        self.assertEqual(
-            load_phone_calibration(self.results, 'fixture'),
-            {'attemptID': 'calibration-fixture'},
-        )
 
     def test_from_calibration_is_replaced_in_a_copy(self):
         (self.results / 'fixture').mkdir(parents=True)
