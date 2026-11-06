@@ -3,19 +3,27 @@
 This repository contains an iOS harness for comparing Swift synchronization mechanisms on real iPhones.
 It records raw samples and run conditions so the measurements can be checked and reproduced.
 
-Start with the experiment pages: [base comparison](Experiments/BaseComparison/README.md),
-[async code](Experiments/AsyncCode/README.md) and
-[priority inversion](Experiments/PriorityInversion/README.md). Each explains its
-question, operations, timing and checks before pointing to the source.
-The [readable-experiment checks](docs/build-checks/2026-11-readable-experiments.md)
-and [latest device acceptance](docs/phase-2-acceptance.md#readable-experiments-and-optimizer-fixes-2026-11-06)
-record the compiler differences and the four acceptance plans on both phones.
+Start with the experiment pages. Each explains its question, operations, timing
+and checks before pointing to the source:
 
-The harness implements calibration, the base comparison, async code (experiment 7),
-and priority inversion (experiment 8B). Phase 1 checked calibration and the base
-comparison on physical iPhones.
-See [device acceptance](docs/phase-1-acceptance.md) and
-[optimized-code checks](docs/build-checks/2026-11-phase-1.md) for the tested scope.
+- [Base comparison](Experiments/BaseComparison/README.md) (experiment 1)
+- [Request registry](Experiments/RequestRegistry/README.md) (experiment 2)
+- [Hot flag](Experiments/HotFlag/README.md) (experiment 3)
+- [Transactional store](Experiments/TransactionalStore/README.md) (experiment 4)
+- [Async code](Experiments/AsyncCode/README.md) (experiment 7)
+- [Main-thread image cache](Experiments/MainThreadCache/README.md) (experiment 8A)
+- [Priority inversion](Experiments/PriorityInversion/README.md) (experiment 8B)
+- [Creation cost](Experiments/CreationCost/README.md) (experiment 9)
+
+The harness also implements calibration. The
+[remaining-experiment Release checks](docs/build-checks/2026-11-remaining-experiments.md)
+record the new rows' compiler work and consumers. Their
+[device acceptance is pending](docs/phase-3-acceptance.md) at the phone-preparation
+handoff. Earlier physical-phone results remain in
+[phase 1 acceptance](docs/phase-1-acceptance.md) and
+[phase 2 acceptance](docs/phase-2-acceptance.md); the
+[readable-experiment checks](docs/build-checks/2026-11-readable-experiments.md)
+record the earlier compiler evidence.
 
 Use Xcode 27.1 (27A9275), Swift swiftlang-6.4.0.34.1, and XcodeGen 2.46.0.
 The Python runner uses the standard library and supports Python 3.9.
@@ -69,8 +77,8 @@ python3 scripts/bench.py run --phone iphone11 --plan plans/traced-priority-inver
 Run `calibrate` for the configured phone before any plan that uses
 `"holderWorkIterations": "fromCalibration"`, including both priority-inversion
 plans. The runner reads the holder work size from `results/<phone>/calibration.json`
-and stops before installation if it is missing. The four new plans have
-`smoke: true`; their tunables are acceptance guesses until the pilot sets the
+and stops before installation if it is missing. The four async/priority-inversion
+plans have `smoke: true`; their tunables are acceptance guesses until the pilot sets the
 measurement values.
 
 Plans with `"traced": true` record System Trace of all processes around each

@@ -38,4 +38,4 @@ The relaxed deinit count equals all objects created, including warm-up. After ea
 
 ## Compiler notes
 
-The measured loops use `@inline(never)` to remain identifiable in Release disassembly. The array keeps every class alive through the after-create snapshot; no stack-promoted substitute satisfies the per-object heap check. Ordinary Release optimization and exclusivity checking stay enabled. Each experiment owns its classes. Release verification compares earlier experiments' machine code with the [retained baseline](../../docs/build-checks/2026-11-readable-experiments.md), then checks object allocation and release in these loops.
+The measured loops use `@inline(never)` to remain identifiable in Release disassembly. The array keeps every class alive through the after-create snapshot; no stack-promoted substitute satisfies the per-object heap check. Ordinary Release optimization and exclusivity checking stay enabled. Each experiment owns its classes. Release verification compares earlier experiments' machine code with the [retained baseline](../../docs/build-checks/2026-11-remaining-experiments.md), then checks object allocation and release in these loops.
