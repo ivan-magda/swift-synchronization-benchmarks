@@ -142,8 +142,16 @@ Generate the Xcode project and run the tests on the Simulator:
 ```bash
 xcodegen generate
 xcodebuild test -project SyncBench.xcodeproj -scheme SyncBench \
-  -destination 'platform=iOS Simulator,name=iPhone 17' -quiet
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -skip-testing:SyncBenchTests/CreationCostTests -quiet
+xcodebuild test -project SyncBench.xcodeproj -scheme SyncBench \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:SyncBenchTests/CreationCostTests \
+  -parallel-testing-enabled NO -quiet
 ```
+
+Creation-cost tests measure process-wide allocations, so run them separately from
+the other test suites.
 
 Compile an unsigned Release build for iOS:
 
