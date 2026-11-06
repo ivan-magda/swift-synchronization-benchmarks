@@ -152,13 +152,41 @@ def measured_units(disassembly: str, indirect_symbols: str,
                 )
             elif branch or mnemonic in ('br', 'ret'):
                 page_registers.clear()
-            elif mnemonic not in ('cmp', 'cmn', 'tst'):
-                # Register results can be second operands (LSE atomics,
-                # paired loads) or store status operands. Conservatively drop
-                # every explicit non-memory register, including read operands,
-                # rather than maintaining an incomplete destination table.
-                registers = re.findall(r'\b[wx]\d+\b', operands.split('[', 1)[0])
-                for register in registers:
+            else:
+                registers = operands.split('[', 1)[0].split(',')
+                if re.fullmatch(
+                    r'(?:ld(?:add|clr|eor|set|smax|smin|umax|umin)|swp)[al]*[bh]?',
+                    mnemonic,
+                ):
+                    destinations = registers[1:2]  # LSE atomic result
+                elif re.fullmatch(r'ld(?:p|np|psw|xp|axp)|casp[al]*', mnemonic):
+                    destinations = registers[:2]
+                elif re.fullmatch(
+                    r'st(?:r|ur|p|np|lr|llr)[bh]?'
+                    r'|st(?:add|clr|eor|set|smax|smin|umax|umin)l?[bh]?',
+                    mnemonic,
+                ) or mnemonic in ('cmp', 'cmn', 'tst', 'nop'):
+                    destinations = []  # Reads only; writeback is handled below.
+                elif mnemonic in (
+                    'adr', 'adrp', 'mov', 'movz', 'movn', 'movk',
+                    'add', 'adds', 'sub', 'subs', 'adc', 'adcs', 'sbc', 'sbcs',
+                    'and', 'ands', 'orr', 'orn', 'eor', 'eon', 'bic', 'bics',
+                    'lsl', 'lsr', 'asr', 'ror', 'neg', 'negs', 'mvn',
+                    'mul', 'madd', 'msub', 'smull', 'umull', 'sdiv', 'udiv',
+                    'csel', 'csinc', 'csinv', 'csneg', 'cset', 'csetm',
+                    'sxtb', 'sxth', 'sxtw', 'uxtb', 'uxth', 'ubfx', 'sbfx',
+                ) or re.fullmatch(
+                    r'ld(?:r|ur|ar|apr|xr|axr|tr)(?:b|h|sb|sh|sw)?'
+                    r'|stl?x[pr][bh]?|cas[al]*[bh]?', mnemonic,
+                ):
+                    destinations = registers[:1]
+                else:
+                    # An unclassified instruction may have implicit or unusual
+                    # results. Forget provenance rather than hide real work.
+                    page_registers.clear()
+                    destinations = []
+                for register in destinations:
+                    register = register.strip()
                     page_registers.discard(re.sub(r'^w', 'x', register))
             writeback = re.search(r'\[(x\d+)[^\]]*\](?:!|,)', operands)
             if writeback:

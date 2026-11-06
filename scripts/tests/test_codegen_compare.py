@@ -169,3 +169,32 @@ class CodegenCompareTests(unittest.TestCase):
                 self.assertEqual(
                     codegen_compare.compare(baseline, candidate).missing, baseline,
                 )
+
+    def test_read_operands_preserve_relocatable_page_provenance(self):
+        names = {'_counter': 'Counter.increment'}
+        for instruction in (
+            'mov x9, x8',
+            'str x8, [x1]',
+            'stp x8, x9, [x1]',
+            'add x9, x8, #0x30',
+            'ldadd x8, x0, [x1]',
+        ):
+            with self.subTest(instruction=instruction):
+                source = (
+                    '_counter:\n'
+                    '1000: adrp x8, 111\n'
+                    '1004: ' + instruction + '\n'
+                    '1008: ldr x0, [x8, #0x10]\n'
+                    '100c: ret\n'
+                )
+                baseline = codegen_compare.measured_units(
+                    source, '', names, ('Counter',),
+                )
+                candidate = codegen_compare.measured_units(
+                    source.replace('111', '222').replace('#0x10', '#0x18'),
+                    '', names, ('Counter',),
+                )
+                report = codegen_compare.compare(baseline, candidate)
+                self.assertEqual(report.missing, {})
+                self.assertEqual(report.added, {})
+                self.assertEqual(report.kept, 1)
