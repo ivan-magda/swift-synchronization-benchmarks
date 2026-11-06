@@ -5,76 +5,9 @@ import Synchronization
 /// Experiment 7A: one counter, called along five paths with one `await` or one lock per
 /// operation. Each path function returns the counter's final value.
 enum CallerPaths {
-    static func run(_ block: BlockContext, asyncCode: AsyncCodeTunables?) -> [CheckResult] {
-        let operation = block.description.operation
-        let finalValue: Int
-
-        switch block.description.mechanism {
-        case "actor":
-            finalValue = runActor(block, asyncCode: asyncCode)
-        case "mainActor":
-            finalValue = toMainActor(block)
-        case "mutex":
-            finalValue = runLock(block, counter: MutexCounter(), asyncCode: asyncCode)
-        case "osAllocatedUnfairLock":
-            finalValue = runLock(block, counter: AllocatedUnfairLockCounter(), asyncCode: asyncCode)
-        case "nsLock":
-            finalValue = runLock(block, counter: NSLockCounter(), asyncCode: asyncCode)
-        default:
-            preconditionFailure("AsyncCode.init accepts only the mechanisms of the rows table")
-        }
-
-        let expected = if operation == "fromManyTasks", let asyncCode {
-            AsyncCodeChecks.expectedCount(tasks: block.description.threads, asyncCode: asyncCode)
-        } else {
-            AsyncCodeChecks.expectedCount(threads: block.description.threads, layout: block.layout)
-        }
-
-        return [AsyncCodeChecks.checkCount(
-            operation: operation,
-            finalValue: finalValue,
-            expected: expected,
-            block: block.position
-        )]
-    }
-
-    private static func runActor(_ block: BlockContext, asyncCode: AsyncCodeTunables?) -> Int {
-        let counter = CounterActor()
-
-        switch block.description.operation {
-        case "onActor":
-            return onActor(block, counter: counter)
-        case "fromBackgroundTask":
-            return fromBackgroundTask(block, counter: counter)
-        case "fromManyTasks":
-            return fromManyTasks(block, counter: counter, asyncCode: asyncCode!)
-        case "fromMainActor":
-            return fromMainActor(block, counter: counter)
-        default:
-            preconditionFailure("No actor path \(block.description.operation)")
-        }
-    }
-
-    private static func runLock<Counter: LockCounter>(
-        _ block: BlockContext,
-        counter: Counter,
-        asyncCode: AsyncCodeTunables?
-    ) -> Int {
-        switch block.description.operation {
-        case "fromBackgroundTask":
-            return fromBackgroundTask(block, counter: counter)
-        case "fromManyTasks":
-            return fromManyTasks(block, counter: counter, asyncCode: asyncCode!)
-        case "fromMainActor":
-            return fromMainActor(block, counter: counter)
-        default:
-            preconditionFailure("No lock path \(block.description.operation)")
-        }
-    }
-
     // MARK: - Path "onActor": the batch loop already runs on the actor.
 
-    private static func onActor(_ block: BlockContext, counter: CounterActor) -> Int {
+    static func onActor(_ block: BlockContext, counter: CounterActor) -> Int {
         let finalValue = Mutex(0)
 
         _ = block.runInTasks { _, barrier, log in
@@ -89,7 +22,7 @@ enum CallerPaths {
 
     // MARK: - Path "fromBackgroundTask": one detached task calls an idle counter.
 
-    private static func fromBackgroundTask(_ block: BlockContext, counter: CounterActor) -> Int {
+    static func fromBackgroundTask(_ block: BlockContext, counter: CounterActor) -> Int {
         let finalValue = Mutex(0)
 
         _ = block.runInTasks { _, barrier, log in
@@ -113,7 +46,7 @@ enum CallerPaths {
         return finalValue.withLock { $0 }
     }
 
-    private static func fromBackgroundTask<Counter: LockCounter>(
+    static func fromBackgroundTask<Counter: LockCounter>(
         _ block: BlockContext,
         counter: Counter
     ) -> Int {
@@ -137,12 +70,14 @@ enum CallerPaths {
 
     // MARK: - Path "fromManyTasks": 50 tasks call one counter at once; each call is timed.
 
-    private static func fromManyTasks(
+    static func fromManyTasks(
         _ block: BlockContext,
         counter: CounterActor,
         asyncCode: AsyncCodeTunables
     ) -> Int {
-        let callTimes = (0..<block.description.threads).map { _ in CallTimes(calls: asyncCode.callsPerTask) }
+        let callTimes = (0..<block.description.threads).map { _ in
+            CallTimes(calls: asyncCode.callsPerTask)
+        }
         let finalValue = Mutex(0)
         _ = block.runInTasks(recording: .samplesOnly) { task, barrier, _ in
             let times = callTimes[task]
@@ -172,12 +107,14 @@ enum CallerPaths {
         return finalValue.withLock { $0 }
     }
 
-    private static func fromManyTasks<Counter: LockCounter>(
+    static func fromManyTasks<Counter: LockCounter>(
         _ block: BlockContext,
         counter: Counter,
         asyncCode: AsyncCodeTunables
     ) -> Int {
-        let callTimes = (0..<block.description.threads).map { _ in CallTimes(calls: asyncCode.callsPerTask) }
+        let callTimes = (0..<block.description.threads).map { _ in
+            CallTimes(calls: asyncCode.callsPerTask)
+        }
         _ = block.runInTasks(recording: .samplesOnly) { task, barrier, _ in
             let times = callTimes[task]
             for _ in 0..<asyncCode.warmupCallsPerTask {
@@ -214,7 +151,7 @@ enum CallerPaths {
 
     // MARK: - Path "fromMainActor": a main-actor function calls the counter and returns.
 
-    private static func fromMainActor(_ block: BlockContext, counter: CounterActor) -> Int {
+    static func fromMainActor(_ block: BlockContext, counter: CounterActor) -> Int {
         let mainThreadCPU = MainThreadCPURecorder(batches: block.layout.totalBatches)
         let finalValue = Mutex(0)
         _ = block.runInTasks { _, barrier, log in
@@ -234,7 +171,7 @@ enum CallerPaths {
         return finalValue.withLock { $0 }
     }
 
-    private static func fromMainActor<Counter: LockCounter>(
+    static func fromMainActor<Counter: LockCounter>(
         _ block: BlockContext,
         counter: Counter
     ) -> Int {
@@ -303,7 +240,7 @@ enum CallerPaths {
 
     // MARK: - Path "toMainActor": a background task updates main-actor state.
 
-    private static func toMainActor(_ block: BlockContext) -> Int {
+    static func toMainActor(_ block: BlockContext) -> Int {
         let counter = DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 MainActorCounter()

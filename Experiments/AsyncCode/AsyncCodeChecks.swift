@@ -1,4 +1,24 @@
 enum AsyncCodeChecks {
+    /// Both caller paths and batching compare their final counter with all work performed.
+    static func checkCount(
+        finalValue: Int,
+        asyncCode: AsyncCodeTunables?,
+        block: BlockContext
+    ) -> CheckResult {
+        let expected = if block.description.operation == "fromManyTasks", let asyncCode {
+            expectedCount(tasks: block.description.threads, asyncCode: asyncCode)
+        } else {
+            expectedCount(threads: block.description.threads, layout: block.layout)
+        }
+
+        return checkCount(
+            operation: block.description.operation,
+            finalValue: finalValue,
+            expected: expected,
+            block: block.position
+        )
+    }
+
     /// The counter must end at the number of increments the block made.
     static func checkCount(
         operation: String,
@@ -16,13 +36,13 @@ enum AsyncCodeChecks {
     }
 
     /// Increments of a batch-timed block: threads × batches × operations per batch.
-    /// `AsyncCode.init` validated the layout, so the product fits Int.
+    /// `AsyncCodeRequest` validated the layout, so the product fits Int.
     static func expectedCount(threads: Int, layout: BatchLayout) -> Int {
         threads * layout.totalBatches * layout.operationsPerBatch
     }
 
     /// Increments of path "fromManyTasks": warm-up and timed calls of every task.
-    /// `AsyncCode.init` checked the product for overflow.
+    /// `AsyncCodeRequest` checked the product for overflow.
     static func expectedCount(tasks: Int, asyncCode: AsyncCodeTunables) -> Int {
         tasks * (asyncCode.warmupCallsPerTask + asyncCode.callsPerTask)
     }

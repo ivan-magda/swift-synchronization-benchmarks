@@ -1,4 +1,13 @@
-/// Actors, the main actor and locks called from async code (experiment 7).
+/// Experiment 7: actors, the main actor and locks called from async code.
+///
+/// 7A: what does one increment cost along five caller paths: already on the actor,
+/// a background task, 50 competing tasks, the main actor, and a call to the main actor?
+/// 7B: how do 100 operations in one await compare with separate awaits or one lock?
+/// 7C: how do template defaults, Swift 6 settings and @concurrent change calls from
+/// the main actor to nonisolated async work?
+///
+/// The rows below select a concrete path. Each path shows its measured loop;
+/// README.md explains timing, correctness checks and compiler constraints.
 struct AsyncCode: Experiment {
     /// Variant → operation → the mechanisms measured with it. Python mirrors this table (Task 8).
     static let rows: [String: [String: [String]]] = [
@@ -31,103 +40,69 @@ struct AsyncCode: Experiment {
     private let asyncCode: AsyncCodeTunables?
 
     init(request: RunRequest) throws(RequestError) {
-        try request.validate()
-
-        guard let operationsTable = Self.rows[request.variant] else {
-            throw RequestError(message: "variant is unknown: \(request.variant)")
-        }
-
-        guard request.tunables.threads == 1 else {
-            throw RequestError(message: "threads must be 1 for asyncCode")
-        }
-
-        guard !request.mechanisms.isEmpty,
-              Set(request.mechanisms).count == request.mechanisms.count else {
-            throw RequestError(message: "mechanisms must be nonempty and unique")
-        }
-
-        guard !request.operations.isEmpty,
-              Set(request.operations).count == request.operations.count else {
-            throw RequestError(message: "operations must be nonempty and unique")
-        }
-
-        var descriptions: [BlockDescription] = []
-        for mechanism in request.mechanisms {
-            for operation in request.operations where operationsTable[operation]?.contains(mechanism) == true {
-                descriptions.append(BlockDescription(
-                    mechanism: mechanism,
-                    operation: operation,
-                    threads: operation == "fromManyTasks" ? Self.manyTasks : 1,
-                    qos: request.tunables.qos,
-                    operationsPerBatch: request.operationsPerBatch(for: mechanism)
-                ))
-            }
-        }
-
-        for mechanism in request.mechanisms where !descriptions.contains(where: { $0.mechanism == mechanism }) {
-            throw RequestError(
-                message: "mechanisms: \(mechanism) has no requested operation in variant \(request.variant)"
-            )
-        }
-
-        for operation in request.operations where !descriptions.contains(where: { $0.operation == operation }) {
-            throw RequestError(
-                message: "operations: \(operation) has no requested mechanism in variant \(request.variant)"
-            )
-        }
-
-        if request.variant == "batching" {
-            // Every sub-batch must hold whole groups. `validate()` made each value a multiple of subBatches.
-            for (key, operations) in request.tunables.operationsPerBatch.sorted(by: { $0.key < $1.key })
-            where !(operations / request.tunables.subBatches).isMultiple(of: Self.groupSize) {
-                throw RequestError(
-                    message: "operationsPerBatch: \(key) must be a multiple of subBatches × \(Self.groupSize)"
-                )
-            }
-        }
-
-        if request.operations.contains("fromManyTasks") {
-            guard let asyncCode = request.tunables.asyncCode else {
-                throw RequestError(message: "asyncCode is required for fromManyTasks")
-            }
-
-            // Each task makes warm-up and timed calls; the timed ones fill a UInt64 buffer.
-            let (calls, callsOverflow) = asyncCode.warmupCallsPerTask.addingReportingOverflow(
-                asyncCode.callsPerTask
-            )
-            let (_, totalOverflow) = calls.multipliedReportingOverflow(by: Self.manyTasks)
-            let (samples, samplesOverflow) = asyncCode.callsPerTask.multipliedReportingOverflow(
-                by: Self.manyTasks
-            )
-            let (_, bytesOverflow) = samples.multipliedReportingOverflow(by: MemoryLayout<UInt64>.stride)
-
-            guard !callsOverflow, !totalOverflow, !samplesOverflow, !bytesOverflow else {
-                throw RequestError(message: "asyncCode calls per task overflow")
-            }
-        }
-
-        // Layout validation proves threads × batches × operations fits Int.
-        for description in descriptions {
-            try BatchLayout(
-                warmupBatches: request.tunables.warmupBatches,
-                measuredBatches: request.tunables.measuredBatches,
-                operationsPerBatch: description.operationsPerBatch,
-                subBatches: request.tunables.subBatches
-            ).validate(threads: description.threads)
-        }
-
-        blocks = descriptions
+        blocks = try AsyncCodeRequest.blocks(for: request)
         asyncCode = request.tunables.asyncCode
     }
 
     func run(_ block: BlockContext) -> [CheckResult] {
-        switch block.description.operation {
-        case "oneAwaitPerGroup", "awaitPerOperation", "oneLockPerGroup":
-            Batching.run(block)
-        case "callFromMainActor":
-            IsolationSettings.run(block)
+        let finalValue: Int
+        switch (block.description.operation, block.description.mechanism) {
+        case ("onActor", "actor"):
+            finalValue = CallerPaths.onActor(block, counter: CounterActor())
+        case ("fromBackgroundTask", "actor"):
+            finalValue = CallerPaths.fromBackgroundTask(block, counter: CounterActor())
+        case ("fromBackgroundTask", "mutex"):
+            finalValue = CallerPaths.fromBackgroundTask(block, counter: MutexCounter())
+        case ("fromBackgroundTask", "osAllocatedUnfairLock"):
+            finalValue = CallerPaths.fromBackgroundTask(block, counter: AllocatedUnfairLockCounter())
+        case ("fromBackgroundTask", "nsLock"):
+            finalValue = CallerPaths.fromBackgroundTask(block, counter: NSLockCounter())
+        case ("fromManyTasks", "actor"):
+            finalValue = CallerPaths.fromManyTasks(
+                block,
+                counter: CounterActor(),
+                asyncCode: asyncCode!
+            )
+        case ("fromManyTasks", "mutex"):
+            finalValue = CallerPaths.fromManyTasks(
+                block,
+                counter: MutexCounter(),
+                asyncCode: asyncCode!
+            )
+        case ("fromManyTasks", "osAllocatedUnfairLock"):
+            finalValue = CallerPaths.fromManyTasks(
+                block,
+                counter: AllocatedUnfairLockCounter(),
+                asyncCode: asyncCode!
+            )
+        case ("fromManyTasks", "nsLock"):
+            finalValue = CallerPaths.fromManyTasks(
+                block,
+                counter: NSLockCounter(),
+                asyncCode: asyncCode!
+            )
+        case ("fromMainActor", "actor"):
+            finalValue = CallerPaths.fromMainActor(block, counter: CounterActor())
+        case ("fromMainActor", "mutex"):
+            finalValue = CallerPaths.fromMainActor(block, counter: MutexCounter())
+        case ("fromMainActor", "osAllocatedUnfairLock"):
+            finalValue = CallerPaths.fromMainActor(block, counter: AllocatedUnfairLockCounter())
+        case ("fromMainActor", "nsLock"):
+            finalValue = CallerPaths.fromMainActor(block, counter: NSLockCounter())
+        case ("toMainActor", "mainActor"):
+            finalValue = CallerPaths.toMainActor(block)
+        case ("oneAwaitPerGroup", "actor"):
+            finalValue = Batching.oneAwaitPerGroup(block)
+        case ("awaitPerOperation", "actor"):
+            finalValue = Batching.awaitPerOperation(block)
+        case ("oneLockPerGroup", "mutex"):
+            finalValue = Batching.oneLockPerGroup(block)
+        case ("callFromMainActor", _):
+            return IsolationSettings.run(block)
         default:
-            CallerPaths.run(block, asyncCode: asyncCode)
+            preconditionFailure("AsyncCode.init accepts only the pairs of the rows table")
         }
+
+        return [AsyncCodeChecks.checkCount(finalValue: finalValue, asyncCode: asyncCode, block: block)]
     }
 }

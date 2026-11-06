@@ -2,7 +2,8 @@ import IsolationProbeSwift6
 import IsolationProbeTemplate
 
 /// Experiment 7C: the main actor calls a nonisolated async function compiled three ways.
-/// The probe counts how many calls ran on the main thread, which shows the thread switches.
+/// The probe counts calls on the main thread: all with template defaults, none with
+/// Swift 6 settings or @concurrent. The timer stays inside the main-actor function.
 enum IsolationSettings {
     static func run(_ block: BlockContext) -> [CheckResult] {
         let mechanism = block.description.mechanism
