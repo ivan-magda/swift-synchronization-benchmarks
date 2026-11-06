@@ -78,6 +78,14 @@ The final division uses Python floating-point arithmetic and `round` returns an 
 launch; the session records `calibrationAttemptID` in `session.json`, and stops
 before installation when the file or its `priorityInversion` is missing.
 
+### Hot flag (experiment 3)
+
+`hotFlag`, variant `default`, runs one reader thread at `tunables.qos` against a main-thread writer that toggles a `Bool` immediately, then every 10 ms with zero timer leeway. The 17 mechanisms are `mutex`, `osAllocatedUnfairLock`, `osAllocatedUnfairLockAdaptiveSpin`, `osUnfairLock`, `nsLock`, `nsRecursiveLock`, `pthreadMutex`, `pthreadReadWriteLock`, `serialQueue`, `barrierQueueSyncWrite`, `barrierQueueAsyncWrite`, `dispatchSemaphore`, `objcSync`, `atomic`, `managedAtomic`, `atomicRelaxed` and `managedAtomicRelaxed`. Acquiring atomic rows use acquiring reads and releasing writes; the relaxed rows use relaxed ordering. Every selected mechanism runs each selected operation.
+
+Both `read` and `readGroups` write the normal warm-up and measured batch lines. `readGroups` additionally writes exactly one `samples` line on thread 0, with metric `readGroupTime`, unit `ticks` and `measuredBatches × operationsPerBatch / 100` values in batch, sub-batch and group order. Each value times 100 reads in a measured batch. Warm-up contributes no group samples. There are no executor CPU arrays or extra sample lines for `read`. For `readGroups`, `operationsPerBatch / subBatches` must be a multiple of 100.
+
+Each block has one `hotFlag.<operation>` check. After its reader batches, the reader stops the main-thread writer with a one-second deadline, waits for pending asynchronous writes, and reads the final value on the reader thread. A passing check requires at least one write, a final read equal to the last written value, valid batch true-read counts and completed main-thread start and stop work. Its detail is, for example, `writes 12; last true, read true`. The iOS 18 acceptance plan adds only `mutex`, `atomic`, `atomicRelaxed`, `managedAtomic` and `managedAtomicRelaxed` rows.
+
 ### Async code (experiment 7)
 
 The variant picks a table of operations; each operation lists the mechanisms measured with it

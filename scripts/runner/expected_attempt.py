@@ -107,6 +107,53 @@ PRIORITY_INVERSION_MECHANISMS = frozenset({
     "objcSync",
 })
 
+HOT_FLAG_MECHANISMS = frozenset({
+    "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
+    "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
+    "pthreadReadWriteLock", "serialQueue", "barrierQueueSyncWrite",
+    "barrierQueueAsyncWrite", "dispatchSemaphore", "objcSync", "atomic",
+    "managedAtomic", "atomicRelaxed", "managedAtomicRelaxed",
+})
+
+
+def _hot_flag_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+    """One reader with batches and, for readGroups, measured 100-read durations."""
+    tunables = request["tunables"]
+    if request["variant"] != "default":
+        raise ValueError("request.variant must be default for hotFlag")
+    if tunables["threads"] != 1:
+        raise ValueError("request.tunables.threads must be 1 for hotFlag")
+    for field, allowed in (
+        ("mechanisms", HOT_FLAG_MECHANISMS),
+        ("operations", {"read", "readGroups"}),
+    ):
+        values = request[field]
+        if not values or len(set(values)) != len(values) or not set(values) <= allowed:
+            raise ValueError("request." + field + " must be nonempty, unique hotFlag entries")
+    blocks = {}
+    for mechanism in request["mechanisms"]:
+        counts = tunables["operationsPerBatch"]
+        count = counts.get(mechanism, counts["default"])
+        if "readGroups" in request["operations"] and (
+            count % tunables["subBatches"] != 0
+            or (count // tunables["subBatches"]) % 100 != 0
+        ):
+            raise ValueError("request.tunables.operationsPerBatch must hold whole 100-read groups")
+        for operation in request["operations"]:
+            samples = ()
+            if operation == "readGroups":
+                samples = (ExpectedSamples(
+                    "readGroupTime", "ticks", True, 1,
+                    tunables["measuredBatches"] * (count // 100), False,
+                ),)
+            blocks[(mechanism, operation)] = ExpectedBlock(
+                mechanism, operation, 1, tunables["qos"], count,
+                tunables["warmupBatches"] + tunables["measuredBatches"],
+                samples, 0, "hotFlag." + operation,
+            )
+    return blocks
+
+
 HOLDER_QOS = {"utilityHolder": "utility", "backgroundHolder": "background"}
 
 
@@ -276,6 +323,10 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
                 0,
                 "calibration.samples",
             )
+    elif request["experiment"] == "hotFlag":
+        blocks = _hot_flag_blocks(request)
+        warmup = tunables["warmupBatches"]
+        measured = tunables["measuredBatches"]
     elif request["experiment"] == "asyncCode":
         blocks, warmup, measured = _async_code_blocks(request)
     elif request["experiment"] == "priorityInversion":

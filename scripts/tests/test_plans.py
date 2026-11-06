@@ -35,6 +35,8 @@ class PlanTests(unittest.TestCase):
         self.assertTrue(
             {
                 "acceptance-async-code.json",
+                "acceptance-hot-flag.json",
+                "acceptance-hot-flag-ios18.json",
                 "acceptance-priority-inversion.json",
                 "traced-async-code.json",
                 "traced-priority-inversion.json",

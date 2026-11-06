@@ -20,6 +20,7 @@ from tests.synthetic_attempts import (
     CALLER_PATHS_OPERATIONS,
     GOLDEN,
     async_code_request,
+    hot_flag_request,
     make_attempt_lines,
     priority_inversion_request,
     trial_line,
@@ -365,6 +366,13 @@ class AttemptCheckTests(unittest.TestCase):
         lines = make_attempt_lines(request, BUILD_ID)
         self.assertTrue(self.verdict(lines, request).accepted)
         return lines
+
+    def test_hot_flag_attempt_requires_its_read_group_samples(self):
+        request = hot_flag_request()
+        lines = self.accepted_lines(request)
+        self.assertEqual(sum(line["type"] == "block" for line in lines), 34)
+        lines.pop(self.first_sample(lines, "readGroupTime", "readGroups"))
+        self.assert_invalid(lines, request)
 
     def test_caller_paths_acceptance_request_is_accepted_with_fourteen_blocks(self):
         request = self.caller_paths()

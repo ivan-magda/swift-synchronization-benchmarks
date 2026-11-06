@@ -61,6 +61,10 @@ enum ExperimentRegistry {
             return try BaseComparison(request: request)
         }
 
+        if request.experiment == "hotFlag" {
+            return try HotFlag(request: request)
+        }
+
         if request.experiment == "asyncCode" {
             return try AsyncCode(request: request)
         }

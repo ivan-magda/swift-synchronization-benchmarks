@@ -8,7 +8,7 @@ import Testing
     // Missing registration, trial emission or warm-up indexing must fail the complete attempt.
     @Test(.timeLimit(.minutes(1)))
     func priorityInversionSmokeRunPasses() async throws {
-        let attempt = try await runAsyncCodeAttempt(.priorityInversionSmoke)
+        let attempt = try await runAttempt(.priorityInversionSmoke)
 
         #expect(attempt.status == "completed")
         #expect(attempt.blocks.count == 4)

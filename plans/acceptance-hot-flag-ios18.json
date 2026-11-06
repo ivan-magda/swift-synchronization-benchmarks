@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "name": "acceptance-hot-flag-ios18",
+  "buildTarget": "ios18",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "default",
+      "experiment": "hotFlag",
+      "variant": "default",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read",
+        "readGroups"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 1000000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}

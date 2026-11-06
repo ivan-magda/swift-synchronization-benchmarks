@@ -20,6 +20,7 @@ from tests.synthetic_attempts import (
     CALLER_PATHS_OPERATIONS,
     GOLDEN,
     async_code_request,
+    hot_flag_request,
 )
 
 ASYNC_CODE_SWIFT = (
@@ -53,6 +54,22 @@ class ExpectedAttemptTests(unittest.TestCase):
         self.assertEqual(block.samples, ())
         self.assertEqual(block.trial_lines, 0)
         self.assertEqual(block.check, "baseComparison.increment")
+
+    def test_hot_flag_blocks_include_only_measured_read_groups(self):
+        expected = expected_attempt(hot_flag_request(), cpu_count=6)
+        self.assertEqual(len(expected.blocks), 34)
+        for block in expected.blocks.values():
+            self.assertEqual(
+                (block.threads, block.qos, block.operations_per_batch, block.batch_lines),
+                (1, "userInitiated", 1000, 3),
+            )
+            self.assertEqual(block.check, "hotFlag." + block.operation)
+            self.assertEqual(block.trial_lines, 0)
+            self.assertEqual(
+                block.samples,
+                (ExpectedSamples("readGroupTime", "ticks", True, 1, 20, False),)
+                if block.operation == "readGroups" else (),
+            )
 
     def test_calibration_blocks_keep_their_thread_and_sample_rules(self):
         expected = expected_attempt(calibration_request(repeats=200), cpu_count=6)

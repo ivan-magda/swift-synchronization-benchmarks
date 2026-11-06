@@ -47,6 +47,25 @@ def async_code_request(variant, mechanisms, operations, calls_per_task=3):
     return request
 
 
+def hot_flag_request():
+    """All 17 flags, plain and grouped reads, with 1,000 operations per batch."""
+    request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
+    request.update(
+        experiment="hotFlag",
+        variant="default",
+        mechanisms=[
+            "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
+            "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
+            "pthreadReadWriteLock", "serialQueue", "barrierQueueSyncWrite",
+            "barrierQueueAsyncWrite", "dispatchSemaphore", "objcSync", "atomic",
+            "managedAtomic", "atomicRelaxed", "managedAtomicRelaxed",
+        ],
+        operations=["read", "readGroups"],
+    )
+    request["tunables"]["operationsPerBatch"] = {"default": 1000}
+    return request
+
+
 def priority_inversion_request():
     """Two reference mechanisms and both holder priorities, with one warm-up trial."""
     request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
@@ -122,6 +141,7 @@ def make_attempt_lines(
     lines = [run, start_reference]
     calibration = request["experiment"] == "calibration"
     async_code = request["experiment"] == "asyncCode"
+    hot_flag = request["experiment"] == "hotFlag"
     priority_inversion = request["experiment"] == "priorityInversion"
 
     # These are the six measurements specified by Calibration, independently of the checker.
@@ -277,16 +297,27 @@ def make_attempt_lines(
                         values=[500] * (tunables["warmupBatches"] + tunables["measuredBatches"]),
                     )
                 )
+        if hot_flag and operation == "readGroups":
+            lines.append(dict(
+                type="samples", block=position, thread=0,
+                metric="readGroupTime", unit="ticks",
+                values=[3] * (tunables["measuredBatches"] * (operations // 100)),
+            ))
         block["end"] = tick
         tick += 10
+        if calibration:
+            check_name = "calibration.samples"
+        elif priority_inversion:
+            check_name = "priorityInversion." + operation
+        elif hot_flag:
+            check_name = "hotFlag." + operation
+        elif async_code:
+            check_name = "asyncCode." + operation
+        else:
+            check_name = "baseComparison." + operation
         end["checks"].append(
             dict(
-                name="calibration.samples"
-                if calibration
-                else (
-                    "priorityInversion." if priority_inversion
-                    else "asyncCode." if async_code else "baseComparison."
-                ) + operation,
+                name=check_name,
                 block=position,
                 passed=True,
                 detail="Synthetic completed work",

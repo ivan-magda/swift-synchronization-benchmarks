@@ -44,7 +44,7 @@ struct IsolationProbeTests {
             mechanisms: ["templateDefaults", "swift6Language", "concurrentAttribute"],
             operationsPerBatch: 20
         )
-        let attempt = try await runAsyncCodeAttempt(request)
+        let attempt = try await runAttempt(request)
 
         #expect(attempt.status == "completed")
         #expect(attempt.blocks.count == 3)

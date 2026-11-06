@@ -7,7 +7,7 @@ import Testing
     // Every allowed pair of the five paths and five mechanisms runs and keeps its count.
     @Test(.timeLimit(.minutes(1)))
     func callerPathsSmokeRunPasses() async throws {
-        let attempt = try await runAsyncCodeAttempt(.callerPathsSmoke)
+        let attempt = try await runAttempt(.callerPathsSmoke)
 
         #expect(attempt.status == "completed")
         #expect(attempt.blocks.count == 14)
@@ -96,7 +96,7 @@ import Testing
     // One actor await, 100 actor awaits and one lock, each covering 100 increments.
     @Test(.timeLimit(.minutes(1)))
     func batchingSmokeRunPasses() async throws {
-        let attempt = try await runAsyncCodeAttempt(.batchingSmoke)
+        let attempt = try await runAttempt(.batchingSmoke)
 
         #expect(attempt.status == "completed")
         #expect(attempt.blocks.count == 3)
@@ -156,55 +156,4 @@ extension RunRequest {
             operationsPerBatch: 400
         )
     }
-}
-
-/// The decoded lines of one finished attempt.
-struct FinishedAttempt {
-    let status: String
-    let lines: [[String: Any]]
-
-    var blocks: [[String: Any]] {
-        lines.filter { $0["type"] as? String == "block" }
-    }
-
-    var checks: [[String: Any]] {
-        lines.last?["checks"] as? [[String: Any]] ?? []
-    }
-
-    func blocks(operation: String) -> [[String: Any]] {
-        blocks.filter { $0["operation"] as? String == operation }
-    }
-
-    func lines(type: String, block: Int) -> [[String: Any]] {
-        lines.filter { $0["type"] as? String == type && $0["block"] as? Int == block }
-    }
-}
-
-func runAsyncCodeAttempt(_ request: RunRequest) async throws -> FinishedAttempt {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
-
-    let outcome = await onBenchmarkThread {
-        RunController.runToCompletion(
-            request,
-            writingTo: directory,
-            captureConditions: {
-                GoldenAttempt.conditions(ticks: Clock.now(), wallClock: "2026-11-05T00:00:00Z")
-            },
-            build: BuildInfo(
-                buildID: "test",
-                commit: "test",
-                dirty: false,
-                target: "ios26",
-                minimumOS: "26.0",
-                configuration: "Release"
-            )
-        )
-    }
-
-    let data = try Data(contentsOf: directory.appending(path: outcome.marker.file))
-    let lines = try data.split(separator: 0x0A).map {
-        try JSONSerialization.jsonObject(with: Data($0)) as! [String: Any]
-    }
-    return FinishedAttempt(status: outcome.status, lines: lines)
 }
