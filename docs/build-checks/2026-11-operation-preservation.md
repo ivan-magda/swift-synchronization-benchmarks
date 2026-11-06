@@ -3,7 +3,9 @@
 Checked on 2026-11-06 by comparing baseline `409b16a646c19aaa6544c6699606aae65ca99ceb`
 with implementation `731bdd96d41fa3f08cfc9399a1f5c651af215c0c`. Both source revisions
 were extracted with `git archive` into separate ignored directories before building.
-No device runs were performed for this correction.
+This unsigned audit did not run devices. The subsequent [iphone15 repeat
+acceptance](../phase-2-acceptance.md#operation-preservation-repeat-2026-11-06)
+checks both deployment targets and the corrected async workload on hardware.
 
 ## Build and inspection method
 
