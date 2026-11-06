@@ -35,12 +35,15 @@ struct OperationList: Equatable, Sendable {
                     groupIndexes.append(Int(generator.next() % UInt64(groups)))
                 }
                 let firstWrite = first + readsPerRun
-                runs.append(Run(reads: first..<firstWrite,
-                    writes: firstWrite..<groupIndexes.count, firstWrite: writeSlot))
+                runs.append(
+                    Run(
+                        reads: first..<firstWrite,
+                        writes: firstWrite..<groupIndexes.count, firstWrite: writeSlot))
                 writeSlot += writesAtBoundary[run]
             }
         }
-        return OperationList(groups: groupIndexes, runs: runs,
+        return OperationList(
+            groups: groupIndexes, runs: runs,
             runsPerBatch: runsPerBatch, writesPerBatch: writesPerBatch)
     }
 }
@@ -55,7 +58,8 @@ final class StoreWorker: @unchecked Sendable {
     var violations = 0
 
     init(seed: UInt64, thread: Int, layout: BatchLayout, groupSize: Int) {
-        operations = OperationList.make(seed: seed, thread: thread, batches: layout.totalBatches,
+        operations = OperationList.make(
+            seed: seed, thread: thread, batches: layout.totalBatches,
             transactionsPerBatch: layout.operationsPerBatch,
             readsPerRun: groupSize == 1 ? 100 : 1, groups: 10_000 / groupSize)
         readTimes = CallTimes(calls: layout.measuredBatches * operations.runsPerBatch)

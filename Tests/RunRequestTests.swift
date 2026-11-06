@@ -62,8 +62,10 @@ func invalidRequestNamesTheField(_ invalidCase: InvalidRequestCase) {
         warmupTrials: 1,
         trials: 3
     )
-    request.tunables.requestRegistry = RequestRegistryTunables(inFlightPerThread: 1, workIterations: 1,
-        pauseMicroseconds: 0, cancelAllEvery: 1, sampleEvery: 2)
+    request.tunables.requestRegistry = RequestRegistryTunables(
+        inFlightPerThread: 1, workIterations: 1,
+        pauseMicroseconds: 0, cancelAllEvery: 1, sampleEvery: 2
+    )
     try request.validate()
     let encoded = try JSONEncoder().encode(request)
     #expect(try JSONDecoder().decode(RunRequest.self, from: encoded) == request)

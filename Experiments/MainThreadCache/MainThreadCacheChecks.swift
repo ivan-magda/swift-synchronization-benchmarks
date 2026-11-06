@@ -86,8 +86,10 @@ final class CacheSession: @unchecked Sendable {
 
     func makeWriters(images: CacheImages) -> [CacheWriter] {
         (0..<block.description.threads).map { index in
-            CacheWriter(images: images, iterations: tunables.decodeIterations,
-                seed: block.request.seed &+ UInt64(index))
+            CacheWriter(
+                images: images, iterations: tunables.decodeIterations,
+                seed: block.request.seed &+ UInt64(index)
+            )
         }
     }
 
@@ -144,8 +146,10 @@ final class CacheSession: @unchecked Sendable {
     func appendSamples(to block: BlockContext) {
         guard completed.withLock({ $0 }), let result = result.withLock({ $0 }) else { return }
         for (metric, unit, values) in result.samples {
-            block.appendSamples(SamplesLine(block: block.position, thread: nil,
-                metric: metric, unit: unit, values: values, cpuAtStart: nil, cpuAtEnd: nil))
+            block.appendSamples(SamplesLine(
+                block: block.position, thread: nil,
+                metric: metric, unit: unit, values: values, cpuAtStart: nil, cpuAtEnd: nil
+            ))
         }
     }
 
@@ -154,11 +158,13 @@ final class CacheSession: @unchecked Sendable {
         let observation = snapshot?.observation
         let writes = writers.reduce(0) { $0 + $1.writes }
         let checksum = writers.reduce(UInt64(0)) { $0 &+ $1.checkValue }
-        return CheckResult(name: "mainThreadCache.scroll", block: block.position,
+        return CheckResult(
+            name: "mainThreadCache.scroll", block: block.position,
             passed: observation?.frames == tunables.frames && (observation?.reads ?? 0) > 0
                 && observation?.violations == 0 && observation?.overflow == false
                 && writers.count == block.description.threads && writers.allSatisfy { $0.writes > 0 },
             detail: "frames \(observation?.frames ?? 0)/\(tunables.frames); reads \(observation?.reads ?? 0), writes \(writes), violations \(observation?.violations ?? 0); overflow \(observation?.overflow ?? false); decode check \(checksum)",
-            violations: observation?.violations)
+            violations: observation?.violations
+        )
     }
 }

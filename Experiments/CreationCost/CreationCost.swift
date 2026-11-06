@@ -66,43 +66,57 @@ struct CreationCost: Experiment {
         let startup = ThreadBarrier(parties: block.description.threads + 1)
         _ = block.runOnThreads(afterStartup: startup) { _, _, log in
             for batch in 0..<block.layout.totalBatches {
-                let secondsInTicks = UInt64(10_000_000_000) * UInt64(Clock.timebase.denom) / UInt64(Clock.timebase.numer)
+                let secondsInTicks =
+                    UInt64(10_000_000_000) * UInt64(Clock.timebase.denom) / UInt64(Clock.timebase.numer)
                 let (deadline, overflow) = Clock.now().addingReportingOverflow(secondsInTicks)
                 if onMain {
-                    guard !overflow, waitForMainThreadWork(until: deadline, beforeWait: { gate.ready.signal() }, { done in
-                        guard gate.ready.wait(timeout: .now() + .seconds(1)) == .success else {
-                            done()
-                            return
-                        }
-                        if let mainActorMake {
-                            storage.run(batch: batch, operation: block.description.operation,
+                    guard !overflow,
+                        waitForMainThreadWork(
+                            until: deadline, beforeWait: { gate.ready.signal() },
+                            { done in
+                                guard gate.ready.wait(timeout: .now() + .seconds(1)) == .success else {
+                                    done()
+                                    return
+                                }
+                                if let mainActorMake {
+                                    storage.run(
+                                        batch: batch, operation: block.description.operation,
                                         layout: block.layout, counter: counter, make: { mainActorMake($0) })
-                        }
-                        done()
-                    }), storage.completedBatch == batch else {
+                                }
+                                done()
+                            }), storage.completedBatch == batch
+                    else {
                         outcome.completed = false
                         break
                     }
                 } else {
-                    let completed = !overflow && waitForMainThreadWork(until: deadline, beforeWait: {
-                        guard gate.ready.wait(timeout: .now() + .seconds(1)) == .success else { return }
-                        storage.run(batch: batch, operation: block.description.operation,
+                    let completed =
+                        !overflow
+                        && waitForMainThreadWork(
+                            until: deadline,
+                            beforeWait: {
+                                guard gate.ready.wait(timeout: .now() + .seconds(1)) == .success else { return }
+                                storage.run(
+                                    batch: batch, operation: block.description.operation,
                                     layout: block.layout, counter: counter, make: make)
-                        gate.finished.signal()
-                    }) { done in
-                        gate.ready.signal()
-                        let parked = gate.finished.wait(timeout: .now() + .seconds(1)) == .success
-                        gate.mainWaitSucceeded.store(parked, ordering: .relaxed)
-                        done()
-                    }
+                                gate.finished.signal()
+                            }
+                        ) { done in
+                            gate.ready.signal()
+                            let parked = gate.finished.wait(timeout: .now() + .seconds(1)) == .success
+                            gate.mainWaitSucceeded.store(parked, ordering: .relaxed)
+                            done()
+                        }
                     guard completed, gate.mainWaitSucceeded.load(ordering: .relaxed),
-                          storage.completedBatch == batch else {
+                        storage.completedBatch == batch
+                    else {
                         outcome.completed = false
                         break
                     }
                 }
                 // Only a completed batch grants permission to read executor-owned storage.
-                log.recordTimes(batch: batch, start: storage.log.start(ofBatch: batch), end: storage.log.end(ofBatch: batch))
+                log.recordTimes(
+                    batch: batch, start: storage.log.start(ofBatch: batch), end: storage.log.end(ofBatch: batch))
                 log.recordCheckValue(batch: batch, value: block.layout.operationsPerBatch)
                 for (reading, cpu) in storage.log.cpuReadings(ofBatch: batch).enumerated() {
                     log.recordCPU(batch: batch, reading: reading, cpu: cpu)
@@ -115,11 +129,13 @@ struct CreationCost: Experiment {
         if block.description.operation == "create" {
             outcome.appendSamples(to: block)
         }
-        return [CreationCostChecks.check(
-            operation: block.description.operation, block: block.position,
-            objects: block.layout.operationsPerBatch, batches: block.layout.totalBatches,
-            destroyed: counter.value, samples: Array(outcome.samples.dropFirst(block.layout.warmupBatches)),
-            completed: outcome.completed
-        )]
+        return [
+            CreationCostChecks.check(
+                operation: block.description.operation, block: block.position,
+                objects: block.layout.operationsPerBatch, batches: block.layout.totalBatches,
+                destroyed: counter.value, samples: Array(outcome.samples.dropFirst(block.layout.warmupBatches)),
+                completed: outcome.completed
+            )
+        ]
     }
 }

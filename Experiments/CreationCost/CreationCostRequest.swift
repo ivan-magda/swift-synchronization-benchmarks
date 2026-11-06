@@ -25,8 +25,10 @@ enum CreationCostRequest {
                 throw RequestError(message: "operationsPerBatch[\(mechanism)] object storage overflow")
             }
             for operation in request.operations {
-                blocks.append(BlockDescription(mechanism: mechanism, operation: operation, threads: 1,
-                                               qos: request.tunables.qos, operationsPerBatch: count))
+                blocks.append(
+                    BlockDescription(
+                        mechanism: mechanism, operation: operation, threads: 1,
+                        qos: request.tunables.qos, operationsPerBatch: count))
             }
         }
         return blocks

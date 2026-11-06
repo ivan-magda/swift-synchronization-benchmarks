@@ -20,9 +20,11 @@ enum MainThreadCacheRequest {
         try validate(cache)
         try request.requireUniqueSelection(mechanisms: mechanisms, operations: ["scroll"])
         return request.mechanisms.map { mechanism in
-            BlockDescription(mechanism: mechanism, operation: "scroll",
+            BlockDescription(
+                mechanism: mechanism, operation: "scroll",
                 threads: request.tunables.threads, qos: request.tunables.qos,
-                operationsPerBatch: request.operationsPerBatch(for: mechanism))
+                operationsPerBatch: request.operationsPerBatch(for: mechanism)
+            )
         }
     }
 

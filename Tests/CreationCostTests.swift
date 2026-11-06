@@ -60,8 +60,10 @@ import Testing
             let ready = DispatchSemaphore(value: 0)
             let observed = Atomic<Bool>(false)
             let ticks = UInt64(1_000_000_000) * UInt64(Clock.timebase.denom) / UInt64(Clock.timebase.numer)
-            let completed = waitForMainThreadWork(until: Clock.now() + ticks,
-                                                 beforeWait: { ready.signal() }) { done in
+            let completed = waitForMainThreadWork(
+                until: Clock.now() + ticks,
+                beforeWait: { ready.signal() }
+            ) { done in
                 observed.store(ready.wait(timeout: .now() + .seconds(1)) == .success, ordering: .relaxed)
                 done()
             }
@@ -74,13 +76,17 @@ import Testing
     @Test func postDestroyGrowthUsesOrderedCounts() {
         func check(_ counts: [UInt64]) -> CheckResult {
             let samples = counts.map { count in
-                CreationCostChecks.MemorySample(before: (1_000, 0), afterCreate: (2_000, 0),
-                                                afterDestroy: (count, 0), heapBlocks: 1_000,
-                                                liveBefore: 1_000, liveAfterDestroy: count)
+                CreationCostChecks.MemorySample(
+                    before: (1_000, 0), afterCreate: (2_000, 0),
+                    afterDestroy: (count, 0), heapBlocks: 1_000,
+                    liveBefore: 1_000, liveAfterDestroy: count
+                )
             }
-            return CreationCostChecks.check(operation: "create", block: 0, objects: 1_000,
-                                             batches: counts.count, destroyed: counts.count * 1_000,
-                                             samples: samples, completed: true)
+            return CreationCostChecks.check(
+                operation: "create", block: 0, objects: 1_000,
+                batches: counts.count, destroyed: counts.count * 1_000,
+                samples: samples, completed: true
+            )
         }
         #expect(check([1_000, 980]).passed)
         #expect(check([1_000, 980, 990]).passed)
@@ -93,8 +99,10 @@ import Testing
             before: (1_000, 0), afterCreate: (2_000, 0), afterDestroy: (1_000, 0),
             heapBlocks: 1_000, liveBefore: nil, liveAfterDestroy: 1_000
         )
-        let check = CreationCostChecks.check(operation: "create", block: 0, objects: 1_000,
-                                             batches: 1, destroyed: 1_000, samples: [sample], completed: true)
+        let check = CreationCostChecks.check(
+            operation: "create", block: 0, objects: 1_000,
+            batches: 1, destroyed: 1_000, samples: [sample], completed: true
+        )
         #expect(!check.passed)
         #expect(check.detail.contains("enumeration failed"))
     }
@@ -117,10 +125,14 @@ import Testing
         objects.removeAll()
         let afterDestroy = MallocStatistics.read()
         let liveAfterDestroy = MallocStatistics.liveBlocks()
-        let sample = CreationCostChecks.MemorySample(before: before, afterCreate: afterCreate, afterDestroy: afterDestroy, heapBlocks: heapBlocks,
-                                                     liveBefore: liveBefore, liveAfterDestroy: liveAfterDestroy)
-        let check = CreationCostChecks.check(operation: "create", block: 0, objects: 1_000,
-                                             batches: 1, destroyed: counter.value, samples: [sample], completed: true)
+        let sample = CreationCostChecks.MemorySample(
+            before: before, afterCreate: afterCreate, afterDestroy: afterDestroy, heapBlocks: heapBlocks,
+            liveBefore: liveBefore, liveAfterDestroy: liveAfterDestroy
+        )
+        let check = CreationCostChecks.check(
+            operation: "create", block: 0, objects: 1_000,
+            batches: 1, destroyed: counter.value, samples: [sample], completed: true
+        )
         #expect(!check.passed)
         #expect(check.detail.contains("growth"))
         #expect(liveAfterDestroy != nil && liveBefore != nil)
@@ -157,10 +169,12 @@ extension RunRequest {
         var request = RunRequest.golden
         request.experiment = "creationCost"
         request.variant = "default"
-        request.mechanisms = ["unsynchronized", "mutex", "osAllocatedUnfairLock", "osUnfairLock",
-                              "nsLock", "nsRecursiveLock", "pthreadMutex", "pthreadReadWriteLock",
-                              "serialQueue", "barrierQueueSyncWrite", "dispatchSemaphore", "actor",
-                              "mainActor", "atomic", "managedAtomic"]
+        request.mechanisms = [
+            "unsynchronized", "mutex", "osAllocatedUnfairLock", "osUnfairLock",
+            "nsLock", "nsRecursiveLock", "pthreadMutex", "pthreadReadWriteLock",
+            "serialQueue", "barrierQueueSyncWrite", "dispatchSemaphore", "actor",
+            "mainActor", "atomic", "managedAtomic"
+        ]
         request.operations = ["create", "destroy"]
         request.tunables.operationsPerBatch = ["default": 1_000]
         return request

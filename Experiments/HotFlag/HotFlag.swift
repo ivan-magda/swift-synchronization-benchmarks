@@ -91,10 +91,11 @@ struct HotFlag: Experiment {
             }
         }
         if grouped {
-            block.appendSamples(SamplesLine(
-                block: block.position, thread: 0, metric: "readGroupTime", unit: "ticks",
-                values: samples.values, cpuAtStart: nil, cpuAtEnd: nil
-            ))
+            block.appendSamples(
+                SamplesLine(
+                    block: block.position, thread: 0, metric: "readGroupTime", unit: "ticks",
+                    values: samples.values, cpuAtStart: nil, cpuAtEnd: nil
+                ))
         }
         return [HotFlagChecks.check(observation.withLock { $0 }, logs: logs, block: block)]
     }

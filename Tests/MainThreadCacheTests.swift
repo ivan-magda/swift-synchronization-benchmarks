@@ -42,9 +42,13 @@ import UIKit
         let observation = await onBenchmarkThread { [request] in
             let lines = ResultLineBuffer()
             let description = experiment.blocks[0]
-            let block = BlockContext(position: 0, description: description,
-                layout: BatchLayout(warmupBatches: 1, measuredBatches: 2,
-                    operationsPerBatch: 4, subBatches: 2), request: request, lines: lines)
+            let block = BlockContext(
+                position: 0, description: description,
+                layout: BatchLayout(
+                    warmupBatches: 1, measuredBatches: 2,
+                    operationsPerBatch: 4, subBatches: 2
+                ), request: request, lines: lines
+            )
             let checks = experiment.measure(cache, block)
             return (lines.data, cache.drain, checks.allSatisfy(\.passed))
         }
@@ -125,10 +129,13 @@ private final class HalfWrittenImageCache: ImageCache {
 
 extension MainThreadCacheTunables {
     static var smoke: Self {
-        Self(warmupFrames: 10, frames: 60, scrollPointsPerSecond: 3_000,
-             decodeIterations: 10, writeIntervalMicroseconds: 20_000)
+        Self(
+            warmupFrames: 10, frames: 60, scrollPointsPerSecond: 3_000,
+            decodeIterations: 10, writeIntervalMicroseconds: 20_000
+        )
     }
 }
+
 extension RunRequest {
     static var mainThreadCacheSmoke: Self {
         var request = RunRequest.golden

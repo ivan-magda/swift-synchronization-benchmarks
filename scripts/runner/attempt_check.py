@@ -349,23 +349,37 @@ def _priority_inversion_tunables(value: Any, name: str) -> None:
 
 
 def _request_registry_tunables(value: Any, name: str) -> None:
-    _fields(value, name, {
-        "inFlightPerThread": _unsigned, "workIterations": _unsigned,
-        "pauseMicroseconds": _uint32, "cancelAllEvery": _unsigned,
-        "sampleEvery": _unsigned,
-    })
+    _fields(
+        value,
+        name,
+        {
+            "inFlightPerThread": _unsigned,
+            "workIterations": _unsigned,
+            "pauseMicroseconds": _uint32,
+            "cancelAllEvery": _unsigned,
+            "sampleEvery": _unsigned,
+        },
+    )
     for field in ("inFlightPerThread", "workIterations", "cancelAllEvery"):
         _require(value[field] >= 1, name + "." + field + " must be at least 1")
-    _require(value["sampleEvery"] >= 2 and value["sampleEvery"] % 2 == 0,
-             name + ".sampleEvery must be positive and even")
+    _require(
+        value["sampleEvery"] >= 2 and value["sampleEvery"] % 2 == 0,
+        name + ".sampleEvery must be positive and even",
+    )
 
 
 def _main_thread_cache_tunables(value: Any, name: str) -> None:
-    _fields(value, name, {
-        "warmupFrames": _unsigned, "frames": _unsigned,
-        "scrollPointsPerSecond": _unsigned, "decodeIterations": _unsigned,
-        "writeIntervalMicroseconds": _uint32,
-    })
+    _fields(
+        value,
+        name,
+        {
+            "warmupFrames": _unsigned,
+            "frames": _unsigned,
+            "scrollPointsPerSecond": _unsigned,
+            "decodeIterations": _unsigned,
+            "writeIntervalMicroseconds": _uint32,
+        },
+    )
 
 
 def _completed_request(request: Dict[str, Any]) -> None:
@@ -462,7 +476,10 @@ def _trial_ticks(line: Dict[str, Any]) -> List[int]:
 
 
 def _check_trials(
-    block_trials: List[Dict[str, Any]], expected_count: int, qos: str, warmup_trials: int
+    block_trials: List[Dict[str, Any]],
+    expected_count: int,
+    qos: str,
+    warmup_trials: int,
 ) -> None:
     _require(
         len(block_trials) == expected_count,
@@ -638,8 +655,7 @@ def _check_work(
                     )
         block_samples = [line for line in samples if line["block"] == block["block"]]
         _require(
-            len(block_samples)
-            == sum(group.lines for group in expected_block.samples),
+            len(block_samples) == sum(group.lines for group in expected_block.samples),
             "samples line count differs from request",
         )
         for group in expected_block.samples:
@@ -664,13 +680,17 @@ def _check_work(
             for sample in group_samples:
                 _require(
                     sample["unit"] == group.unit
-                    and (len(sample["values"]) > 0 if group.values_per_line is None
-                         else len(sample["values"]) == group.values_per_line),
+                    and (
+                        len(sample["values"]) > 0
+                        if group.values_per_line is None
+                        else len(sample["values"]) == group.values_per_line
+                    ),
                     "samples unit or value count differs from request",
                 )
                 readings = {"cpuAtStart", "cpuAtEnd"}
                 _require(
-                    readings & set(sample) == (readings if group.cpu_readings else set()),
+                    readings & set(sample)
+                    == (readings if group.cpu_readings else set()),
                     "samples CPU readings differ from request",
                 )
         _check_trials(
@@ -763,8 +783,7 @@ def check_attempt(
             "run build ID differs from expected build",
         )
         _require(
-            expected_os_build is None
-            or run["phone"]["osBuild"] == expected_os_build,
+            expected_os_build is None or run["phone"]["osBuild"] == expected_os_build,
             "phone iOS build differs from the plan",
         )
         if end["status"] in ("refused", "failed"):

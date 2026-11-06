@@ -22,40 +22,52 @@ extension MallocStatistics {
     /// allocate nothing. Concurrent framework activity can still change the heap.
     static func liveBlocks() -> UInt64? {
         let task = mach_task_self_
-        let reader: @convention(c) (task_t, vm_address_t, vm_size_t,
-                                    UnsafeMutablePointer<UnsafeMutableRawPointer?>?) -> kern_return_t = { remoteTask, address, _, memory in
-            guard remoteTask == mach_task_self_, let memory,
-                  let pointer = UnsafeMutableRawPointer(bitPattern: address) else {
-                return KERN_INVALID_ARGUMENT
+        let reader:
+            @convention(c) (
+                task_t, vm_address_t, vm_size_t,
+                UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+            ) -> kern_return_t = { remoteTask, address, _, memory in
+                guard remoteTask == mach_task_self_, let memory,
+                    let pointer = UnsafeMutableRawPointer(bitPattern: address)
+                else {
+                    return KERN_INVALID_ARGUMENT
+                }
+                memory.pointee = pointer
+                return KERN_SUCCESS
             }
-            memory.pointee = pointer
-            return KERN_SUCCESS
-        }
-        let recorder: @convention(c) (task_t, UnsafeMutableRawPointer?, UInt32,
-                                      UnsafeMutablePointer<vm_range_t>?, UInt32) -> Void = { _, context, type, ranges, count in
-            guard type & UInt32(MALLOC_PTR_IN_USE_RANGE_TYPE) != 0, let context else { return }
-            let total = context.assumingMemoryBound(to: LiveCount.self)
-            guard count == 0 || ranges != nil else {
-                total.pointee.failed = true
-                return
+        let recorder:
+            @convention(c) (
+                task_t, UnsafeMutableRawPointer?, UInt32,
+                UnsafeMutablePointer<vm_range_t>?, UInt32
+            ) -> Void = { _, context, type, ranges, count in
+                guard type & UInt32(MALLOC_PTR_IN_USE_RANGE_TYPE) != 0, let context else { return }
+                let total = context.assumingMemoryBound(to: LiveCount.self)
+                guard count == 0 || ranges != nil else {
+                    total.pointee.failed = true
+                    return
+                }
+                let (blocks, overflow) = total.pointee.blocks.addingReportingOverflow(UInt64(count))
+                total.pointee.blocks = blocks
+                total.pointee.failed = total.pointee.failed || overflow
             }
-            let (blocks, overflow) = total.pointee.blocks.addingReportingOverflow(UInt64(count))
-            total.pointee.blocks = blocks
-            total.pointee.failed = total.pointee.failed || overflow
-        }
         var addresses: UnsafeMutablePointer<vm_address_t>?
         var zoneCount: UInt32 = 0
         guard malloc_get_all_zones(task, reader, &addresses, &zoneCount) == KERN_SUCCESS,
-              let addresses, zoneCount > 0 else { return nil }
+            let addresses, zoneCount > 0
+        else { return nil }
         var total = LiveCount()
         let succeeded = withUnsafeMutablePointer(to: &total) { total in
             for index in 0..<Int(zoneCount) {
                 let address = addresses[index]
                 guard let zone = UnsafePointer<malloc_zone_t>(bitPattern: address),
-                      let introspection = zone.pointee.introspect,
-                      let enumerate = introspection.pointee.enumerator else { return false }
-                guard enumerate(task, total, UInt32(MALLOC_PTR_IN_USE_RANGE_TYPE), address,
-                                reader, recorder) == KERN_SUCCESS else { return false }
+                    let introspection = zone.pointee.introspect,
+                    let enumerate = introspection.pointee.enumerator
+                else { return false }
+                guard
+                    enumerate(
+                        task, total, UInt32(MALLOC_PTR_IN_USE_RANGE_TYPE), address,
+                        reader, recorder) == KERN_SUCCESS
+                else { return false }
             }
             return !total.pointee.failed
         }

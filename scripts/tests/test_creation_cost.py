@@ -13,11 +13,27 @@ from tests.synthetic_attempts import hot_flag_request, make_attempt_lines, write
 
 def creation_cost_request():
     request = hot_flag_request()
-    request.update(experiment="creationCost", operations=["create", "destroy"], mechanisms=[
-        "unsynchronized", "mutex", "osAllocatedUnfairLock", "osUnfairLock", "nsLock",
-        "nsRecursiveLock", "pthreadMutex", "pthreadReadWriteLock", "serialQueue",
-        "barrierQueueSyncWrite", "dispatchSemaphore", "actor", "mainActor", "atomic", "managedAtomic",
-    ])
+    request.update(
+        experiment="creationCost",
+        operations=["create", "destroy"],
+        mechanisms=[
+            "unsynchronized",
+            "mutex",
+            "osAllocatedUnfairLock",
+            "osUnfairLock",
+            "nsLock",
+            "nsRecursiveLock",
+            "pthreadMutex",
+            "pthreadReadWriteLock",
+            "serialQueue",
+            "barrierQueueSyncWrite",
+            "dispatchSemaphore",
+            "actor",
+            "mainActor",
+            "atomic",
+            "managedAtomic",
+        ],
+    )
     return request
 
 
@@ -32,14 +48,30 @@ class CreationCostTests(unittest.TestCase):
             if block.operation == "destroy":
                 self.assertEqual(samples, ())
                 continue
-            self.assertEqual({sample.metric for sample in samples}, {
-                "mallocBlocksBeforeCreate", "mallocBlocksAfterCreate", "mallocBlocksAfterDestroy",
-                "mallocBytesBeforeCreate", "mallocBytesAfterCreate", "mallocBytesAfterDestroy",
-            })
+            self.assertEqual(
+                {sample.metric for sample in samples},
+                {
+                    "mallocBlocksBeforeCreate",
+                    "mallocBlocksAfterCreate",
+                    "mallocBlocksAfterDestroy",
+                    "mallocBytesBeforeCreate",
+                    "mallocBytesAfterCreate",
+                    "mallocBytesAfterDestroy",
+                },
+            )
             for sample in samples:
-                self.assertEqual((sample.per_thread, sample.lines, sample.values_per_line, sample.cpu_readings),
-                                 (False, 1, 3, False))
-                self.assertEqual(sample.unit, "blocks" if "Blocks" in sample.metric else "bytes")
+                self.assertEqual(
+                    (
+                        sample.per_thread,
+                        sample.lines,
+                        sample.values_per_line,
+                        sample.cpu_readings,
+                    ),
+                    (False, 1, 3, False),
+                )
+                self.assertEqual(
+                    sample.unit, "blocks" if "Blocks" in sample.metric else "bytes"
+                )
 
     def test_checker_rejects_missing_or_extra_malloc_values(self):
         request = creation_cost_request()
@@ -54,7 +86,9 @@ class CreationCostTests(unittest.TestCase):
                 for mutation in ("remove", "extra", "thread", "unit"):
                     with self.subTest(metric=metric, mutation=mutation):
                         broken = deepcopy(lines)
-                        sample = next(line for line in broken if line.get("metric") == metric)
+                        sample = next(
+                            line for line in broken if line.get("metric") == metric
+                        )
                         if mutation == "remove":
                             broken.remove(sample)
                         elif mutation == "extra":
@@ -64,11 +98,18 @@ class CreationCostTests(unittest.TestCase):
                         else:
                             sample["unit"] = "ticks"
                         result, marker = write_attempt(path, broken)
-                        self.assertFalse(check_attempt(result, marker, request, "test").accepted)
+                        self.assertFalse(
+                            check_attempt(result, marker, request, "test").accepted
+                        )
 
     def test_rejects_unsupported_selection_or_thread_count(self):
-        for field, value in (("variant", "other"), ("mechanisms", ["objcSync"]),
-                             ("mechanisms", ["mutex", "mutex"]), ("operations", ["read"]), ("threads", 2)):
+        for field, value in (
+            ("variant", "other"),
+            ("mechanisms", ["objcSync"]),
+            ("mechanisms", ["mutex", "mutex"]),
+            ("operations", ["read"]),
+            ("threads", 2),
+        ):
             with self.subTest(field=field):
                 request = creation_cost_request()
                 target = request["tunables"] if field == "threads" else request
@@ -77,9 +118,13 @@ class CreationCostTests(unittest.TestCase):
                     expected_attempt(request, cpu_count=6)
 
     def test_acceptance_plan_carries_both_object_counts(self):
-        plan = load_plan(Path(__file__).resolve().parents[2] / "plans/acceptance-creation-cost.json")
-        self.assertEqual(sorted(run.tunables["operationsPerBatch"]["default"] for run in plan.runs),
-                         [10000, 100000])
+        plan = load_plan(
+            Path(__file__).resolve().parents[2] / "plans/acceptance-creation-cost.json"
+        )
+        self.assertEqual(
+            sorted(run.tunables["operationsPerBatch"]["default"] for run in plan.runs),
+            [10000, 100000],
+        )
         for run in plan.runs:
             self.assertEqual(run.experiment, "creationCost")
             self.assertEqual(run.operations, ("create", "destroy"))

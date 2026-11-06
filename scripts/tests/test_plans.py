@@ -49,13 +49,23 @@ class PlanTests(unittest.TestCase):
 
     def test_request_registry_group_rejects_each_bad_minimum(self):
         for field, value in (
-            ("inFlightPerThread", 0), ("workIterations", 0),
-            ("pauseMicroseconds", -1), ("cancelAllEvery", 0), ("sampleEvery", 0), ("sampleEvery", 1), ("sampleEvery", 3),
+            ("inFlightPerThread", 0),
+            ("workIterations", 0),
+            ("pauseMicroseconds", -1),
+            ("cancelAllEvery", 0),
+            ("sampleEvery", 0),
+            ("sampleEvery", 1),
+            ("sampleEvery", 3),
         ):
             with self.subTest(field=field):
                 document = json.loads(SMOKE_PLAN.read_text())
-                group = dict(inFlightPerThread=1, workIterations=1,
-                             pauseMicroseconds=0, cancelAllEvery=1, sampleEvery=2)
+                group = dict(
+                    inFlightPerThread=1,
+                    workIterations=1,
+                    pauseMicroseconds=0,
+                    cancelAllEvery=1,
+                    sampleEvery=2,
+                )
                 group[field] = value
                 document["runs"][0]["tunables"]["requestRegistry"] = group
                 with self.assertRaisesRegex(PlanError, "requestRegistry." + field):
@@ -118,7 +128,11 @@ class PlanTests(unittest.TestCase):
         document["shuffle"] = False
         self.assertEqual(
             [run.run_id for run in self.load_document(document).runs],
-            ["smoke-base-comparison.one-thread.1", "smoke-base-comparison.one-thread.2", "smoke-base-comparison.one-thread.3"],
+            [
+                "smoke-base-comparison.one-thread.1",
+                "smoke-base-comparison.one-thread.2",
+                "smoke-base-comparison.one-thread.3",
+            ],
         )
         document["shuffle"] = True
 
@@ -143,7 +157,6 @@ class PlanTests(unittest.TestCase):
             ["crash", "hang"],
         )
 
-
     def test_calibration_launches_once_with_200_samples_per_measurement(self):
         plan = load_plan(PLANS / "calibration.json")
         self.assertEqual(len(plan.runs), 1)
@@ -158,7 +171,6 @@ class PlanTests(unittest.TestCase):
             ),
             ("calibration", "default", [], []),
         )
-
 
     def test_invalid_plans_name_the_key(self):
         document = json.loads(SMOKE_PLAN.read_text())
@@ -181,7 +193,10 @@ class PlanTests(unittest.TestCase):
             ("iosBuilds", lambda value: value.update(smoke=False, iosBuilds={})),
             ("iosBuilds", lambda value: value.update(iosBuilds={"phone": "bad/build"})),
             ("iosBuilds", lambda value: value.update(iosBuilds=["24A1"])),
-            ("iosBuild was replaced by iosBuilds", lambda value: value.update(iosBuild="24A1")),
+            (
+                "iosBuild was replaced by iosBuilds",
+                lambda value: value.update(iosBuild="24A1"),
+            ),
             (
                 "callsPerTask",
                 lambda value: value["runs"][0]["tunables"].update(

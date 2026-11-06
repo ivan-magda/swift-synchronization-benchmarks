@@ -42,9 +42,10 @@ final class CreationBatchStorage<Object: AnyObject>: @unchecked Sendable {
             objects.removeAll(keepingCapacity: true)
             let afterDestroy = MallocStatistics.read()
             let liveAfterDestroy = MallocStatistics.liveBlocks()
-            sample = CreationCostChecks.MemorySample(before: before, afterCreate: afterCreate,
-                                                     afterDestroy: afterDestroy, heapBlocks: heapBlocks,
-                                                     liveBefore: liveBefore, liveAfterDestroy: liveAfterDestroy)
+            sample = CreationCostChecks.MemorySample(
+                before: before, afterCreate: afterCreate,
+                afterDestroy: afterDestroy, heapBlocks: heapBlocks,
+                liveBefore: liveBefore, liveAfterDestroy: liveAfterDestroy)
         }
         log.recordTimes(batch: batch, start: start, end: end)
         completedBatch = batch
@@ -70,8 +71,10 @@ final class CreationBatchOutcome: @unchecked Sendable {
             ("mallocBytesAfterDestroy", "bytes", { $0.afterDestroy.bytes }),
         ]
         for (metric, unit, value) in metrics {
-            block.appendSamples(SamplesLine(block: block.position, thread: nil, metric: metric, unit: unit,
-                                            values: samples.map(value), cpuAtStart: nil, cpuAtEnd: nil))
+            block.appendSamples(
+                SamplesLine(
+                    block: block.position, thread: nil, metric: metric, unit: unit,
+                    values: samples.map(value), cpuAtStart: nil, cpuAtEnd: nil))
         }
     }
 }

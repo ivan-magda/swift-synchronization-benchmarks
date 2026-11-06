@@ -9,6 +9,7 @@ The experiments themselves are specified in `docs/experiments.md`. This document
 We need raw, checkable data for the seven approved experiments (1, 2, 3, 4, 7, 8, 9) from two real iPhones. Readers must be able to see how each number was made and to run the code themselves.
 
 Goals:
+
 - Measure on a real iPhone, in a Release build, with no debugger.
 - Give every mechanism the same work, and check the result after every run.
 - Record the conditions of every run.
@@ -18,6 +19,7 @@ Goals:
 Non-goals: energy measurement (Ivan's decision); a general benchmark framework; timed results from the Simulator or a Mac (smoke tests only); statistics and charts (milestone 11).
 
 The harness fails, even if it works, when:
+
 - a difference between mechanisms comes from the harness and not from the mechanism (thread start-up inside the timed part, an allocation in one wrapper only, a different call path);
 - runs from different iOS builds, toolchains or code versions get mixed;
 - a failed or refused run disappears without a trace;
@@ -69,6 +71,7 @@ Every experiment folder follows the [readable-experiment structure](superpowers/
 ## The app
 
 Build:
+
 - One app target, UIKit life cycle, iPhone only. Release, `-O`, whole-module. Exclusivity checking stays at its Release default; never `-Ounchecked`.
 - Measure ordinary Swift application code with standard Release exclusivity enforcement. Do not use `@exclusivity(unchecked)`. Harness wrappers must not add costs absent from ordinary code using the same mechanism. Base comparison uses concrete queue counters with direct `read`, `write`, and `increment` bodies inside queue closures, never a generic `body(&state)` for their integer storage.
 - Each experiment owns its concrete wrapper declarations in its experiment directory. BaseComparison owns its Int locks, queues, atomics and actors; experiments 7 and 8B own their counters and trial mechanisms. Do not share a generic wrapper with another experiment's state type: its stored property declaration is shared across specializations, which can change exclusivity optimization even for an existing Int row. Common clocks, thread infrastructure, and result types remain shared.
@@ -79,6 +82,7 @@ Build:
 - Info.plist: `CADisableMinimumFrameDurationOnPhone = YES`, so the 15 Pro Max can run at 120 Hz; file sharing on, as a manual fallback.
 
 One run inside the app:
+
 1. Read the launch arguments: experiment, variant, run ID, attempt ID (new for every launch), seed, and the tunables (batch size, warm-up and measured batch counts, durations). The plan holds the tunables, so the pilot can change them without a rebuild. With no arguments the app shows an idle screen and does nothing.
 2. Wait until the first frame is on screen. Never do work during launch.
 3. Preflight: record the conditions. If a hard condition fails, refuse the run (see "Checks").
@@ -88,6 +92,7 @@ One run inside the app:
 7. Write `runs/<attempt-id>.jsonl` with a final `end` line, then the marker `runs/<attempt-id>.done`, then exit. The app writes the `end` line and the marker in every case it controls: a completed run, a refused run, a failed check.
 
 Rules for timed code:
+
 - Clock: `mach_absolute_time()` ticks; the timebase goes into the file. One tick is about 41.67 ns on A13.
 - The cost of an operation comes from batches. Where a spec asks for a distribution, single operations or small groups are timed with the same clock: 2 (sampled waits), 3 (groups of 100 reads), 4 (each 20-record transaction, groups of 100 one-record reads, each write until it is done, writer waits), 7A path 3 (each call), 8A (each main-thread read), 8B (each trial). For an async `.barrier` write, the caller records the submission time and the write block records its own end time. A value of one or two ticks is below the timer's resolution; the analysis reports it as such, not as nanoseconds. Calibration measures the clock-read cost that goes with these numbers.
 - The harness adds no I/O, logging or allocation inside the timed part. Allocations that belong to a mechanism, such as a block per `async` call, are part of its cost. Samples go to preallocated buffers; the file is written at the end.
@@ -98,6 +103,7 @@ Rules for timed code:
 - The main thread never waits without a limit. In 8B the load threads stop after a fixed time, so no wait can come near the watchdog limit.
 
 Notes on single experiments:
+
 - The `.barrier` queue has two rows wherever it appears: experiments 1, 3, 4 and 8A (Ivan, 2026-11-05). Reads use `sync` in both rows.
   - "sync write": writes and increments use `sync(flags: .barrier)`. This is the contract of a lock: the write is done when the call returns (Swiftfin, bitchat).
   - "async write": writes and increments use `async(flags: .barrier)` (Firefox, Apollo 1.x). Timing runs to completion: a batch ends after a `sync` that waits for all queued writes, and the correctness check waits the same way.
@@ -114,6 +120,7 @@ Smoke mode: tiny tunables, for checking all experiments end to end during develo
 ## The Mac script
 
 `scripts/bench.py`: Python 3, standard library only, so readers install nothing extra. Commands:
+
 - `doctor`: the Xcode build and `swiftc` version match the frozen ones; XcodeGen is installed; the phone is connected, unlocked and in Developer Mode. It compares the phone's installed iOS build with the plan's `iosBuilds` entry for that phone key; a smoke plan may omit the pin.
 - `build --target ios26|ios18`: `xcodegen generate`, then `xcodebuild` Release with `-allowProvisioningUpdates`. Before compiling, it puts a build ID into the app as a generated source file: git commit, clean or dirty tree, target. After the build, it writes `build-info.json` next to the results, never into the signed app: the build ID, Xcode and Swift versions, deployment target, key build settings, a hash of the executable code with the signature removed, the profile expiry date.
 - `calibrate --phone <name>`: runs the calibration mode and saves the phone facts.
@@ -121,6 +128,7 @@ Smoke mode: tiny tunables, for checking all experiments end to end during develo
 - `status --plan <file>`: what is done, what failed, what is left.
 
 How `run` works:
+
 1. Refuse to start if `doctor` fails or if the profile expires before the planned end of the session.
 2. Install the build the block needs, then wait a settle time.
 3. For each pending run, in the plan's seeded random order:

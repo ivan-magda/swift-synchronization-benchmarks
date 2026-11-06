@@ -107,9 +107,7 @@ def _object(value: Any, key: str) -> Dict[str, Any]:
 def _async_code_tunables(value: Any) -> None:
     value = _object(value, "tunables.asyncCode")
     _integer(value.get("callsPerTask"), "tunables.asyncCode.callsPerTask", 1)
-    _integer(
-        value.get("warmupCallsPerTask"), "tunables.asyncCode.warmupCallsPerTask"
-    )
+    _integer(value.get("warmupCallsPerTask"), "tunables.asyncCode.warmupCallsPerTask")
 
 
 def _priority_inversion_tunables(value: Any) -> None:
@@ -144,9 +142,16 @@ def _main_thread_cache_tunables(value: Any) -> None:
     prefix = "tunables.mainThreadCache."
     _integer(value.get("warmupFrames"), prefix + "warmupFrames")
     _integer(value.get("frames"), prefix + "frames", 1)
-    _integer(value.get("scrollPointsPerSecond"), prefix + "scrollPointsPerSecond", 1, 20000)
+    _integer(
+        value.get("scrollPointsPerSecond"), prefix + "scrollPointsPerSecond", 1, 20000
+    )
     _integer(value.get("decodeIterations"), prefix + "decodeIterations", 1)
-    _integer(value.get("writeIntervalMicroseconds"), prefix + "writeIntervalMicroseconds", 0, 2**32 - 1)
+    _integer(
+        value.get("writeIntervalMicroseconds"),
+        prefix + "writeIntervalMicroseconds",
+        0,
+        2**32 - 1,
+    )
 
 
 def _tunables(value: Any) -> Dict[str, Any]:
@@ -224,9 +229,7 @@ def load_plan(path: Path) -> Plan:
         raise PlanError("buildTarget must be ios26 or ios18")
     smoke = _boolean(document.get("smoke"), "smoke")
     if "iosBuild" in document:
-        raise PlanError(
-            "iosBuild was replaced by iosBuilds (phone key → iOS build)"
-        )
+        raise PlanError("iosBuild was replaced by iosBuilds (phone key → iOS build)")
     ios_builds = _ios_builds(document.get("iosBuilds", {}), smoke)
     traced = _boolean(document.get("traced", False), "traced")
     seed = _integer(document.get("seed"), "seed", 0, 2**53 - 1)
@@ -255,13 +258,9 @@ def load_plan(path: Path) -> Plan:
         experiment = _identifier(entry.get("experiment"), "runs.experiment")
         variant = _identifier(entry.get("variant"), "runs.variant")
         repeats = _integer(entry.get("repeats"), "runs.repeats", 1)
-        time_limit = _integer(
-            entry.get("timeLimitSeconds"), "runs.timeLimitSeconds", 1
-        )
+        time_limit = _integer(entry.get("timeLimitSeconds"), "runs.timeLimitSeconds", 1)
         simulation = entry.get("simulation")
-        if "simulation" in entry and (
-            not smoke or simulation not in ("crash", "hang")
-        ):
+        if "simulation" in entry and (not smoke or simulation not in ("crash", "hang")):
             raise PlanError("runs.simulation requires smoke and crash or hang")
         mechanisms = _strings(entry.get("mechanisms"), "runs.mechanisms")
         operations = _strings(entry.get("operations"), "runs.operations")

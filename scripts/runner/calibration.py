@@ -135,9 +135,10 @@ def derive_holder_work(
             "fewer than half of the holderWork samples ran on one performance CPU"
         )
     median_ticks = int(median(usable))
-    if median_ticks <= 0 or min(
-        phone["timebaseNumerator"], phone["timebaseDenominator"]
-    ) <= 0:
+    if (
+        median_ticks <= 0
+        or min(phone["timebaseNumerator"], phone["timebaseDenominator"]) <= 0
+    ):
         raise CalibrationError("holderWork median and timebase must be positive")
     target_ticks = (
         TARGET_MILLISECONDS * 1_000_000 * phone["timebaseDenominator"]
@@ -162,14 +163,18 @@ def derive_display(calibration_file: Path) -> Dict[str, Any]:
         numerator = phone["timebaseNumerator"]
         denominator = phone["timebaseDenominator"]
         values = next(
-            line["values"] for line in lines
+            line["values"]
+            for line in lines
             if line["type"] == "samples" and line["metric"] == "displayFrame"
         )
         intervals = [end - start for start, end in zip(values, values[1:])]
         if (
-            type(numerator) is not int or numerator <= 0
-            or type(denominator) is not int or denominator <= 0
-            or not intervals or any(interval <= 0 for interval in intervals)
+            type(numerator) is not int
+            or numerator <= 0
+            or type(denominator) is not int
+            or denominator <= 0
+            or not intervals
+            or any(interval <= 0 for interval in intervals)
         ):
             raise ValueError()
         median_ticks = median(intervals)

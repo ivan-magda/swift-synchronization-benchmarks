@@ -61,7 +61,12 @@ class ExpectedAttemptTests(unittest.TestCase):
         self.assertEqual(len(expected.blocks), 34)
         for block in expected.blocks.values():
             self.assertEqual(
-                (block.threads, block.qos, block.operations_per_batch, block.batch_lines),
+                (
+                    block.threads,
+                    block.qos,
+                    block.operations_per_batch,
+                    block.batch_lines,
+                ),
                 (1, "userInitiated", 1000, 3),
             )
             self.assertEqual(block.check, "hotFlag." + block.operation)
@@ -69,25 +74,35 @@ class ExpectedAttemptTests(unittest.TestCase):
             self.assertEqual(
                 block.samples,
                 (ExpectedSamples("readGroupTime", "ticks", True, 1, 20, False),)
-                if block.operation == "readGroups" else (),
+                if block.operation == "readGroups"
+                else (),
             )
 
     def test_request_registry_requires_measured_calls_and_cancel_all_samples(self):
         for variant in ("normal", "burst"):
             with self.subTest(variant=variant):
-                expected = expected_attempt(request_registry_request(variant), cpu_count=6)
+                expected = expected_attempt(
+                    request_registry_request(variant), cpu_count=6
+                )
                 self.assertEqual(len(expected.blocks), 10)
                 for block in expected.blocks.values():
                     self.assertEqual(
                         (block.threads, block.batch_lines, block.check),
                         (4, 12, "requestRegistry.addAndRemove"),
                     )
-                    self.assertEqual(block.samples, (
-                        ExpectedSamples("callStart", "ticks", True, 4, 32, False),
-                        ExpectedSamples("callTime", "ticks", True, 4, 32, False),
-                        ExpectedSamples("cancelAllStart", "ticks", False, 1, 8, False),
-                        ExpectedSamples("cancelAllTime", "ticks", False, 1, 8, False),
-                    ))
+                    self.assertEqual(
+                        block.samples,
+                        (
+                            ExpectedSamples("callStart", "ticks", True, 4, 32, False),
+                            ExpectedSamples("callTime", "ticks", True, 4, 32, False),
+                            ExpectedSamples(
+                                "cancelAllStart", "ticks", False, 1, 8, False
+                            ),
+                            ExpectedSamples(
+                                "cancelAllTime", "ticks", False, 1, 8, False
+                            ),
+                        ),
+                    )
 
     def test_calibration_blocks_keep_their_thread_and_sample_rules(self):
         expected = expected_attempt(calibration_request(repeats=200), cpu_count=6)
@@ -152,9 +167,7 @@ class ExpectedAttemptTests(unittest.TestCase):
             expected.blocks[("mainActor", "toMainActor")].samples, main.samples
         )
         self.assertEqual(expected.blocks[("actor", "onActor")].samples, ())
-        self.assertEqual(
-            expected.blocks[("actor", "fromBackgroundTask")].samples, ()
-        )
+        self.assertEqual(expected.blocks[("actor", "fromBackgroundTask")].samples, ())
         self.assertEqual((expected.warmup_batches, expected.measured_batches), (2, 2))
 
     def test_batching_and_isolation_settings_blocks(self):

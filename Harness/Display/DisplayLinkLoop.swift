@@ -25,10 +25,13 @@ import UIKit
             return
         }
 
-        let screen = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.screen
+        let screen = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }.first?.screen
         let maximum = Float(screen?.maximumFramesPerSecond ?? 60)
         let link = CADisplayLink(target: self, selector: #selector(onDisplayLink(_:)))
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: maximum, maximum: maximum, preferred: maximum)
+        link.preferredFrameRateRange = CAFrameRateRange(
+            minimum: maximum, maximum: maximum, preferred: maximum
+        )
         self.link = link
         link.add(to: .main, forMode: .common)
     }

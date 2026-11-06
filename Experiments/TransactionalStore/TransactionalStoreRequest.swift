@@ -14,7 +14,8 @@ enum TransactionalStoreRequest {
         guard request.tunables.threads == 6 else {
             throw RequestError(message: "threads must be 6 for transactionalStore")
         }
-        try request.requireUniqueSelection(mechanisms: mechanisms,
+        try request.requireUniqueSelection(
+            mechanisms: mechanisms,
             operations: Set(TransactionalStore.Operation.allCases.map(\.rawValue)))
         var blocks: [BlockDescription] = []
         for mechanism in request.mechanisms {
@@ -32,12 +33,15 @@ enum TransactionalStoreRequest {
             let (readValue, valueOverflow) = writes.multipliedReportingOverflow(by: 20)
             let (_, sumOverflow) = readValue.multipliedReportingOverflow(by: count - count / 50)
             guard !transactionOverflow, !byteOverflow, !aggregateOverflow,
-                !writeOverflow, !valueOverflow, !sumOverflow else {
+                !writeOverflow, !valueOverflow, !sumOverflow
+            else {
                 throw RequestError(message: "operationsPerBatch[\(mechanism)] transactional storage or sum overflow")
             }
             for operation in request.operations {
-                blocks.append(BlockDescription(mechanism: mechanism, operation: operation,
-                    threads: 6, qos: request.tunables.qos, operationsPerBatch: count))
+                blocks.append(
+                    BlockDescription(
+                        mechanism: mechanism, operation: operation,
+                        threads: 6, qos: request.tunables.qos, operationsPerBatch: count))
             }
         }
         return blocks

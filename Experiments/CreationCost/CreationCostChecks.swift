@@ -45,7 +45,8 @@ enum CreationCostChecks {
             }
             let returnedToBaseline = liveAfterDestroy <= liveBefore || liveAfterDestroy - liveBefore <= allowance
             passed = passed && allObjectsUseHeap && returnedToBaseline
-            detail += "; live blocks \(liveBefore), \(liveAfterDestroy); growth \(Int64(liveAfterDestroy) - Int64(liveBefore))"
+            detail +=
+                "; live blocks \(liveBefore), \(liveAfterDestroy); growth \(Int64(liveAfterDestroy) - Int64(liveBefore))"
             let earlierMinimum = minimum ?? liveAfterDestroy
             if liveAfterDestroy >= earlierMinimum {
                 growth = max(growth, liveAfterDestroy - earlierMinimum)
@@ -54,6 +55,7 @@ enum CreationCostChecks {
         }
         passed = passed && growth <= allowance
         detail += "; post-destroy growth \(growth), allowance \(allowance)"
-        return CheckResult(name: "creationCost.\(operation)", block: block, passed: passed, detail: detail, violations: nil)
+        return CheckResult(
+            name: "creationCost.\(operation)", block: block, passed: passed, detail: detail, violations: nil)
     }
 }

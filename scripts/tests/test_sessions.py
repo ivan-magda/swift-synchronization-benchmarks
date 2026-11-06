@@ -67,7 +67,10 @@ class SessionTests(unittest.TestCase):
     def state(self):
         return RunState.load_or_create(
             state_path(
-                self.results, self.plan, PHONE.key, self.info['codeHash'],
+                self.results,
+                self.plan,
+                PHONE.key,
+                self.info['codeHash'],
                 dirty=self.info['dirty'],
             ),
             self.plan,
@@ -149,22 +152,29 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.devices.launch_timeouts, [300])
         self.assertEqual(self.devices.wait_timeouts, [300])
 
-    def test_failed_trace_keeps_app_verdict_and_ordinary_cli_retry_with_one_attempt(self):
+    def test_failed_trace_keeps_app_verdict_and_ordinary_cli_retry_with_one_attempt(
+        self,
+    ):
         import bench
 
         # Ignoring recorder failure would permanently consume this one-attempt run.
         self.traced_run()
         self.plan = replace(self.plan, max_attempts=1)
         recorder = FakeRecorder(
-            self.devices.events, self.clock,
-            stop_error=SessionError('System Trace recorder exited before stop (status 1)'),
+            self.devices.events,
+            self.clock,
+            stop_error=SessionError(
+                'System Trace recorder exited before stop (status 1)'
+            ),
         )
         summary = self.run_session(['complete'], recorder_factory=lambda: recorder)
         self.assertEqual((summary.accepted, summary.rejected), (0, 1))
         self.assertIn('System Trace', summary.stop_reason)
         state = self.state()
         attempt = state.attempts(self.plan.runs[0].run_id)[0]
-        self.assertEqual((attempt['status'], attempt['accepted']), ('traceFailed', False))
+        self.assertEqual(
+            (attempt['status'], attempt['accepted']), ('traceFailed', False)
+        )
         self.assertEqual(attempt['traceStatus'], 'failed')
         self.assertIn('exited before stop', attempt['traceReason'])
         self.assertEqual(
@@ -184,10 +194,15 @@ class SessionTests(unittest.TestCase):
             attempt['appVerdict'],
         )
 
-        (self.root / 'local.json').write_text(json.dumps({
-            'teamID': CONFIG.team_id, 'bundleID': CONFIG.bundle_id,
-            'phones': {'fixture': {'udid': PHONE.udid, 'model': PHONE.model}},
-        }))
+        (self.root / 'local.json').write_text(
+            json.dumps(
+                {
+                    'teamID': CONFIG.team_id,
+                    'bundleID': CONFIG.bundle_id,
+                    'phones': {'fixture': {'udid': PHONE.udid, 'model': PHONE.model}},
+                }
+            )
+        )
         recorder = FakeRecorder(self.devices.events, self.clock)
 
         def session(*args):
@@ -231,8 +246,13 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(
             self.devices.events,
             [
-                'trace start', 'launch', 'await exit', 'terminate',
-                'trace stop', 'copy', 'copy',
+                'trace start',
+                'launch',
+                'await exit',
+                'terminate',
+                'trace stop',
+                'copy',
+                'copy',
             ],
         )
         self.assertEqual(
@@ -274,11 +294,14 @@ class SessionTests(unittest.TestCase):
         self.traced_run()
         for outcome, interrupted, expected_events, status in [
             (
-                'launch-failed', False,
-                ['trace start', 'launch', 'trace stop'], 'launchFailed',
+                'launch-failed',
+                False,
+                ['trace start', 'launch', 'trace stop'],
+                'launchFailed',
             ),
             (
-                'hang', True,
+                'hang',
+                True,
                 ['trace start', 'launch', 'await exit', 'terminate', 'trace stop'],
                 'interrupted',
             ),
@@ -545,7 +568,6 @@ class SessionTests(unittest.TestCase):
         )
         self.assertIsNotNone(summary.stop_reason)
 
-
     def test_locked_phone_stops_and_next_session_resumes(self):
         first = self.run_session(['complete', 'locked'])
         second = self.run_session(['complete'])
@@ -592,8 +614,10 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(len(self.devices.requests), 4)
 
     def test_legacy_state_is_retained_without_crediting_unknown_eligibility(self):
-        legacy_path = self.results / 'state' / (
-            f'{self.plan.name}--{PHONE.key}--{self.plan.sha256[:8]}--aaaaaaaa.json'
+        legacy_path = (
+            self.results
+            / 'state'
+            / (f'{self.plan.name}--{PHONE.key}--{self.plan.sha256[:8]}--aaaaaaaa.json')
         )
         legacy = RunState.load_or_create(legacy_path, self.plan)
         for run in self.plan.runs:
@@ -700,9 +724,7 @@ class SessionTests(unittest.TestCase):
 
     def write_phone_calibration(self, document):
         (self.results / PHONE.key).mkdir(parents=True, exist_ok=True)
-        (self.results / PHONE.key / 'calibration.json').write_text(
-            json.dumps(document)
-        )
+        (self.results / PHONE.key / 'calibration.json').write_text(json.dumps(document))
 
     def test_from_calibration_without_phone_work_size_stops_before_install(self):
         self.use_holder_work_from_calibration()
@@ -724,8 +746,10 @@ class SessionTests(unittest.TestCase):
         )
         summary = self.run_session(['complete'])
         self.assertEqual(
-            [r['tunables']['priorityInversion']['holderWorkIterations']
-             for r in self.devices.requests],
+            [
+                r['tunables']['priorityInversion']['holderWorkIterations']
+                for r in self.devices.requests
+            ],
             [5_000_000],
         )
         self.assertEqual(
@@ -822,11 +846,14 @@ class SessionTests(unittest.TestCase):
             )
             self.assertEqual(calibration['coreMap']['performance'], [0, 1])
             self.assertEqual(calibration['phone']['cpuCount'], 6)
-            self.assertEqual(calibration['display'], {
-                'medianFrameTicks': 200_000,
-                'medianFrameMilliseconds': 8.33,
-                'framesMeasured': 200,
-            })
+            self.assertEqual(
+                calibration['display'],
+                {
+                    'medianFrameTicks': 200_000,
+                    'medianFrameMilliseconds': 8.33,
+                    'framesMeasured': 200,
+                },
+            )
             # Synthetic holderWork samples take 3 ticks on CPU 0; 5 ms is 120,000 ticks.
             self.assertEqual(
                 calibration['priorityInversion'],
@@ -894,21 +921,42 @@ class TraceRecorderTests(unittest.TestCase):
         )
         notification = self.spawn.call_args_list[0].args[0][2]
         self.assertRegex(notification, r'^dev\.syncbench\.trace\.[0-9a-f]{8}$')
-        self.assertEqual(self.effects.mock_calls[:3], [
-            call.spawn(['notifyutil', '-1', notification]),
-            call.spawn([
-                'xcrun', 'xctrace', 'record', '--template', 'System Trace',
-                '--device', 'FICTIONAL-DEVICE', '--all-processes',
-                '--time-limit', '360s', '--output', 'results/fixture/attempt.trace',
-                '--notify-tracing-started', notification, '--no-prompt',
-            ]),
-            call.listener.wait(timeout=60),
-        ])
+        self.assertEqual(
+            self.effects.mock_calls[:3],
+            [
+                call.spawn(['notifyutil', '-1', notification]),
+                call.spawn(
+                    [
+                        'xcrun',
+                        'xctrace',
+                        'record',
+                        '--template',
+                        'System Trace',
+                        '--device',
+                        'FICTIONAL-DEVICE',
+                        '--all-processes',
+                        '--time-limit',
+                        '360s',
+                        '--output',
+                        'results/fixture/attempt.trace',
+                        '--notify-tracing-started',
+                        notification,
+                        '--no-prompt',
+                    ]
+                ),
+                call.listener.wait(timeout=60),
+            ],
+        )
         self.recorder.stop()
-        self.assertEqual(self.effects.mock_calls[3:], [
-            call.process.poll(), call.process.send_signal(signal.SIGINT),
-            call.process.wait(timeout=300), call.listener.poll(),
-        ])
+        self.assertEqual(
+            self.effects.mock_calls[3:],
+            [
+                call.process.poll(),
+                call.process.send_signal(signal.SIGINT),
+                call.process.wait(timeout=300),
+                call.listener.poll(),
+            ],
+        )
 
     def test_stop_kills_and_reaps_recorder_only_after_grace_period_expires(self):
         self.process.wait.side_effect = [subprocess.TimeoutExpired('xctrace', 300), 0]
@@ -916,11 +964,17 @@ class TraceRecorderTests(unittest.TestCase):
         self.effects.reset_mock()
         with self.assertRaisesRegex(SessionError, 'finalization timed out'):
             self.recorder.stop()
-        self.assertEqual(self.effects.mock_calls, [
-            call.process.poll(), call.process.send_signal(signal.SIGINT),
-            call.process.wait(timeout=300), call.process.kill(),
-            call.process.wait(timeout=5), call.listener.poll(),
-        ])
+        self.assertEqual(
+            self.effects.mock_calls,
+            [
+                call.process.poll(),
+                call.process.send_signal(signal.SIGINT),
+                call.process.wait(timeout=300),
+                call.process.kill(),
+                call.process.wait(timeout=5),
+                call.listener.poll(),
+            ],
+        )
 
     def test_nonzero_recorder_finalization_is_failure(self):
         self.process.returncode = 1
@@ -932,7 +986,8 @@ class TraceRecorderTests(unittest.TestCase):
     def test_missing_start_notification_stops_both_processes_before_raising(self):
         self.listener.poll.return_value = None
         self.listener.wait.side_effect = [
-            subprocess.TimeoutExpired('notifyutil', 60), 0,
+            subprocess.TimeoutExpired('notifyutil', 60),
+            0,
         ]
         with self.assertRaisesRegex(
             SessionError, 'System Trace did not start within 60 seconds'
@@ -968,19 +1023,29 @@ class TraceRecorderTests(unittest.TestCase):
         self.process.wait.side_effect = [KeyboardInterrupt(), 0]
         self.listener.poll.return_value = None
         self.listener.wait.side_effect = [
-            0, subprocess.TimeoutExpired('notifyutil', 5), 0,
+            0,
+            subprocess.TimeoutExpired('notifyutil', 5),
+            0,
         ]
         self.recorder.start('FICTIONAL-DEVICE', Path('results/attempt.trace'), 360)
         self.effects.reset_mock()
         with self.assertRaises(KeyboardInterrupt):
             self.recorder.stop()
-        self.assertEqual(self.effects.mock_calls, [
-            call.process.poll(), call.process.send_signal(signal.SIGINT),
-            call.process.wait(timeout=300), call.process.kill(),
-            call.process.wait(timeout=5), call.listener.poll(),
-            call.listener.terminate(), call.listener.wait(timeout=5),
-            call.listener.kill(), call.listener.wait(timeout=5),
-        ])
+        self.assertEqual(
+            self.effects.mock_calls,
+            [
+                call.process.poll(),
+                call.process.send_signal(signal.SIGINT),
+                call.process.wait(timeout=300),
+                call.process.kill(),
+                call.process.wait(timeout=5),
+                call.listener.poll(),
+                call.listener.terminate(),
+                call.listener.wait(timeout=5),
+                call.listener.kill(),
+                call.listener.wait(timeout=5),
+            ],
+        )
         self.effects.reset_mock()
         self.recorder.stop()
         self.assertEqual(self.effects.mock_calls, [])
@@ -1001,6 +1066,11 @@ class TraceRecorderTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             self.recorder.stop()
         self.listener.kill.assert_called_once_with()
-        self.assertEqual(self.listener.wait.call_args_list, [
-            call(timeout=60), call(timeout=5), call(timeout=5),
-        ])
+        self.assertEqual(
+            self.listener.wait.call_args_list,
+            [
+                call(timeout=60),
+                call(timeout=5),
+                call(timeout=5),
+            ],
+        )

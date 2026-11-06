@@ -204,7 +204,6 @@ func batchEdgesAreReportedAroundEveryBatch() async {
     #expect(edges.map(\.edge) == [.start, .end, .start, .end, .start, .end])
 }
 
-
 @Test(arguments: [true, false])
 func requireUniqueSelectionRejectsEmptyAndUnknownValues(checkMechanisms: Bool) throws {
     var request = RunRequest.golden
@@ -268,10 +267,14 @@ func requireUniqueSelectionRejectsEmptyAndUnknownValues(checkMechanisms: Bool) t
                 let request = RunRequest.golden
                 let block = BlockContext(
                     position: 0,
-                    description: BlockDescription(mechanism: "test", operation: "sample", threads: 1,
-                                                  qos: .userInitiated, operationsPerBatch: 4),
-                    layout: BatchLayout(warmupBatches: 0, measuredBatches: 1,
-                                        operationsPerBatch: 4, subBatches: 1),
+                    description: BlockDescription(
+                        mechanism: "test", operation: "sample", threads: 1,
+                        qos: .userInitiated, operationsPerBatch: 4
+                    ),
+                    layout: BatchLayout(
+                        warmupBatches: 0, measuredBatches: 1,
+                        operationsPerBatch: 4, subBatches: 1
+                    ),
                     request: request,
                     lines: ResultLineBuffer()
                 )

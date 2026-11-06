@@ -11,7 +11,8 @@ struct RequestRegistry: Experiment {
     }
 
     func run(_ block: BlockContext) -> [CheckResult] {
-        let capacity = block.description.threads * block.request.tunables.requestRegistry!.inFlightPerThread
+        let capacity =
+            block.description.threads * block.request.tunables.requestRegistry!.inFlightPerThread
         switch block.description.mechanism {
         case "mutex":
             return measure(MutexRegistry(capacity: capacity), block)
@@ -48,11 +49,16 @@ struct RequestRegistry: Experiment {
         for operation in 0..<count {
             let ordinal = firstOperation + operation
             let pair = ordinal / 2
-            let index = ordinal.isMultiple(of: 2) ? pair % worker.downloads.count
-                : (pair % worker.downloads.count + tunables.inFlightPerThread) % worker.downloads.count
+            let index =
+                ordinal.isMultiple(of: 2)
+                ? pair % worker.downloads.count
+                : (pair % worker.downloads.count + tunables.inFlightPerThread)
+                    % worker.downloads.count
             let download = worker.downloads[index]
             let measured = measuredOperation.map { $0 + operation }
-            let sample = measured.map { $0 % tunables.sampleEvery == ($0 / tunables.sampleEvery) % 2 } ?? false
+            let sample =
+                measured.map { $0 % tunables.sampleEvery == ($0 / tunables.sampleEvery) % 2 }
+                ?? false
             let removing = ordinal.isMultiple(of: 2)
             let removed: Download?
             let start = sample ? Clock.now() : 0

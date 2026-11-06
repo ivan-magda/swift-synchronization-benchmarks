@@ -82,12 +82,16 @@ class AttemptCheckTests(unittest.TestCase):
             for metric in ("callStart", "callTime", "cancelAllStart", "cancelAllTime"):
                 with self.subTest(variant=variant, metric=metric):
                     broken = deepcopy(lines)
-                    sample = next(line for line in broken if line.get("metric") == metric)
+                    sample = next(
+                        line for line in broken if line.get("metric") == metric
+                    )
                     sample["values"].pop()
                     self.assert_invalid(broken, request)
             broken_request = deepcopy(request)
             broken_request["tunables"]["requestRegistry"]["workIterations"] = 0
-            self.assert_invalid(make_attempt_lines(broken_request, BUILD_ID), broken_request)
+            self.assert_invalid(
+                make_attempt_lines(broken_request, BUILD_ID), broken_request
+            )
 
     def test_golden_file_is_accepted(self):
         result, marker = write_attempt(self.path, GOLDEN_LINES)
@@ -126,7 +130,6 @@ class AttemptCheckTests(unittest.TestCase):
                 self.assertEqual(
                     check_attempt(result, marker, REQUEST, BUILD_ID).status, "invalid"
                 )
-
 
     def test_wrong_identity_or_incomplete_work_is_rejected(self):
         # Each mutation would otherwise allow incomparable or incomplete measurements.
@@ -172,7 +175,6 @@ class AttemptCheckTests(unittest.TestCase):
         blocks[1]["mechanism"] = "mutex"
         self.assert_invalid(lines, request)
 
-
     def test_check_failures_and_wrong_ownership_are_invalid(self):
         for replacement in (
             {"violations": 1},
@@ -200,7 +202,6 @@ class AttemptCheckTests(unittest.TestCase):
                     (status, False, reason),
                 )
 
-
     def test_bad_conditions_rejected_outside_smoke(self):
         request = deepcopy(REQUEST)
         request["smoke"] = False
@@ -224,7 +225,6 @@ class AttemptCheckTests(unittest.TestCase):
         lines[0]["phone"]["cacheLineBytes"] = -1
         lines[0]["phone"]["performanceLevels"][0]["l1DataCacheBytes"] = -1
         self.assertTrue(self.verdict(lines).accepted)
-
 
     def test_nonobject_and_broken_json_lines_are_invalid(self):
         for value in (None, [], 1, "run"):
@@ -286,7 +286,6 @@ class AttemptCheckTests(unittest.TestCase):
                 lines = deepcopy(GOLDEN_LINES)
                 lines[index].update(replacement)
                 self.assert_invalid(lines)
-
 
     def test_calibration_counts(self):
         request = deepcopy(REQUEST)
@@ -392,9 +391,7 @@ class AttemptCheckTests(unittest.TestCase):
 
     def test_caller_paths_acceptance_request_is_accepted_with_fourteen_blocks(self):
         request = self.caller_paths()
-        self.assertEqual(
-            len(request["mechanisms"]) * len(request["operations"]), 25
-        )
+        self.assertEqual(len(request["mechanisms"]) * len(request["operations"]), 25)
         lines = self.accepted_lines(request)
         self.assertEqual(sum(line["type"] == "block" for line in lines), 14)
         many_tasks = [
@@ -450,9 +447,9 @@ class AttemptCheckTests(unittest.TestCase):
             copy.insert(copy.index(block) + 1, extra)
 
         def add_thread_to_main_thread_line(copy):
-            copy[
-                self.first_sample(copy, "mainThreadCPUAtBatchStart", "toMainActor")
-            ]["thread"] = 0
+            copy[self.first_sample(copy, "mainThreadCPUAtBatchStart", "toMainActor")][
+                "thread"
+            ] = 0
 
         for name, mutate in {
             "49 tasks": drop_call_time_line,
@@ -488,10 +485,20 @@ class AttemptCheckTests(unittest.TestCase):
         self.assertTrue(self.verdict(lines, request).accepted)
 
         request["mechanisms"] = [
-            "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
-            "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
-            "pthreadReadWriteLock", "serialQueue", "barrierQueueSyncWrite",
-            "barrierQueueAsyncWrite", "dispatchSemaphore", "actor", "objcSync",
+            "mutex",
+            "osAllocatedUnfairLock",
+            "osAllocatedUnfairLockAdaptiveSpin",
+            "osUnfairLock",
+            "nsLock",
+            "nsRecursiveLock",
+            "pthreadMutex",
+            "pthreadReadWriteLock",
+            "serialQueue",
+            "barrierQueueSyncWrite",
+            "barrierQueueAsyncWrite",
+            "dispatchSemaphore",
+            "actor",
+            "objcSync",
         ]
         self.accepted_lines(request)
 
@@ -528,27 +535,27 @@ class AttemptCheckTests(unittest.TestCase):
         lines = make_attempt_lines(request, BUILD_ID)
         mutations = {
             "unknown mechanism": (
-                "mechanisms", lambda copy: copy.update(mechanisms=["unknown"])
+                "mechanisms",
+                lambda copy: copy.update(mechanisms=["unknown"]),
             ),
-            "empty mechanisms": (
-                "mechanisms", lambda copy: copy.update(mechanisms=[])
-            ),
+            "empty mechanisms": ("mechanisms", lambda copy: copy.update(mechanisms=[])),
             "duplicate mechanisms": (
-                "mechanisms", lambda copy: copy.update(mechanisms=["nsLock", "nsLock"])
+                "mechanisms",
+                lambda copy: copy.update(mechanisms=["nsLock", "nsLock"]),
             ),
             "unknown operation": (
-                "operations", lambda copy: copy.update(operations=["unknown"])
+                "operations",
+                lambda copy: copy.update(operations=["unknown"]),
             ),
-            "empty operations": (
-                "operations", lambda copy: copy.update(operations=[])
-            ),
+            "empty operations": ("operations", lambda copy: copy.update(operations=[])),
             "duplicate operations": (
                 "operations",
                 lambda copy: copy.update(operations=["utilityHolder", "utilityHolder"]),
             ),
             "variant": ("variant", lambda copy: copy.update(variant="unknown")),
             "threads": (
-                "tunables.threads", lambda copy: copy["tunables"].update(threads=2)
+                "tunables.threads",
+                lambda copy: copy["tunables"].update(threads=2),
             ),
             "missing tunables": (
                 "tunables.priorityInversion",
@@ -600,9 +607,7 @@ class TrialLineTests(unittest.TestCase):
 
     def verdict(self, lines):
         result, done = write_attempt(self.path, lines)
-        with mock.patch(
-            "runner.attempt_check.expected_attempt", self.expecting_trials
-        ):
+        with mock.patch("runner.attempt_check.expected_attempt", self.expecting_trials):
             return check_attempt(result, done, self.request, BUILD_ID)
 
     def trial_indexes(self, lines):

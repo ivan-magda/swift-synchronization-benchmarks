@@ -25,8 +25,10 @@ import UIKit
     private var loop: DisplayLinkLoop?
     private var maximumFramesPerSecond = 60
 
-    init(images: CacheImages, tunables: MainThreadCacheTunables, readCapacity: Int,
-         read: @escaping @MainActor (String) -> CachedImage?) {
+    init(
+        images: CacheImages, tunables: MainThreadCacheTunables, readCapacity: Int,
+        read: @escaping @MainActor (String) -> CachedImage?
+    ) {
         self.images = images
         self.tunables = tunables
         self.readCapacity = readCapacity
@@ -69,8 +71,10 @@ import UIKit
             recordingReads = frame >= tunables.warmupFrames
             if recordingReads {
                 frameStarts.record(call: frames, ticks: Clock.now())
-                frameIntervals.record(call: frames,
-                    ticks: UInt64(max(0, (link.targetTimestamp - link.timestamp) * 1_000_000_000)))
+                frameIntervals.record(
+                    call: frames,
+                    ticks: UInt64(max(0, (link.targetTimestamp - link.timestamp) * 1_000_000_000))
+                )
                 frames += 1
             }
             let distance = CGFloat(tunables.scrollPointsPerSecond) / CGFloat(maximumFramesPerSecond)
@@ -95,9 +99,11 @@ import UIKit
     }
 
     var samples: [(String, String, [UInt64])] {
-        [("readTime", "ticks", Array(readTimes.values.prefix(min(reads, readCapacity)))),
-         ("frameStart", "ticks", frameStarts.values),
-         ("frameInterval", "nanoseconds", frameIntervals.values)]
+        [
+            ("readTime", "ticks", Array(readTimes.values.prefix(min(reads, readCapacity)))),
+            ("frameStart", "ticks", frameStarts.values),
+            ("frameInterval", "nanoseconds", frameIntervals.values),
+        ]
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {

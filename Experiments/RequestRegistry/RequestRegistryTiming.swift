@@ -12,7 +12,9 @@ final class RegistryWorker: @unchecked Sendable {
 
     init(thread: Int, tunables: RequestRegistryTunables, layout: BatchLayout) {
         downloads = (0...tunables.inFlightPerThread).map {
-            Download(id: thread * (tunables.inFlightPerThread + 1) + $0, workIterations: tunables.workIterations)
+            Download(
+                id: thread * (tunables.inFlightPerThread + 1) + $0,
+                workIterations: tunables.workIterations)
         }
         let operations = layout.measuredBatches * layout.operationsPerBatch
         callStart = CallTimes(calls: operations / tunables.sampleEvery)
@@ -39,10 +41,15 @@ extension RequestRegistry {
                 recordExecutorCPU: { _ in }, waitForPendingWrites: {},
                 runOperations: { batch, subBatch, count in
                     let firstOperation = batch * block.layout.operationsPerBatch + subBatch * count
-                    let measuredOperation = batch >= block.layout.warmupBatches
-                        ? firstOperation - block.layout.warmupBatches * block.layout.operationsPerBatch : nil
-                    return Self.operationLoop(registry, worker: worker, tunables: tunables,
-                        firstOperation: firstOperation, count: count, measuredOperation: measuredOperation, cancelAll: thread == 0)
+                    let measuredOperation =
+                        batch >= block.layout.warmupBatches
+                        ? firstOperation - block.layout.warmupBatches
+                            * block.layout.operationsPerBatch : nil
+                    return Self.operationLoop(
+                        registry, worker: worker, tunables: tunables,
+                        firstOperation: firstOperation, count: count,
+                        measuredOperation: measuredOperation,
+                        cancelAll: thread == 0)
                 }
             )
             barrier.arriveAndWait()
@@ -53,14 +60,24 @@ extension RequestRegistry {
             }
         }
         for (thread, worker) in workers.enumerated() {
-            for (metric, times) in [("callStart", worker.callStart), ("callTime", worker.callTime)] {
-                block.appendSamples(SamplesLine(block: block.position, thread: thread,
-                    metric: metric, unit: "ticks", values: times.values, cpuAtStart: nil, cpuAtEnd: nil))
+            for (metric, times) in [("callStart", worker.callStart), ("callTime", worker.callTime)]
+            {
+                block.appendSamples(
+                    SamplesLine(
+                        block: block.position, thread: thread,
+                        metric: metric, unit: "ticks", values: times.values, cpuAtStart: nil,
+                        cpuAtEnd: nil))
             }
         }
-        for (metric, times) in [("cancelAllStart", workers[0].cancelAllStart), ("cancelAllTime", workers[0].cancelAllTime)] {
-            block.appendSamples(SamplesLine(block: block.position, thread: nil,
-                metric: metric, unit: "ticks", values: times.values, cpuAtStart: nil, cpuAtEnd: nil))
+        for (metric, times) in [
+            ("cancelAllStart", workers[0].cancelAllStart),
+            ("cancelAllTime", workers[0].cancelAllTime),
+        ] {
+            block.appendSamples(
+                SamplesLine(
+                    block: block.position, thread: nil,
+                    metric: metric, unit: "ticks", values: times.values, cpuAtStart: nil,
+                    cpuAtEnd: nil))
         }
         return [RequestRegistryChecks.check(registry, workers: workers, logs: logs, block: block)]
     }

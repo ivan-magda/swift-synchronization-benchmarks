@@ -26,22 +26,25 @@ enum HotFlagRequest {
             let layout = try request.validatedLayout(operationsPerBatch: count, threads: 1)
             if request.operations.contains("readGroups") {
                 guard layout.operationsPerSubBatch.isMultiple(of: HotFlag.groupSize) else {
-                    throw RequestError(message: "operationsPerBatch[\(mechanism)] must hold whole 100-read groups per sub-batch")
+                    throw RequestError(
+                        message: "operationsPerBatch[\(mechanism)] must hold whole 100-read groups per sub-batch")
                 }
-                let (samples, countOverflow) = layout.measuredBatches.multipliedReportingOverflow(by: count / HotFlag.groupSize)
+                let (samples, countOverflow) = layout.measuredBatches.multipliedReportingOverflow(
+                    by: count / HotFlag.groupSize)
                 let (_, byteOverflow) = samples.multipliedReportingOverflow(by: MemoryLayout<UInt64>.stride)
                 guard !countOverflow, !byteOverflow else {
                     throw RequestError(message: "operationsPerBatch[\(mechanism)] group sample storage overflow")
                 }
             }
             for operation in request.operations {
-                blocks.append(BlockDescription(
-                    mechanism: mechanism,
-                    operation: operation,
-                    threads: 1,
-                    qos: request.tunables.qos,
-                    operationsPerBatch: count
-                ))
+                blocks.append(
+                    BlockDescription(
+                        mechanism: mechanism,
+                        operation: operation,
+                        threads: 1,
+                        qos: request.tunables.qos,
+                        operationsPerBatch: count
+                    ))
             }
         }
         return blocks

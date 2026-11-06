@@ -21,7 +21,8 @@ enum TransactionalStoreChecks {
         let validSums = logs.allSatisfy { log in
             (0..<block.layout.totalBatches).allSatisfy { (0...maximumSum).contains(log.checkValue(ofBatch: $0)) }
         }
-        return CheckResult(name: "transactionalStore.\(block.description.operation)", block: block.position,
+        return CheckResult(
+            name: "transactionalStore.\(block.description.operation)", block: block.position,
             passed: violations == 0 && validGroups && validSums,
             detail: "violations \(violations); groups \(expectedVersions.count) with expected versions",
             violations: violations)

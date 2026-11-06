@@ -16,7 +16,13 @@ GOLDEN = (
 
 
 MAIN_THREAD_CPU_OPERATIONS = ("fromMainActor", "toMainActor", "callFromMainActor")
-CALLER_PATHS_MECHANISMS = ["actor", "mutex", "osAllocatedUnfairLock", "nsLock", "mainActor"]
+CALLER_PATHS_MECHANISMS = [
+    "actor",
+    "mutex",
+    "osAllocatedUnfairLock",
+    "nsLock",
+    "mainActor",
+]
 CALLER_PATHS_OPERATIONS = [
     "onActor",
     "fromBackgroundTask",
@@ -54,11 +60,23 @@ def hot_flag_request():
         experiment="hotFlag",
         variant="default",
         mechanisms=[
-            "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
-            "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
-            "pthreadReadWriteLock", "serialQueue", "barrierQueueSyncWrite",
-            "barrierQueueAsyncWrite", "dispatchSemaphore", "objcSync", "atomic",
-            "managedAtomic", "atomicRelaxed", "managedAtomicRelaxed",
+            "mutex",
+            "osAllocatedUnfairLock",
+            "osAllocatedUnfairLockAdaptiveSpin",
+            "osUnfairLock",
+            "nsLock",
+            "nsRecursiveLock",
+            "pthreadMutex",
+            "pthreadReadWriteLock",
+            "serialQueue",
+            "barrierQueueSyncWrite",
+            "barrierQueueAsyncWrite",
+            "dispatchSemaphore",
+            "objcSync",
+            "atomic",
+            "managedAtomic",
+            "atomicRelaxed",
+            "managedAtomicRelaxed",
         ],
         operations=["read", "readGroups"],
     )
@@ -69,9 +87,13 @@ def hot_flag_request():
 def transactional_store_request():
     """Thirteen stores, both transaction sizes, six workers, 5,000 transactions."""
     request = hot_flag_request()
-    request.update(experiment="transactionalStore", operations=["singleRecord", "twentyRecords"])
+    request.update(
+        experiment="transactionalStore", operations=["singleRecord", "twentyRecords"]
+    )
     request["mechanisms"] = request["mechanisms"][:13]
-    request["tunables"].update(threads=6, subBatches=8, operationsPerBatch={"default": 5000})
+    request["tunables"].update(
+        threads=6, subBatches=8, operationsPerBatch={"default": 5000}
+    )
     return request
 
 
@@ -79,18 +101,29 @@ def request_registry_request(variant="burst"):
     """Ten registries, four workers and two measured batches of 1,024 calls."""
     request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
     request.update(
-        experiment="requestRegistry", variant=variant,
+        experiment="requestRegistry",
+        variant=variant,
         mechanisms=[
-            "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
-            "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
-            "serialQueue", "dispatchSemaphore", "objcSync",
-        ], operations=["addAndRemove"],
+            "mutex",
+            "osAllocatedUnfairLock",
+            "osAllocatedUnfairLockAdaptiveSpin",
+            "osUnfairLock",
+            "nsLock",
+            "nsRecursiveLock",
+            "pthreadMutex",
+            "serialQueue",
+            "dispatchSemaphore",
+            "objcSync",
+        ],
+        operations=["addAndRemove"],
     )
     request["tunables"].update(threads=4, operationsPerBatch={"default": 1024})
     request["tunables"]["requestRegistry"] = dict(
-        inFlightPerThread=16, workIterations=10,
+        inFlightPerThread=16,
+        workIterations=10,
         pauseMicroseconds=1 if variant == "normal" else 0,
-        cancelAllEvery=256, sampleEvery=64,
+        cancelAllEvery=256,
+        sampleEvery=64,
     )
     return request
 
@@ -214,7 +247,9 @@ def make_attempt_lines(
                 mechanism,
                 operation,
                 1,
-                {"utilityHolder": "utility", "backgroundHolder": "background"}[operation],
+                {"utilityHolder": "utility", "backgroundHolder": "background"}[
+                    operation
+                ],
                 None,
             )
             for mechanism in request["mechanisms"]
@@ -256,8 +291,12 @@ def make_attempt_lines(
                     )
                     # Give every trial a distinct, ordered interval inside the block.
                     for field in (
-                        "loadStart", "loadStop", "holderAcquire", "holderRelease",
-                        "mainArrival", "mainAcquire",
+                        "loadStart",
+                        "loadStop",
+                        "holderAcquire",
+                        "holderRelease",
+                        "mainArrival",
+                        "mainAcquire",
                     ):
                         trial[field] += number * 10
                     lines.append(trial)
@@ -296,7 +335,9 @@ def make_attempt_lines(
             else:
                 # Only actor and main-actor rows read the executor's CPU, except onActor.
                 reads_executor = (
-                    async_code and mechanism in ("actor", "mainActor") and operation != "onActor"
+                    async_code
+                    and mechanism in ("actor", "mainActor")
+                    and operation != "onActor"
                 )
                 for batch in range(
                     tunables["warmupBatches"] + tunables["measuredBatches"]
@@ -329,44 +370,84 @@ def make_attempt_lines(
                         block=position,
                         metric=metric,
                         unit="microseconds",
-                        values=[500] * (tunables["warmupBatches"] + tunables["measuredBatches"]),
+                        values=[500]
+                        * (tunables["warmupBatches"] + tunables["measuredBatches"]),
                     )
                 )
         if hot_flag and operation == "readGroups":
-            lines.append(dict(
-                type="samples", block=position, thread=0,
-                metric="readGroupTime", unit="ticks",
-                values=[3] * (tunables["measuredBatches"] * (operations // 100)),
-            ))
+            lines.append(
+                dict(
+                    type="samples",
+                    block=position,
+                    thread=0,
+                    metric="readGroupTime",
+                    unit="ticks",
+                    values=[3] * (tunables["measuredBatches"] * (operations // 100)),
+                )
+            )
         if main_thread_cache:
-            for metric, unit, count in (("readTime", "ticks", 17),
-                                        ("frameStart", "ticks", tunables["mainThreadCache"]["frames"]),
-                                        ("frameInterval", "nanoseconds", tunables["mainThreadCache"]["frames"])):
-                lines.append(dict(type="samples", block=position, metric=metric, unit=unit, values=[3] * count))
+            for metric, unit, count in (
+                ("readTime", "ticks", 17),
+                ("frameStart", "ticks", tunables["mainThreadCache"]["frames"]),
+                ("frameInterval", "nanoseconds", tunables["mainThreadCache"]["frames"]),
+            ):
+                lines.append(
+                    dict(
+                        type="samples",
+                        block=position,
+                        metric=metric,
+                        unit=unit,
+                        values=[3] * count,
+                    )
+                )
         if creation_cost and operation == "create":
             for kind, unit in (("Blocks", "blocks"), ("Bytes", "bytes")):
                 for edge in ("BeforeCreate", "AfterCreate", "AfterDestroy"):
-                    lines.append(dict(type="samples", block=position,
-                                      metric="malloc" + kind + edge, unit=unit,
-                                      values=[3] * (tunables["warmupBatches"] + tunables["measuredBatches"])))
+                    lines.append(
+                        dict(
+                            type="samples",
+                            block=position,
+                            metric="malloc" + kind + edge,
+                            unit=unit,
+                            values=[3]
+                            * (tunables["warmupBatches"] + tunables["measuredBatches"]),
+                        )
+                    )
         if transactional_store:
             writes = operations // 50
-            read_metric = "hundredReadsTime" if operation == "singleRecord" else "readTime"
+            read_metric = (
+                "hundredReadsTime" if operation == "singleRecord" else "readTime"
+            )
             reads = (operations - writes) // (100 if operation == "singleRecord" else 1)
             for metric, count in ((read_metric, reads), ("writeTime", writes)):
                 for thread in range(threads):
-                    lines.append(dict(type="samples", block=position, thread=thread,
-                                      metric=metric, unit="ticks",
-                                      values=[3] * (tunables["measuredBatches"] * count)))
+                    lines.append(
+                        dict(
+                            type="samples",
+                            block=position,
+                            thread=thread,
+                            metric=metric,
+                            unit="ticks",
+                            values=[3] * (tunables["measuredBatches"] * count),
+                        )
+                    )
         if request_registry:
             registry = tunables["requestRegistry"]
             for metric, per_thread, field in (
-                ("callStart", True, "sampleEvery"), ("callTime", True, "sampleEvery"),
-                ("cancelAllStart", False, "cancelAllEvery"), ("cancelAllTime", False, "cancelAllEvery"),
+                ("callStart", True, "sampleEvery"),
+                ("callTime", True, "sampleEvery"),
+                ("cancelAllStart", False, "cancelAllEvery"),
+                ("cancelAllTime", False, "cancelAllEvery"),
             ):
                 for thread in range(threads if per_thread else 1):
-                    sample = dict(type="samples", block=position, metric=metric, unit="ticks",
-                                  values=[3] * (tunables["measuredBatches"] * operations // registry[field]))
+                    sample = dict(
+                        type="samples",
+                        block=position,
+                        metric=metric,
+                        unit="ticks",
+                        values=[3]
+                        * (tunables["measuredBatches"] * operations // registry[field]),
+                    )
                     if per_thread:
                         sample["thread"] = thread
                     lines.append(sample)

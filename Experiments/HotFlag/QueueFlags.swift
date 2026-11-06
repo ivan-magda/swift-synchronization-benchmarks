@@ -1,6 +1,5 @@
 import Dispatch
 
-
 /// Hot-flag state: every access runs on the serial queue.
 /// Keep operations direct so generic inout callbacks cannot add exclusivity checks.
 final class SerialQueueFlag: SharedFlag, @unchecked Sendable {
@@ -25,7 +24,6 @@ final class SerialQueueFlag: SharedFlag, @unchecked Sendable {
 
 }
 
-
 /// Hot-flag state: reads share the queue; synchronous barriers protect mutations.
 /// This concrete Bool storage is never exposed through a generic state callback.
 final class BarrierQueueSyncWriteFlag: SharedFlag, @unchecked Sendable {
@@ -49,7 +47,6 @@ final class BarrierQueueSyncWriteFlag: SharedFlag, @unchecked Sendable {
     }
 
 }
-
 
 /// Hot-flag state: reads share the queue; asynchronous barriers protect mutations.
 /// Submitted closures retain their owner. Callers drain queued work before observing completion.

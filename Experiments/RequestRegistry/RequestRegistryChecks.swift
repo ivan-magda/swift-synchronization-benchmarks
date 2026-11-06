@@ -11,9 +11,13 @@ enum RequestRegistryChecks {
             total + worker.downloads.reduce(0) { $0 + $1.cancelCount.load(ordering: .relaxed) }
         }
         let tunables = block.request.tunables.requestRegistry!
-        let expectedAdded = block.description.threads
-            * (tunables.inFlightPerThread + block.layout.totalBatches * block.layout.operationsPerBatch / 2)
-        let work = Int(truncatingIfNeeded: referenceLoop(iterations: tunables.workIterations))
+        let expectedAdded =
+            block.description.threads
+            * (tunables.inFlightPerThread + block.layout.totalBatches
+                * block.layout.operationsPerBatch
+                / 2)
+        let work =
+            Int(truncatingIfNeeded: referenceLoop(iterations: tunables.workIterations))
             &* block.layout.operationsPerBatch
         let validWork = logs.allSatisfy { log in
             (0..<block.layout.totalBatches).allSatisfy { log.checkValue(ofBatch: $0) == work }

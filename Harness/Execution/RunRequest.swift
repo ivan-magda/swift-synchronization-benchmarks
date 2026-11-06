@@ -214,7 +214,9 @@ struct RunRequest: Codable, Equatable, Sendable {
                 priorityInversion.trials
             )
             guard !overflow else {
-                throw RequestError(message: "priorityInversion.warmupTrials + priorityInversion.trials overflows")
+                throw RequestError(
+                    message: "priorityInversion.warmupTrials + priorityInversion.trials overflows"
+                )
             }
         }
 

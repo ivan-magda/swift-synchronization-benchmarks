@@ -37,12 +37,18 @@ import Testing
     // A probabilistic write decision or splitting read runs changes exact counts.
     @Test(arguments: [1, 100])
     func operationListHasTwoPercentWrites(readsPerRun: Int) {
-        let list = OperationList.make(seed: 7, thread: 2, batches: 2,
-            transactionsPerBatch: 5_000, readsPerRun: readsPerRun, groups: 500)
-        #expect(list == OperationList.make(seed: 7, thread: 2, batches: 2,
-            transactionsPerBatch: 5_000, readsPerRun: readsPerRun, groups: 500))
-        #expect(list != OperationList.make(seed: 8, thread: 2, batches: 2,
-            transactionsPerBatch: 5_000, readsPerRun: readsPerRun, groups: 500))
+        let list = OperationList.make(
+            seed: 7, thread: 2, batches: 2,
+            transactionsPerBatch: 5_000, readsPerRun: readsPerRun, groups: 500
+        )
+        #expect(list == OperationList.make(
+            seed: 7, thread: 2, batches: 2,
+            transactionsPerBatch: 5_000, readsPerRun: readsPerRun, groups: 500
+        ))
+        #expect(list != OperationList.make(
+            seed: 8, thread: 2, batches: 2,
+            transactionsPerBatch: 5_000, readsPerRun: readsPerRun, groups: 500
+        ))
         for batch in 0..<2 {
             let runs = list.runs[(batch * list.runsPerBatch)..<((batch + 1) * list.runsPerBatch)]
             #expect(runs.reduce(0) { $0 + $1.reads.count } == 4_900)
@@ -62,9 +68,11 @@ import Testing
         let checks = await onBenchmarkThread {
             let experiment = try! TransactionalStore(request: configured)
             let description = experiment.blocks[0]
-            let block = BlockContext(position: 0, description: description,
+            let block = BlockContext(
+                position: 0, description: description,
                 layout: try! configured.validatedLayout(operationsPerBatch: 5_000, threads: 6),
-                request: configured, lines: ResultLineBuffer())
+                request: configured, lines: ResultLineBuffer()
+            )
             return experiment.measure(HalfWrittenStore(), block)
         }
         let check = try #require(checks.first)

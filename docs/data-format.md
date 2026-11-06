@@ -39,17 +39,15 @@ Refusal reason codes are `thermal`, `lowPower`, `battery`, `debugger`, `applicat
 Calibration writes six blocks with operation `""`: `clockSingleThread` (one thread),
 `clockAllCPUs`, `cpuSpeedUserInteractive`, and `cpuSpeedBackground` (each using
 `phone.cpuCount` threads), `holderWorkSingleThread` and `displayFrames` (one thread
-each). Every block
-uses QoS `userInteractive` except `cpuSpeedBackground` (`background`). Clock blocks
+each). Every block uses QoS `userInteractive` except `cpuSpeedBackground` (`background`). Clock blocks
 use metric `clockRead1000`; CPU-speed blocks use `referenceLoop`;
 `holderWorkSingleThread` uses `holderWork`; `displayFrames` uses `displayFrame`.
-Each block writes one `samples` line
-per thread, with unit `ticks` and exactly `tunables.repeats` values, so an attempt
+Each block writes one `samples` line per thread, with unit `ticks` and exactly
+`tunables.repeats` values, so an attempt
 has `3 + 3 × cpuCount` samples lines. `referenceLoop` and `holderWork` samples time
 `referenceLoop(iterations: tunables.referenceLoopIterations)` and carry
 `cpuAtStart` and `cpuAtEnd`; clock and display samples carry neither. The core map
-pools every
-`referenceLoop` line, so the holder work keeps its own metric. Calibration writes no
+pools every `referenceLoop` line, so the holder work keeps its own metric. Calibration writes no
 batch lines. Each block owns exactly one `calibration.samples` correctness check
 with its block position; there is no separate run-level calibration check.
 
@@ -65,8 +63,8 @@ attempt: `attemptID`, `phone` (the run line's phone facts), `coreMap`
 `medianFrameMilliseconds` (ticks converted using the phone timebase, rounded to two
 places) and `framesMeasured` (the callback count). Derivation requires at least two
 callbacks, positive gaps and a positive timebase. Existing `calibration.json` files
-without `display` still resolve holder work. The holder work calculation keeps the `holderWork` samples whose
-`cpuAtStart` equals `cpuAtEnd` and is a performance CPU of the core map (at least
+without `display` still resolve holder work. The holder work calculation keeps the
+`holderWork` samples whose `cpuAtStart` equals `cpuAtEnd` and is a performance CPU of the core map (at least
 half of all samples, or calibration fails), and takes `int(median(usableTicks))`.
 It computes the 5 ms target as
 `targetTicks = 5_000_000 × timebaseDenominator // timebaseNumerator`, then sets
@@ -174,6 +172,7 @@ for `batching`, when an `operationsPerBatch` value is not a multiple of `subBatc
 Every block uses QoS `tunables.qos` and `operationsPerBatch` for its mechanism.
 
 `callerPaths` blocks:
+
 - `onActor`, `fromBackgroundTask`, `fromMainActor`, `toMainActor`: one task (`threads` 1)
   and the usual `batch` lines. The `actor` and `mainActor` rows carry
   `executorCPUReadings`, except `onActor`, whose loop already runs on the actor.

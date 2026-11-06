@@ -90,40 +90,67 @@ _MAIN_THREAD_CPU_OPERATIONS = ("fromMainActor", "toMainActor", "callFromMainActo
 
 # Experiment 8B: ContendedLocks.mechanisms is defined in
 # Experiments/PriorityInversion/PriorityInversion.swift, beside the trial steps.
-PRIORITY_INVERSION_MECHANISMS = frozenset({
-    "mutex",
-    "osAllocatedUnfairLock",
-    "osAllocatedUnfairLockAdaptiveSpin",
-    "osUnfairLock",
-    "nsLock",
-    "nsRecursiveLock",
-    "pthreadMutex",
-    "pthreadReadWriteLock",
-    "serialQueue",
-    "barrierQueueSyncWrite",
-    "barrierQueueAsyncWrite",
-    "dispatchSemaphore",
-    "actor",
-    "objcSync",
-})
+PRIORITY_INVERSION_MECHANISMS = frozenset(
+    {
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "actor",
+        "objcSync",
+    }
+)
 
-HOT_FLAG_MECHANISMS = frozenset({
-    "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
-    "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
-    "pthreadReadWriteLock", "serialQueue", "barrierQueueSyncWrite",
-    "barrierQueueAsyncWrite", "dispatchSemaphore", "objcSync", "atomic",
-    "managedAtomic", "atomicRelaxed", "managedAtomicRelaxed",
-})
+HOT_FLAG_MECHANISMS = frozenset(
+    {
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "atomic",
+        "managedAtomic",
+        "atomicRelaxed",
+        "managedAtomicRelaxed",
+    }
+)
 
 
-REQUEST_REGISTRY_MECHANISMS = frozenset({
-    "mutex", "osAllocatedUnfairLock", "osAllocatedUnfairLockAdaptiveSpin",
-    "osUnfairLock", "nsLock", "nsRecursiveLock", "pthreadMutex",
-    "serialQueue", "dispatchSemaphore", "objcSync",
-})
+REQUEST_REGISTRY_MECHANISMS = frozenset(
+    {
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "serialQueue",
+        "dispatchSemaphore",
+        "objcSync",
+    }
+)
 
 
-def _request_registry_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+def _request_registry_blocks(
+    request: Dict[str, Any],
+) -> Dict[Tuple[str, str], ExpectedBlock]:
     tunables = request["tunables"]
     registry = tunables.get("requestRegistry")
     if registry is None:
@@ -131,42 +158,68 @@ def _request_registry_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], E
     if request["variant"] not in ("normal", "burst"):
         raise ValueError("request.variant must be normal or burst for requestRegistry")
     pause = registry["pauseMicroseconds"]
-    if (request["variant"] == "normal" and pause < 1
-            or request["variant"] == "burst" and pause != 0):
+    if (
+        request["variant"] == "normal"
+        and pause < 1
+        or request["variant"] == "burst"
+        and pause != 0
+    ):
         raise ValueError("requestRegistry.pauseMicroseconds must match variant")
     if tunables["threads"] not in (4, 8):
         raise ValueError("request.tunables.threads must be 4 or 8 for requestRegistry")
-    for field, allowed in (("mechanisms", REQUEST_REGISTRY_MECHANISMS),
-                           ("operations", {"addAndRemove"})):
+    for field, allowed in (
+        ("mechanisms", REQUEST_REGISTRY_MECHANISMS),
+        ("operations", {"addAndRemove"}),
+    ):
         values = request[field]
         if not values or len(set(values)) != len(values) or not set(values) <= allowed:
-            raise ValueError("request." + field + " must be nonempty, unique requestRegistry entries")
+            raise ValueError(
+                "request." + field + " must be nonempty, unique requestRegistry entries"
+            )
     blocks = {}
     for mechanism in request["mechanisms"]:
         counts = tunables["operationsPerBatch"]
         count = counts.get(mechanism, counts["default"])
         sub_count = count // tunables["subBatches"]
         if sub_count % 2:
-            raise ValueError("request.tunables.operationsPerBatch must be even per sub-batch")
+            raise ValueError(
+                "request.tunables.operationsPerBatch must be even per sub-batch"
+            )
         for field in ("sampleEvery", "cancelAllEvery"):
             if registry[field] < 1 or sub_count % registry[field]:
-                raise ValueError("requestRegistry." + field + " must divide operations per sub-batch")
+                raise ValueError(
+                    "requestRegistry." + field + " must divide operations per sub-batch"
+                )
         if registry["sampleEvery"] % 2:
             raise ValueError("requestRegistry.sampleEvery must be even")
         measured = tunables["measuredBatches"] * count
         threads = tunables["threads"]
         samples = tuple(
-            ExpectedSamples(metric, "ticks", per_thread, threads if per_thread else 1,
-                            measured // registry[field], False)
+            ExpectedSamples(
+                metric,
+                "ticks",
+                per_thread,
+                threads if per_thread else 1,
+                measured // registry[field],
+                False,
+            )
             for metric, per_thread, field in (
-                ("callStart", True, "sampleEvery"), ("callTime", True, "sampleEvery"),
-                ("cancelAllStart", False, "cancelAllEvery"), ("cancelAllTime", False, "cancelAllEvery"),
+                ("callStart", True, "sampleEvery"),
+                ("callTime", True, "sampleEvery"),
+                ("cancelAllStart", False, "cancelAllEvery"),
+                ("cancelAllTime", False, "cancelAllEvery"),
             )
         )
         blocks[(mechanism, "addAndRemove")] = ExpectedBlock(
-            mechanism, "addAndRemove", threads, tunables["qos"], count,
+            mechanism,
+            "addAndRemove",
+            threads,
+            tunables["qos"],
+            count,
             threads * (tunables["warmupBatches"] + tunables["measuredBatches"]),
-            samples, 0, "requestRegistry.addAndRemove",
+            samples,
+            0,
+            "requestRegistry.addAndRemove",
         )
     return blocks
 
@@ -184,7 +237,9 @@ def _hot_flag_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedB
     ):
         values = request[field]
         if not values or len(set(values)) != len(values) or not set(values) <= allowed:
-            raise ValueError("request." + field + " must be nonempty, unique hotFlag entries")
+            raise ValueError(
+                "request." + field + " must be nonempty, unique hotFlag entries"
+            )
     blocks = {}
     for mechanism in request["mechanisms"]:
         counts = tunables["operationsPerBatch"]
@@ -193,113 +248,205 @@ def _hot_flag_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedB
             count % tunables["subBatches"] != 0
             or (count // tunables["subBatches"]) % 100 != 0
         ):
-            raise ValueError("request.tunables.operationsPerBatch must hold whole 100-read groups")
+            raise ValueError(
+                "request.tunables.operationsPerBatch must hold whole 100-read groups"
+            )
         for operation in request["operations"]:
             samples = ()
             if operation == "readGroups":
-                samples = (ExpectedSamples(
-                    "readGroupTime", "ticks", True, 1,
-                    tunables["measuredBatches"] * (count // 100), False,
-                ),)
+                samples = (
+                    ExpectedSamples(
+                        "readGroupTime",
+                        "ticks",
+                        True,
+                        1,
+                        tunables["measuredBatches"] * (count // 100),
+                        False,
+                    ),
+                )
             blocks[(mechanism, operation)] = ExpectedBlock(
-                mechanism, operation, 1, tunables["qos"], count,
+                mechanism,
+                operation,
+                1,
+                tunables["qos"],
+                count,
                 tunables["warmupBatches"] + tunables["measuredBatches"],
-                samples, 0, "hotFlag." + operation,
+                samples,
+                0,
+                "hotFlag." + operation,
             )
     return blocks
 
 
 TRANSACTIONAL_STORE_MECHANISMS = HOT_FLAG_MECHANISMS - {
-    "atomic", "atomicRelaxed", "managedAtomic", "managedAtomicRelaxed",
+    "atomic",
+    "atomicRelaxed",
+    "managedAtomic",
+    "managedAtomicRelaxed",
 }
 
 
-def _transactional_store_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+def _transactional_store_blocks(
+    request: Dict[str, Any],
+) -> Dict[Tuple[str, str], ExpectedBlock]:
     tunables = request["tunables"]
     if request["variant"] != "default":
         raise ValueError("request.variant must be default for transactionalStore")
     if tunables["threads"] != 6:
         raise ValueError("request.tunables.threads must be 6 for transactionalStore")
-    for field, allowed in (("mechanisms", TRANSACTIONAL_STORE_MECHANISMS),
-                           ("operations", {"singleRecord", "twentyRecords"})):
+    for field, allowed in (
+        ("mechanisms", TRANSACTIONAL_STORE_MECHANISMS),
+        ("operations", {"singleRecord", "twentyRecords"}),
+    ):
         values = request[field]
         if not values or len(set(values)) != len(values) or not set(values) <= allowed:
-            raise ValueError("request." + field + " must be nonempty, unique transactionalStore entries")
+            raise ValueError(
+                "request."
+                + field
+                + " must be nonempty, unique transactionalStore entries"
+            )
     blocks = {}
     for mechanism in request["mechanisms"]:
         counts = tunables["operationsPerBatch"]
         count = counts.get(mechanism, counts["default"])
         if count % 5000:
-            raise ValueError("request.tunables.operationsPerBatch must be a multiple of 5000")
+            raise ValueError(
+                "request.tunables.operationsPerBatch must be a multiple of 5000"
+            )
         writes = count // 50
         for operation in request["operations"]:
             metric = "hundredReadsTime" if operation == "singleRecord" else "readTime"
             reads = (count - writes) // (100 if operation == "singleRecord" else 1)
             samples = (
-                ExpectedSamples(metric, "ticks", True, 6, tunables["measuredBatches"] * reads, False),
-                ExpectedSamples("writeTime", "ticks", True, 6, tunables["measuredBatches"] * writes, False),
+                ExpectedSamples(
+                    metric, "ticks", True, 6, tunables["measuredBatches"] * reads, False
+                ),
+                ExpectedSamples(
+                    "writeTime",
+                    "ticks",
+                    True,
+                    6,
+                    tunables["measuredBatches"] * writes,
+                    False,
+                ),
             )
             blocks[(mechanism, operation)] = ExpectedBlock(
-                mechanism, operation, 6, tunables["qos"], count,
+                mechanism,
+                operation,
+                6,
+                tunables["qos"],
+                count,
                 6 * (tunables["warmupBatches"] + tunables["measuredBatches"]),
-                samples, 0, "transactionalStore." + operation,
+                samples,
+                0,
+                "transactionalStore." + operation,
             )
     return blocks
 
 
-CREATION_COST_MECHANISMS = frozenset({
-    "unsynchronized", "mutex", "osAllocatedUnfairLock", "osUnfairLock", "nsLock",
-    "nsRecursiveLock", "pthreadMutex", "pthreadReadWriteLock", "serialQueue",
-    "barrierQueueSyncWrite", "dispatchSemaphore", "actor", "mainActor", "atomic", "managedAtomic",
-})
+CREATION_COST_MECHANISMS = frozenset(
+    {
+        "unsynchronized",
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "dispatchSemaphore",
+        "actor",
+        "mainActor",
+        "atomic",
+        "managedAtomic",
+    }
+)
 
 
-def _main_thread_cache_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+def _main_thread_cache_blocks(
+    request: Dict[str, Any],
+) -> Dict[Tuple[str, str], ExpectedBlock]:
     tunables = request["tunables"]
     cache = tunables.get("mainThreadCache")
     if not isinstance(cache, dict):
         raise ValueError("request.tunables.mainThreadCache is required")
-    fields = {"frames", "warmupFrames", "scrollPointsPerSecond", "decodeIterations", "writeIntervalMicroseconds"}
+    fields = {
+        "frames",
+        "warmupFrames",
+        "scrollPointsPerSecond",
+        "decodeIterations",
+        "writeIntervalMicroseconds",
+    }
     if set(cache) != fields or any(type(value) is not int for value in cache.values()):
         raise ValueError("mainThreadCache requires integer tunables")
-    if (cache["frames"] < 1 or cache["warmupFrames"] < 0
-            or not 1 <= cache["scrollPointsPerSecond"] <= 20000
-            or not 1 <= cache["decodeIterations"] <= 2**63 - 1
-            or not 0 <= cache["writeIntervalMicroseconds"] <= 2**32 - 1):
+    if (
+        cache["frames"] < 1
+        or cache["warmupFrames"] < 0
+        or not 1 <= cache["scrollPointsPerSecond"] <= 20000
+        or not 1 <= cache["decodeIterations"] <= 2**63 - 1
+        or not 0 <= cache["writeIntervalMicroseconds"] <= 2**32 - 1
+    ):
         raise ValueError("mainThreadCache tunable outside range")
     frames = cache["frames"] + cache["warmupFrames"]
-    if (frames * 50000000 + 5000000000 > 2**63 - 1
-            or (frames * cache["scrollPointsPerSecond"] + frames) * 128 > 2**63 - 1):
+    if (
+        frames * 50000000 + 5000000000 > 2**63 - 1
+        or (frames * cache["scrollPointsPerSecond"] + frames) * 128 > 2**63 - 1
+    ):
         raise ValueError("mainThreadCache storage or frame duration overflow")
     if request["variant"] != "default" or not 2 <= tunables["threads"] <= 4:
         raise ValueError("mainThreadCache requires default variant and 2...4 writers")
-    for field, allowed in (("mechanisms", TRANSACTIONAL_STORE_MECHANISMS | {"mainActor"}),
-                           ("operations", {"scroll"})):
+    for field, allowed in (
+        ("mechanisms", TRANSACTIONAL_STORE_MECHANISMS | {"mainActor"}),
+        ("operations", {"scroll"}),
+    ):
         values = request[field]
         if not values or len(set(values)) != len(values) or not set(values) <= allowed:
-            raise ValueError("request." + field + " must be nonempty, unique mainThreadCache entries")
+            raise ValueError(
+                "request." + field + " must be nonempty, unique mainThreadCache entries"
+            )
     samples = (
         ExpectedSamples("readTime", "ticks", False, 1, None, False),
         ExpectedSamples("frameStart", "ticks", False, 1, cache["frames"], False),
-        ExpectedSamples("frameInterval", "nanoseconds", False, 1, cache["frames"], False),
+        ExpectedSamples(
+            "frameInterval", "nanoseconds", False, 1, cache["frames"], False
+        ),
     )
     counts = tunables["operationsPerBatch"]
-    return {(mechanism, "scroll"): ExpectedBlock(
-        mechanism, "scroll", tunables["threads"], tunables["qos"],
-        counts.get(mechanism, counts["default"]), 0, samples, 0, "mainThreadCache.scroll",
-    ) for mechanism in request["mechanisms"]}
+    return {
+        (mechanism, "scroll"): ExpectedBlock(
+            mechanism,
+            "scroll",
+            tunables["threads"],
+            tunables["qos"],
+            counts.get(mechanism, counts["default"]),
+            0,
+            samples,
+            0,
+            "mainThreadCache.scroll",
+        )
+        for mechanism in request["mechanisms"]
+    }
 
 
-def _creation_cost_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+def _creation_cost_blocks(
+    request: Dict[str, Any],
+) -> Dict[Tuple[str, str], ExpectedBlock]:
     tunables = request["tunables"]
     if request["variant"] != "default":
         raise ValueError("request.variant must be default for creationCost")
     if tunables["threads"] != 1:
         raise ValueError("request.tunables.threads must be 1 for creationCost")
-    for field, allowed in (("mechanisms", CREATION_COST_MECHANISMS), ("operations", {"create", "destroy"})):
+    for field, allowed in (
+        ("mechanisms", CREATION_COST_MECHANISMS),
+        ("operations", {"create", "destroy"}),
+    ):
         values = request[field]
         if not values or len(set(values)) != len(values) or not set(values) <= allowed:
-            raise ValueError("request." + field + " must be nonempty, unique creationCost entries")
+            raise ValueError(
+                "request." + field + " must be nonempty, unique creationCost entries"
+            )
     blocks = {}
     for mechanism in request["mechanisms"]:
         counts = tunables["operationsPerBatch"]
@@ -308,15 +455,27 @@ def _creation_cost_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], Expe
             samples = ()
             if operation == "create":
                 samples = tuple(
-                    ExpectedSamples("malloc" + kind + edge, unit, False, 1,
-                                    tunables["warmupBatches"] + tunables["measuredBatches"], False)
+                    ExpectedSamples(
+                        "malloc" + kind + edge,
+                        unit,
+                        False,
+                        1,
+                        tunables["warmupBatches"] + tunables["measuredBatches"],
+                        False,
+                    )
                     for kind, unit in (("Blocks", "blocks"), ("Bytes", "bytes"))
                     for edge in ("BeforeCreate", "AfterCreate", "AfterDestroy")
                 )
             blocks[(mechanism, operation)] = ExpectedBlock(
-                mechanism, operation, 1, tunables["qos"], count,
+                mechanism,
+                operation,
+                1,
+                tunables["qos"],
+                count,
                 tunables["warmupBatches"] + tunables["measuredBatches"],
-                samples, 0, "creationCost." + operation,
+                samples,
+                0,
+                "creationCost." + operation,
             )
     return blocks
 
@@ -325,7 +484,7 @@ HOLDER_QOS = {"utilityHolder": "utility", "backgroundHolder": "background"}
 
 
 def _priority_inversion_blocks(
-    request: Dict[str, Any]
+    request: Dict[str, Any],
 ) -> Dict[Tuple[str, str], ExpectedBlock]:
     """The complete mechanism × holder matrix, with no batch or sample lines."""
     tunables = request["tunables"]
@@ -348,7 +507,9 @@ def _priority_inversion_blocks(
             or not unique_values <= set(allowed)
         ):
             raise ValueError(
-                "request." + field + " must be nonempty, unique priorityInversion entries"
+                "request."
+                + field
+                + " must be nonempty, unique priorityInversion entries"
             )
     operations = tunables["operationsPerBatch"]
     return {
@@ -369,7 +530,7 @@ def _priority_inversion_blocks(
 
 
 def _async_code_blocks(
-    request: Dict[str, Any]
+    request: Dict[str, Any],
 ) -> Tuple[Dict[Tuple[str, str], ExpectedBlock], int, int]:
     """The blocks of an experiment 7 request, with its warm-up and measured batch counts."""
     tunables = request["tunables"]
@@ -431,10 +592,14 @@ def _async_code_blocks(
 
     for mechanism in request["mechanisms"]:
         if not any(key[0] == mechanism for key in blocks):
-            raise ValueError("request.mechanisms has an entry without a requested operation")
+            raise ValueError(
+                "request.mechanisms has an entry without a requested operation"
+            )
     for operation in request["operations"]:
         if not any(key[1] == operation for key in blocks):
-            raise ValueError("request.operations has an entry without a requested mechanism")
+            raise ValueError(
+                "request.operations has an entry without a requested mechanism"
+            )
     return blocks, warmup, measured
 
 

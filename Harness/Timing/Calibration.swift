@@ -27,7 +27,9 @@ struct Calibration: Experiment {
         }
 
         let cpuCount = PhoneFacts.read().cpuCount
-        let (bytes, overflow) = repeats.multipliedReportingOverflow(by: MemoryLayout<CalibrationSample>.stride)
+        let (bytes, overflow) = repeats.multipliedReportingOverflow(
+            by: MemoryLayout<CalibrationSample>.stride
+        )
         let (_, aggregateOverflow) = bytes.multipliedReportingOverflow(by: cpuCount)
 
         guard !overflow, !aggregateOverflow else {
@@ -35,7 +37,9 @@ struct Calibration: Experiment {
         }
 
         let (frameNanoseconds, frameOverflow) = UInt64(repeats).multipliedReportingOverflow(by: 50_000_000)
-        let (durationNanoseconds, durationOverflow) = frameNanoseconds.addingReportingOverflow(5_000_000_000)
+        let (durationNanoseconds, durationOverflow) = frameNanoseconds.addingReportingOverflow(
+            5_000_000_000
+        )
         let timebase = Clock.timebase
         let durationProduct = durationNanoseconds.multipliedFullWidth(by: UInt64(timebase.denom))
         guard !frameOverflow, !durationOverflow, durationProduct.high < UInt64(timebase.numer) else {

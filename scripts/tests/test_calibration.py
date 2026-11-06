@@ -68,7 +68,9 @@ class CalibrationTests(unittest.TestCase):
             ([100, 200, 300], 0, 3),
             ([100, 200, 300], 125, 0),
         ):
-            with self.subTest(values=values, numerator=numerator, denominator=denominator):
+            with self.subTest(
+                values=values, numerator=numerator, denominator=denominator
+            ):
                 lines = deepcopy(self.lines)
                 lines[0]['request']['tunables']['repeats'] = len(values)
                 lines[0]['phone'].update(
@@ -78,7 +80,7 @@ class CalibrationTests(unittest.TestCase):
                     if line['type'] == 'samples':
                         for field in ('values', 'cpuAtStart', 'cpuAtEnd'):
                             if field in line:
-                                line[field] = line[field][:len(values)]
+                                line[field] = line[field][: len(values)]
                         if line['metric'] == 'displayFrame':
                             line['values'] = values
                 path, _ = write_attempt(self.directory, lines)
@@ -179,9 +181,7 @@ class HolderWorkTests(unittest.TestCase):
         # 5 ms = 120,000 ticks; 120,000 x 100,000 / 2,400. The efficiency-CPU sample (1)
         # and the migrated sample (9) would move the median to 2,300.
         self.assertEqual(
-            self.derive(
-                [2400, 2300, 2500, 1, 9], [4, 5, 4, 0, 4], [4, 5, 4, 0, 5]
-            ),
+            self.derive([2400, 2300, 2500, 1, 9], [4, 5, 4, 0, 4], [4, 5, 4, 0, 5]),
             {
                 'holderWorkIterations': 5_000_000,
                 'targetMilliseconds': 5,
@@ -224,9 +224,9 @@ class PhoneCalibrationTests(unittest.TestCase):
 
     def test_from_calibration_is_replaced_in_a_copy(self):
         (self.results / 'fixture').mkdir(parents=True)
-        (self.results / 'fixture/calibration.json').write_text(json.dumps(
-            {'priorityInversion': {'holderWorkIterations': 5_000_000}}
-        ))
+        (self.results / 'fixture/calibration.json').write_text(
+            json.dumps({'priorityInversion': {'holderWorkIterations': 5_000_000}})
+        )
         calibration = load_phone_calibration(self.results, 'fixture')
         resolved = resolve_tunables(self.tunables, calibration)
         self.assertEqual(

@@ -67,7 +67,8 @@ struct TransactionalStore: Experiment {
             }
             if measured {
                 let end = Clock.now()
-                worker.readTimes.record(call: runIndex - layout.warmupBatches * operations.runsPerBatch,
+                worker.readTimes.record(
+                    call: runIndex - layout.warmupBatches * operations.runsPerBatch,
                     ticks: end - start)
             }
             for index in run.writes {
@@ -90,7 +91,8 @@ struct TransactionalStore: Experiment {
                 layout: block.layout, barrier: barrier, log: log,
                 recordExecutorCPU: { _ in }, waitForPendingWrites: { store.waitForPendingWrites() },
                 runOperations: { batch, subBatch, _ in
-                    Self.operationLoop(store, worker: worker, batch: batch,
+                    Self.operationLoop(
+                        store, worker: worker, batch: batch,
                         subBatch: subBatch, layout: block.layout)
                 }
             )
@@ -100,10 +102,14 @@ struct TransactionalStore: Experiment {
             let ends = worker.writeEnds.values
             let first = block.layout.warmupBatches * worker.operations.writesPerBatch
             let writeTimes = (first..<ends.count).map { ends[$0] - starts[$0] }
-            for (metric, values) in [(isSingleRecord ? "hundredReadsTime" : "readTime", worker.readTimes.values),
-                ("writeTime", writeTimes)] {
-                block.appendSamples(SamplesLine(block: block.position, thread: thread,
-                    metric: metric, unit: "ticks", values: values, cpuAtStart: nil, cpuAtEnd: nil))
+            for (metric, values) in [
+                (isSingleRecord ? "hundredReadsTime" : "readTime", worker.readTimes.values),
+                ("writeTime", writeTimes)
+            ] {
+                block.appendSamples(
+                    SamplesLine(
+                        block: block.position, thread: thread,
+                        metric: metric, unit: "ticks", values: values, cpuAtStart: nil, cpuAtEnd: nil))
             }
         }
         return [TransactionalStoreChecks.check(store, workers: workers, logs: logs, block: block)]
