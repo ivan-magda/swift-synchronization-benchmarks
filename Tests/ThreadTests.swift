@@ -1,4 +1,5 @@
 import Darwin
+import Dispatch
 import Synchronization
 import Testing
 
@@ -265,4 +266,51 @@ func requireUniqueSelectionRejectsEmptyAndUnknownValues(checkMechanisms: Bool) t
         operationsPerBatch: 8,
         subBatches: 2
     ))
+}
+
+@Suite struct ThreadStartupTests {
+    // Holding the final startup participant must prevent the worker from sampling.
+    @Test(.timeLimit(.minutes(1)))
+    func threadStartupBlocksSamplingUntilRunSetupFinishes() async {
+        let observation = await onBenchmarkThread {
+            let startup = ThreadBarrier(parties: 3)
+            let sampled = DispatchSemaphore(value: 0)
+            let completed = DispatchSemaphore(value: 0)
+            let released = DispatchSemaphore(value: 0)
+            let owner = BenchmarkThread.start(name: "startup-owner", qos: .userInitiated) {
+                let request = RunRequest.golden
+                let block = BlockContext(
+                    position: 0,
+                    description: BlockDescription(mechanism: "test", operation: "sample", threads: 1,
+                                                  qos: .userInitiated, operationsPerBatch: 4),
+                    layout: BatchLayout(warmupBatches: 0, measuredBatches: 1,
+                                        operationsPerBatch: 4, subBatches: 1),
+                    request: request,
+                    lines: ResultLineBuffer()
+                )
+                _ = block.runOnThreads(recording: .samplesOnly, afterStartup: startup) { _, _, _ in
+                    _ = MallocStatistics.read()
+                    sampled.signal()
+                }
+                completed.signal()
+            }
+            let sampledBeforeRelease = sampled.wait(timeout: .now() + .seconds(1)) == .success
+            // Release even when the early-sampling assertion will fail. Waits remain
+            // bounded if a broken implementation omitted a barrier participant.
+            let releaser = BenchmarkThread.start(name: "startup-release", qos: .userInitiated) {
+                startup.arriveAndWait()
+                released.signal()
+            }
+            let ownerCompleted = completed.wait(timeout: .now() + .seconds(1)) == .success
+            let gateReleased = released.wait(timeout: .now() + .seconds(1)) == .success
+            let sampledAfterRelease = sampledBeforeRelease || sampled.wait(timeout: .now() + .seconds(1)) == .success
+            if ownerCompleted { owner.join() }
+            if gateReleased { releaser.join() }
+            return (sampledBeforeRelease, ownerCompleted, gateReleased, sampledAfterRelease)
+        }
+        #expect(!observation.0)
+        #expect(observation.1)
+        #expect(observation.2)
+        #expect(observation.3)
+    }
 }

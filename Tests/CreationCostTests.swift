@@ -28,6 +28,20 @@ import Testing
         }
     }
 
+    // With no warm-up, the first snapshot still waits for the run pthread's setup.
+    @Test(.timeLimit(.minutes(1)))
+    func creationCostWithoutWarmupWaitsForStartup() async throws {
+        var request = RunRequest.creationCostSmoke
+        request.tunables.warmupBatches = 0
+        request.mechanisms = ["unsynchronized", "mainActor"]
+        let attempt = try await runAttempt(request)
+        #expect(attempt.status == "completed")
+        #expect(attempt.checks.count == 4)
+        for check in attempt.checks {
+            #expect(check["passed"] as? Bool == true, "\(check)")
+        }
+    }
+
     // A stack-promoted or prematurely released class fails the per-object heap proof.
     @Test func unprotectedObjectsAreHeapBlocks() {
         let counter = CreationDeinitCounter()

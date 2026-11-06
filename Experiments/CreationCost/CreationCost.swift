@@ -63,7 +63,8 @@ struct CreationCost: Experiment {
         let outcome = CreationBatchOutcome(capacity: block.layout.totalBatches)
         let onMain = block.description.mechanism == "mainActor"
         let gate = CreationBatchGate()
-        _ = block.runOnThreads { _, _, log in
+        let startup = ThreadBarrier(parties: block.description.threads + 1)
+        _ = block.runOnThreads(afterStartup: startup) { _, _, log in
             for batch in 0..<block.layout.totalBatches {
                 let secondsInTicks = UInt64(10_000_000_000) * UInt64(Clock.timebase.denom) / UInt64(Clock.timebase.numer)
                 let (deadline, overflow) = Clock.now().addingReportingOverflow(secondsInTicks)

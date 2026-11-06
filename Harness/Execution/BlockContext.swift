@@ -61,6 +61,36 @@ final class BlockContext: @unchecked Sendable {
         return logs
     }
 
+    /// Allocation-sensitive workers wait until the run pthread finishes launching
+    /// all workers. The caller supplies one barrier party per worker plus the run
+    /// pthread. This untimed lifecycle overload leaves the original paths unchanged.
+    func runOnThreads(
+        recording: BlockRecording = .batches,
+        afterStartup startup: ThreadBarrier,
+        _ body: @escaping @Sendable (_ thread: Int, _ barrier: ThreadBarrier, _ log: ThreadLog) -> Void
+    ) -> [ThreadLog] {
+        beginWorkers()
+        let logs = makeLogs(recording: recording)
+        let barrier = ThreadBarrier(parties: description.threads)
+        let start = Clock.now()
+        let switches = ContextSwitches.now()
+        let thermal = ProcessInfo.processInfo.thermalState.resultName
+        let threads = logs.enumerated().map { index, log in
+            BenchmarkThread.start(name: "benchmark-\(position)-\(index)", qos: description.qos) {
+                startup.arriveAndWait()
+                body(index, barrier, log)
+            }
+        }
+        // Every handle and the thread array now exist; startup temporaries have left scope.
+        startup.arriveAndWait()
+        for thread in threads {
+            thread.join()
+        }
+
+        finish(start: start, switches: switches, thermal: thermal, logs: logs, recording: recording)
+        return logs
+    }
+
     /// Workers run at `workerQoS` instead of the block's QoS; the block line still reports
     /// the block's QoS. The body deliberately duplicates `runOnThreads(recording:_:)`, which
     /// stays unchanged so experiment 1's machine code does not change. Keep the two in step.
