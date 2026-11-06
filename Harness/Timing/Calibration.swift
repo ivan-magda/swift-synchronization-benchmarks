@@ -1,5 +1,7 @@
+import Synchronization
+
 /// Clock overhead and fixed CPU work, measured alone and across all CPUs, and the
-/// single-thread work that sizes the priority-inversion holder.
+/// single-thread work that sizes the priority-inversion holder, plus display callbacks.
 struct Calibration: Experiment {
     let blocks: [BlockDescription]
     private let repeats: Int
@@ -32,6 +34,13 @@ struct Calibration: Experiment {
             throw RequestError(message: "repeats sample storage size overflow")
         }
 
+        let (frameNanoseconds, frameOverflow) = UInt64(repeats).multipliedReportingOverflow(by: 50_000_000)
+        let (durationNanoseconds, durationOverflow) = frameNanoseconds.addingReportingOverflow(5_000_000_000)
+        let timebase = Clock.timebase
+        let durationProduct = durationNanoseconds.multipliedFullWidth(by: UInt64(timebase.denom))
+        guard !frameOverflow, !durationOverflow, durationProduct.high < UInt64(timebase.numer) else {
+            throw RequestError(message: "repeats display deadline overflow")
+        }
         self.repeats = repeats
         iterations = request.tunables.referenceLoopIterations
         blocks = [
@@ -39,12 +48,13 @@ struct Calibration: Experiment {
             "clockAllCPUs",
             "cpuSpeedUserInteractive",
             "cpuSpeedBackground",
-            "holderWorkSingleThread"
+            "holderWorkSingleThread",
+            "displayFrames"
         ].map {
             BlockDescription(
                 mechanism: $0,
                 operation: "",
-                threads: $0.hasSuffix("SingleThread") ? 1 : cpuCount,
+                threads: ($0.hasSuffix("SingleThread") || $0 == "displayFrames") ? 1 : cpuCount,
                 qos: $0 == "cpuSpeedBackground" ? .background : .userInteractive,
                 operationsPerBatch: request.operationsPerBatch(for: $0)
             )
@@ -61,6 +71,10 @@ struct Calibration: Experiment {
     }
 
     func run(_ block: BlockContext) -> [CheckResult] {
+        if block.description.mechanism == "displayFrames" {
+            return runDisplayFrames(block)
+        }
+
         // Allocate and initialize every worker's storage before the block envelope starts.
         let buffers = (0..<block.description.threads).map { _ in
             CalibrationSamples(capacity: repeats)
@@ -121,6 +135,46 @@ struct Calibration: Experiment {
             block: block.position,
             passed: passed,
             detail: "Every samples line must contain \(repeats) values",
+            violations: nil
+        )]
+    }
+
+    private func runDisplayFrames(_ block: BlockContext) -> [CheckResult] {
+        let samples = CallTimes(calls: repeats)
+        let completed = Atomic<Bool>(false)
+        let frames = repeats
+        // The initializer validated this duration and its tick conversion.
+        let nanoseconds = UInt64(repeats) * 50_000_000 + 5_000_000_000
+        let timebase = Clock.timebase
+        let product = nanoseconds.multipliedFullWidth(by: UInt64(timebase.denom))
+        let duration = UInt64(timebase.numer).dividingFullWidth(product).quotient
+        _ = block.runOnThreads(recording: .samplesOnly) { _, _, _ in
+            let (deadline, overflow) = Clock.now().addingReportingOverflow(duration)
+            guard !overflow else { return }
+            let finished = waitForMainThreadWork(until: deadline) { done in
+                let loop = DisplayLinkLoop(frames: frames) { frame, _ in
+                    samples.record(call: frame, ticks: Clock.now())
+                }
+                loop.start(finished: done)
+            }
+            completed.store(finished, ordering: .releasing)
+        }
+        let passed = completed.load(ordering: .acquiring)
+        // A late loop keeps its buffer alive; only completion permits reading its writes.
+        block.appendSamples(SamplesLine(
+            block: block.position,
+            thread: 0,
+            metric: "displayFrame",
+            unit: "ticks",
+            values: passed ? samples.values : [],
+            cpuAtStart: nil,
+            cpuAtEnd: nil
+        ))
+        return [CheckResult(
+            name: "calibration.samples",
+            block: block.position,
+            passed: passed,
+            detail: "Display callbacks must produce \(frames) values before the deadline",
             violations: nil
         )]
     }

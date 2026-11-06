@@ -1,4 +1,4 @@
-"""Infer core groups and the holder work size only from accepted calibration."""
+"""Infer core groups, holder work size and display intervals from accepted calibration."""
 
 from __future__ import annotations
 
@@ -152,6 +152,38 @@ def derive_holder_work(
         "medianTicks": median_ticks,
         "samplesUsed": len(usable),
     }
+
+
+def derive_display(calibration_file: Path) -> Dict[str, Any]:
+    """Derive the achieved interval from consecutive display callback ticks."""
+    lines = read_accepted_calibration(calibration_file)
+    try:
+        phone = run_line(lines)["phone"]
+        numerator = phone["timebaseNumerator"]
+        denominator = phone["timebaseDenominator"]
+        values = next(
+            line["values"] for line in lines
+            if line["type"] == "samples" and line["metric"] == "displayFrame"
+        )
+        intervals = [end - start for start, end in zip(values, values[1:])]
+        if (
+            type(numerator) is not int or numerator <= 0
+            or type(denominator) is not int or denominator <= 0
+            or not intervals or any(interval <= 0 for interval in intervals)
+        ):
+            raise ValueError()
+        median_ticks = median(intervals)
+        return {
+            "medianFrameTicks": median_ticks,
+            "medianFrameMilliseconds": round(
+                median_ticks * numerator / denominator / 1_000_000, 2
+            ),
+            "framesMeasured": len(values),
+        }
+    except _READ_ERRORS:
+        raise CalibrationError(
+            "display calibration requires two callbacks, positive intervals and timebase"
+        ) from None
 
 
 def load_phone_calibration(results: Path, phone_key: str) -> Optional[Dict[str, Any]]:

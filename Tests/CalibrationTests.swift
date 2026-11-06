@@ -42,20 +42,21 @@ import Testing
         let blocks = lines.filter { $0["type"] as? String == "block" }
         let samples = lines.filter { $0["type"] as? String == "samples" }
 
-        #expect(blocks.count == 5)
-        #expect(samples.count == 2 + 3 * cpuCount)
+        #expect(blocks.count == 6)
+        #expect(samples.count == 3 + 3 * cpuCount)
         #expect(!lines.contains { $0["type"] as? String == "batch" })
         #expect(Set(blocks.compactMap { $0["mechanism"] as? String }) == [
             "clockSingleThread",
             "clockAllCPUs",
             "cpuSpeedUserInteractive",
             "cpuSpeedBackground",
-            "holderWorkSingleThread"
+            "holderWorkSingleThread",
+            "displayFrames"
         ])
         for block in blocks {
             let position = try #require(block["block"] as? Int)
             let name = try #require(block["mechanism"] as? String)
-            let threads = name.hasSuffix("SingleThread") ? 1 : cpuCount
+            let threads = (name.hasSuffix("SingleThread") || name == "displayFrames") ? 1 : cpuCount
             let records = samples.filter { $0["block"] as? Int == position }
 
             #expect(block["operation"] as? String == "")
@@ -74,6 +75,12 @@ import Testing
                     #expect(record["metric"] as? String == "clockRead1000")
                     #expect(record["cpuAtStart"] == nil)
                     #expect(record["cpuAtEnd"] == nil)
+                } else if name == "displayFrames" {
+                    #expect(record["metric"] as? String == "displayFrame")
+                    #expect(record["cpuAtStart"] == nil)
+                    #expect(record["cpuAtEnd"] == nil)
+                    let ticks = try #require(record["values"] as? [UInt64])
+                    #expect(zip(ticks, ticks.dropFirst()).allSatisfy { $0 < $1 })
                 } else {
                     // holderWork must not reuse referenceLoop: the core map pools every referenceLoop line.
                     let metric = name.hasPrefix("cpuSpeed") ? "referenceLoop" : "holderWork"
@@ -86,7 +93,7 @@ import Testing
 
         let end = try #require(lines.last)
         let checks = try #require(end["checks"] as? [[String: Any]])
-        #expect(checks.count == 5)
+        #expect(checks.count == 6)
         #expect(
             checks.allSatisfy {
                 $0["name"] as? String == "calibration.samples" && $0["passed"] as? Bool == true

@@ -10,7 +10,12 @@ from typing import Optional, Sequence
 
 from runner.attempt_check import check_attempt
 from runner.builds import BuildError, build as build_app, latest_build
-from runner.calibration import CalibrationError, derive_core_map, derive_holder_work
+from runner.calibration import (
+    CalibrationError,
+    derive_core_map,
+    derive_display,
+    derive_holder_work,
+)
 from runner.config import ConfigError, REPOSITORY, load_local_config
 from runner.device_control import DeviceControl, DeviceControlError
 from runner.doctor import doctor as inspect_environment
@@ -127,6 +132,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
                         attemptID=attempt["attemptID"],
                         phone=facts,
                         priorityInversion=derive_holder_work(result, core_map),
+                        display=derive_display(result),
                     )
                     (results / phone.key / "calibration.json").write_text(
                         json.dumps(calibration, sort_keys=True, indent=2) + "\n",

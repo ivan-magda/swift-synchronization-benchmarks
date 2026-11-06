@@ -51,6 +51,7 @@ _CALIBRATION_BLOCKS = (
     ("cpuSpeedBackground", None, "background", "referenceLoop", True),
     # A separate metric keeps the holder work out of the referenceLoop core map.
     ("holderWorkSingleThread", 1, "userInteractive", "holderWork", True),
+    ("displayFrames", 1, "userInteractive", "displayFrame", False),
 )
 
 # Experiment 7: variant -> operation -> mechanisms measured with it.

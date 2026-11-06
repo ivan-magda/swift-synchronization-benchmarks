@@ -822,6 +822,11 @@ class SessionTests(unittest.TestCase):
             )
             self.assertEqual(calibration['coreMap']['performance'], [0, 1])
             self.assertEqual(calibration['phone']['cpuCount'], 6)
+            self.assertEqual(calibration['display'], {
+                'medianFrameTicks': 200_000,
+                'medianFrameMilliseconds': 8.33,
+                'framesMeasured': 200,
+            })
             # Synthetic holderWork samples take 3 ticks on CPU 0; 5 ms is 120,000 ticks.
             self.assertEqual(
                 calibration['priorityInversion'],

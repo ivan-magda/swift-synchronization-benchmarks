@@ -80,7 +80,7 @@ class ExpectedAttemptTests(unittest.TestCase):
             holder.samples,
             (ExpectedSamples("holderWork", "ticks", True, 1, 200, True),),
         )
-        self.assertEqual(len(expected.blocks), 5)
+        self.assertEqual(len(expected.blocks), 6)
 
     def test_caller_paths_expect_the_fourteen_allowed_blocks(self):
         request = async_code_request(

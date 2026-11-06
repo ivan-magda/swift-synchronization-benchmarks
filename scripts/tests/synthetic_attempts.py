@@ -124,7 +124,7 @@ def make_attempt_lines(
     async_code = request["experiment"] == "asyncCode"
     priority_inversion = request["experiment"] == "priorityInversion"
 
-    # These are the five measurements specified by Calibration, independently of the checker.
+    # These are the six measurements specified by Calibration, independently of the checker.
     if calibration:
         measurements = [
             ("clockSingleThread", "", 1, "userInteractive", "clockRead1000"),
@@ -138,6 +138,7 @@ def make_attempt_lines(
             ),
             ("cpuSpeedBackground", "", cpu_count, "background", "referenceLoop"),
             ("holderWorkSingleThread", "", 1, "userInteractive", "holderWork"),
+            ("displayFrames", "", 1, "userInteractive", "displayFrame"),
         ]
     elif async_code:
         # The requested pairs that the table allows, mechanisms first, as the app orders them.
@@ -216,6 +217,10 @@ def make_attempt_lines(
                     unit="ticks",
                     values=[3] * count,
                 )
+                if metric == "displayFrame":
+                    sample["values"] = [
+                        10_000_000 + frame * 200_000 for frame in range(count)
+                    ]
                 if metric in ("referenceLoop", "holderWork"):
                     sample.update(
                         cpuAtStart=[thread] * count, cpuAtEnd=[thread] * count

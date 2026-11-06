@@ -9,6 +9,7 @@ from pathlib import Path
 from runner.calibration import (
     CalibrationError,
     derive_core_map,
+    derive_display,
     derive_holder_work,
     load_phone_calibration,
     resolve_tunables,
@@ -40,6 +41,49 @@ class CalibrationTests(unittest.TestCase):
     def derive(self, lines=None):
         path, _ = write_attempt(self.directory, self.lines if lines is None else lines)
         return derive_core_map(path)
+
+    def test_display_uses_callback_gaps_and_phone_timebase(self):
+        # 200,000 ticks at 125/3 ns per tick is 8.333... ms.
+        # Absolute timestamps must be differenced before taking the median.
+        self.lines[0]['phone']['timebaseNumerator'] = 125
+        self.lines[0]['phone']['timebaseDenominator'] = 3
+        for line in self.lines:
+            if line['type'] == 'samples' and line['metric'] == 'displayFrame':
+                line['values'] = [10_000_000, 10_200_000, 10_400_000]
+        path, _ = write_attempt(self.directory, self.lines)
+        self.assertEqual(
+            derive_display(path),
+            {
+                'medianFrameTicks': 200_000,
+                'medianFrameMilliseconds': 8.33,
+                'framesMeasured': 3,
+            },
+        )
+
+    def test_display_requires_positive_intervals_and_timebase(self):
+        for values, numerator, denominator in (
+            ([100], 125, 3),
+            ([100, 100, 200], 125, 3),
+            ([200, 100, 300], 125, 3),
+            ([100, 200, 300], 0, 3),
+            ([100, 200, 300], 125, 0),
+        ):
+            with self.subTest(values=values, numerator=numerator, denominator=denominator):
+                lines = deepcopy(self.lines)
+                lines[0]['request']['tunables']['repeats'] = len(values)
+                lines[0]['phone'].update(
+                    timebaseNumerator=numerator, timebaseDenominator=denominator
+                )
+                for line in lines:
+                    if line['type'] == 'samples':
+                        for field in ('values', 'cpuAtStart', 'cpuAtEnd'):
+                            if field in line:
+                                line[field] = line[field][:len(values)]
+                        if line['metric'] == 'displayFrame':
+                            line['values'] = values
+                path, _ = write_attempt(self.directory, lines)
+                with self.assertRaises(CalibrationError):
+                    derive_display(path)
 
     def test_core_map_from_synthetic_calibration(self):
         self.assertEqual(
@@ -179,7 +223,11 @@ class PhoneCalibrationTests(unittest.TestCase):
         )
 
     def test_from_calibration_is_replaced_in_a_copy(self):
-        calibration = {'priorityInversion': {'holderWorkIterations': 5_000_000}}
+        (self.results / 'fixture').mkdir(parents=True)
+        (self.results / 'fixture/calibration.json').write_text(json.dumps(
+            {'priorityInversion': {'holderWorkIterations': 5_000_000}}
+        ))
+        calibration = load_phone_calibration(self.results, 'fixture')
         resolved = resolve_tunables(self.tunables, calibration)
         self.assertEqual(
             resolved['priorityInversion']['holderWorkIterations'], 5_000_000

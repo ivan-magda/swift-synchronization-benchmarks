@@ -36,24 +36,36 @@ Refusal reason codes are `thermal`, `lowPower`, `battery`, `debugger`, `applicat
 
 ### Calibration work and checks
 
-Calibration writes five blocks with operation `""`: `clockSingleThread` (one thread),
+Calibration writes six blocks with operation `""`: `clockSingleThread` (one thread),
 `clockAllCPUs`, `cpuSpeedUserInteractive`, and `cpuSpeedBackground` (each using
-`phone.cpuCount` threads), and `holderWorkSingleThread` (one thread). Every block
+`phone.cpuCount` threads), `holderWorkSingleThread` and `displayFrames` (one thread
+each). Every block
 uses QoS `userInteractive` except `cpuSpeedBackground` (`background`). Clock blocks
 use metric `clockRead1000`; CPU-speed blocks use `referenceLoop`;
-`holderWorkSingleThread` uses `holderWork`. Each block writes one `samples` line
+`holderWorkSingleThread` uses `holderWork`; `displayFrames` uses `displayFrame`.
+Each block writes one `samples` line
 per thread, with unit `ticks` and exactly `tunables.repeats` values, so an attempt
-has `2 + 3 × cpuCount` samples lines. `referenceLoop` and `holderWork` samples time
+has `3 + 3 × cpuCount` samples lines. `referenceLoop` and `holderWork` samples time
 `referenceLoop(iterations: tunables.referenceLoopIterations)` and carry
-`cpuAtStart` and `cpuAtEnd`; clock samples carry neither. The core map pools every
+`cpuAtStart` and `cpuAtEnd`; clock and display samples carry neither. The core map
+pools every
 `referenceLoop` line, so the holder work keeps its own metric. Calibration writes no
 batch lines. Each block owns exactly one `calibration.samples` correctness check
 with its block position; there is no separate run-level calibration check.
 
+`displayFrames` requests the screen's maximum frame rate and records `Clock.now()`
+at each of `repeats` display-link callbacks (absolute ticks, not durations). The run
+thread waits at most `repeats × 50 ms + 5 s`; a missed deadline fails the block check.
+These callback gaps measure achieved main-thread cadence, not render-server hitches.
+
 `bench.py calibrate` writes `results/<phone>/calibration.json` from the accepted
 attempt: `attemptID`, `phone` (the run line's phone facts), `coreMap`
-(`performance`, `efficiency`, `medianTicksByCPU`) and `priorityInversion`. The
-holder work calculation keeps the `holderWork` samples whose
+(`performance`, `efficiency`, `medianTicksByCPU`), `display` and `priorityInversion`.
+`display` holds `medianFrameTicks` (the median of consecutive callback gaps),
+`medianFrameMilliseconds` (ticks converted using the phone timebase, rounded to two
+places) and `framesMeasured` (the callback count). Derivation requires at least two
+callbacks, positive gaps and a positive timebase. Existing `calibration.json` files
+without `display` still resolve holder work. The holder work calculation keeps the `holderWork` samples whose
 `cpuAtStart` equals `cpuAtEnd` and is a performance CPU of the core map (at least
 half of all samples, or calibration fails), and takes `int(median(usableTicks))`.
 It computes the 5 ms target as
