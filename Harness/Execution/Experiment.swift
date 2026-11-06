@@ -69,6 +69,10 @@ enum ExperimentRegistry {
             return try HotFlag(request: request)
         }
 
+        if request.experiment == "transactionalStore" {
+            return try TransactionalStore(request: request)
+        }
+
         if request.experiment == "asyncCode" {
             return try AsyncCode(request: request)
         }

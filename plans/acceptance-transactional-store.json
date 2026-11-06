@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "name": "acceptance-transactional-store",
+  "buildTarget": "ios26",
+  "smoke": true,
+  "iosBuilds": {},
+  "seed": 20261106,
+  "settleSeconds": 10,
+  "pauseSeconds": 2,
+  "runs": [
+    {
+      "name": "default",
+      "experiment": "transactionalStore",
+      "variant": "default",
+      "repeats": 1,
+      "timeLimitSeconds": 300,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync"
+      ],
+      "operations": [
+        "singleRecord",
+        "twentyRecords"
+      ],
+      "tunables": {
+        "threads": 6,
+        "qos": "userInitiated",
+        "warmupBatches": 1,
+        "measuredBatches": 3,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 50000
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}

@@ -209,6 +209,44 @@ def _hot_flag_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedB
     return blocks
 
 
+TRANSACTIONAL_STORE_MECHANISMS = HOT_FLAG_MECHANISMS - {
+    "atomic", "atomicRelaxed", "managedAtomic", "managedAtomicRelaxed",
+}
+
+
+def _transactional_store_blocks(request: Dict[str, Any]) -> Dict[Tuple[str, str], ExpectedBlock]:
+    tunables = request["tunables"]
+    if request["variant"] != "default":
+        raise ValueError("request.variant must be default for transactionalStore")
+    if tunables["threads"] != 6:
+        raise ValueError("request.tunables.threads must be 6 for transactionalStore")
+    for field, allowed in (("mechanisms", TRANSACTIONAL_STORE_MECHANISMS),
+                           ("operations", {"singleRecord", "twentyRecords"})):
+        values = request[field]
+        if not values or len(set(values)) != len(values) or not set(values) <= allowed:
+            raise ValueError("request." + field + " must be nonempty, unique transactionalStore entries")
+    blocks = {}
+    for mechanism in request["mechanisms"]:
+        counts = tunables["operationsPerBatch"]
+        count = counts.get(mechanism, counts["default"])
+        if count % 5000:
+            raise ValueError("request.tunables.operationsPerBatch must be a multiple of 5000")
+        writes = count // 50
+        for operation in request["operations"]:
+            metric = "hundredReadsTime" if operation == "singleRecord" else "readTime"
+            reads = (count - writes) // (100 if operation == "singleRecord" else 1)
+            samples = (
+                ExpectedSamples(metric, "ticks", True, 6, tunables["measuredBatches"] * reads, False),
+                ExpectedSamples("writeTime", "ticks", True, 6, tunables["measuredBatches"] * writes, False),
+            )
+            blocks[(mechanism, operation)] = ExpectedBlock(
+                mechanism, operation, 6, tunables["qos"], count,
+                6 * (tunables["warmupBatches"] + tunables["measuredBatches"]),
+                samples, 0, "transactionalStore." + operation,
+            )
+    return blocks
+
+
 HOLDER_QOS = {"utilityHolder": "utility", "backgroundHolder": "background"}
 
 
@@ -384,6 +422,10 @@ def expected_attempt(request: Dict[str, Any], cpu_count: int) -> ExpectedAttempt
         measured = tunables["measuredBatches"]
     elif request["experiment"] == "hotFlag":
         blocks = _hot_flag_blocks(request)
+        warmup = tunables["warmupBatches"]
+        measured = tunables["measuredBatches"]
+    elif request["experiment"] == "transactionalStore":
+        blocks = _transactional_store_blocks(request)
         warmup = tunables["warmupBatches"]
         measured = tunables["measuredBatches"]
     elif request["experiment"] == "asyncCode":

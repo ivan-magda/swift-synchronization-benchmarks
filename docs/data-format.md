@@ -96,6 +96,16 @@ Both `read` and `readGroups` write the normal warm-up and measured batch lines. 
 
 Each block has one `hotFlag.<operation>` check. After its reader batches, the reader stops the main-thread writer with a one-second deadline, waits for pending asynchronous writes, and reads the final value on the reader thread. A passing check requires at least one write, a final read equal to the last written value, valid batch true-read counts and completed main-thread start and stop work. Its detail is, for example, `writes 12; last true, read true`. The iOS 18 acceptance plan adds only `mutex`, `atomic`, `atomicRelaxed`, `managedAtomic` and `managedAtomicRelaxed` rows.
 
+### Transactional store (experiment 4)
+
+`transactionalStore`, variant `default`, runs six workers at `tunables.qos`. Its 13 mechanisms are `mutex`, `osAllocatedUnfairLock`, `osAllocatedUnfairLockAdaptiveSpin`, `osUnfairLock`, `nsLock`, `nsRecursiveLock`, `pthreadMutex`, `pthreadReadWriteLock`, `serialQueue`, `barrierQueueSyncWrite`, `barrierQueueAsyncWrite`, `dispatchSemaphore` and `objcSync`. Every selected row runs each selected operation: `singleRecord` or `twentyRecords`. A store owns 10,000 records partitioned into groups of one or twenty. Each read sums all values and compares all versions under protection; each write increments the group's version and assigns that version to every value.
+
+`operationsPerBatch` must be a multiple of 5,000. Before timing, seeded per-worker lists place exactly `operationsPerBatch / 50` writes between read runs and select record groups through `SplitMix64`. A read run contains 100 transactions for `singleRecord`, or one for `twentyRecords`. Sub-batch k starts at run `runsPerBatch × k / subBatches`, so run boundaries survive uneven splits; the ordinary batch line still reports `operationsPerBatch` transactions. Each batch drains pending writes before its end tick.
+
+Every block writes ordinary warm-up and measured batch lines plus two measured-only samples lines per thread, with unit `ticks` and no CPU arrays. `singleRecord` uses `hundredReadsTime` with `measuredBatches × (operationsPerBatch - operationsPerBatch / 50) / 100` values; `twentyRecords` uses `readTime` with `measuredBatches × (operationsPerBatch - operationsPerBatch / 50)` values. Both use `writeTime` with `measuredBatches × operationsPerBatch / 50` values. Read samples bracket each complete read run. Write samples span submission through the completion tick recorded inside the write critical section, before unlocking. Arrays follow batch and run order, and write samples follow write order.
+
+Each block has one `transactionalStore.<operation>` check with integer `violations`, counting reads that saw different versions within a group. A passing check requires zero violations, every group's final version equal to its write count across all lists, a matching final value sum and valid batch sums. Detail follows `violations 0; groups 10000 with expected versions` (500 groups for `twentyRecords`). Checks and sample encoding happen after all workers and asynchronous writes finish.
+
 ### Async code (experiment 7)
 
 The variant picks a table of operations; each operation lists the mechanisms measured with it
@@ -161,7 +171,7 @@ the main thread equals that number for `templateDefaults` and 0 for the other tw
 `calls 1200/1200; on main thread 1200, expected 1200`.
 
 The attempt checker stores the required name in each `ExpectedBlock.check`:
-`baseComparison.<operation>`, `requestRegistry.addAndRemove`, `hotFlag.<operation>`, `asyncCode.<operation>`,
+`baseComparison.<operation>`, `requestRegistry.addAndRemove`, `hotFlag.<operation>`, `transactionalStore.<operation>`, `asyncCode.<operation>`,
 `priorityInversion.<operation>`, or the fixed calibration name `calibration.samples`.
 `ExpectedAttempt.blocks` maps each (mechanism, operation) pair to its expected work,
 including batch, samples and trial line counts. `ExpectedAttempt.run_checks` is

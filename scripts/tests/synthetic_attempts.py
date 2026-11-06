@@ -66,6 +66,15 @@ def hot_flag_request():
     return request
 
 
+def transactional_store_request():
+    """Thirteen stores, both transaction sizes, six workers, 5,000 transactions."""
+    request = hot_flag_request()
+    request.update(experiment="transactionalStore", operations=["singleRecord", "twentyRecords"])
+    request["mechanisms"] = request["mechanisms"][:13]
+    request["tunables"].update(threads=6, subBatches=8, operationsPerBatch={"default": 5000})
+    return request
+
+
 def request_registry_request(variant="burst"):
     """Ten registries, four workers and two measured batches of 1,024 calls."""
     request = deepcopy(json.loads(GOLDEN.read_text().splitlines()[0])["request"])
@@ -161,6 +170,7 @@ def make_attempt_lines(
     lines = [run, start_reference]
     calibration = request["experiment"] == "calibration"
     async_code = request["experiment"] == "asyncCode"
+    transactional_store = request["experiment"] == "transactionalStore"
     hot_flag = request["experiment"] == "hotFlag"
     request_registry = request["experiment"] == "requestRegistry"
     priority_inversion = request["experiment"] == "priorityInversion"
@@ -324,6 +334,15 @@ def make_attempt_lines(
                 metric="readGroupTime", unit="ticks",
                 values=[3] * (tunables["measuredBatches"] * (operations // 100)),
             ))
+        if transactional_store:
+            writes = operations // 50
+            read_metric = "hundredReadsTime" if operation == "singleRecord" else "readTime"
+            reads = (operations - writes) // (100 if operation == "singleRecord" else 1)
+            for metric, count in ((read_metric, reads), ("writeTime", writes)):
+                for thread in range(threads):
+                    lines.append(dict(type="samples", block=position, thread=thread,
+                                      metric=metric, unit="ticks",
+                                      values=[3] * (tunables["measuredBatches"] * count)))
         if request_registry:
             registry = tunables["requestRegistry"]
             for metric, per_thread, field in (
@@ -344,6 +363,8 @@ def make_attempt_lines(
             check_name = "priorityInversion." + operation
         elif request_registry:
             check_name = "requestRegistry." + operation
+        elif transactional_store:
+            check_name = "transactionalStore." + operation
         elif hot_flag:
             check_name = "hotFlag." + operation
         elif async_code:
