@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime
 import json
+import math
 from pathlib import Path
 import tempfile
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -219,7 +220,7 @@ class DeviceControl:
                 '--pid',
                 str(pid),
                 '--timeout',
-                str(max(5, timeout_seconds)),
+                str(max(5, math.ceil(timeout_seconds))),
             ],
             timeout_seconds,
             timed_out,

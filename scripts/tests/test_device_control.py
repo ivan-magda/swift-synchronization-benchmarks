@@ -71,7 +71,10 @@ class DeviceControlTests(unittest.TestCase):
         device = self.device(
             ['await-exited', timeout, {'return_code': 124, 'stdout': '', 'stderr': ''}]
         )
-        self.assertEqual(device.await_termination('PRIVATE-UDID', 6323, 30), (True, 0))
+        self.assertEqual(device.await_termination('PRIVATE-UDID', 6323, 30.25), (True, 0))
+        arguments, deadline = self.runner.calls[0]
+        self.assertEqual(arguments[arguments.index('--timeout') + 1], '31')
+        self.assertEqual(deadline, 30.25)
         self.assertEqual(
             device.await_termination('PRIVATE-UDID', 6323, 5), (False, None)
         )
