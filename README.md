@@ -15,7 +15,7 @@ The experiments cover locks, queues, actors, and atomics in workloads such as co
 
 ## Results
 
-The [benchmark results from 7 November 2026](https://github.com/ivan-magda/swift-synchronization-benchmarks/releases/tag/benchmark-results-2026-11-07) contains raw measurements from iPhone 11 Pro Max and iPhone 15 Pro Max, along with run plans, checks, and build metadata. The optional priority-inversion campaign was paused; its included results are incomplete. Use the recorded acceptance checks when analysing attempts.
+The [benchmark results from 7 November 2026](https://github.com/ivan-magda/swift-synchronization-benchmarks/releases/tag/benchmark-results-2026-11-07) contains raw measurements from iPhone 11 Pro Max and iPhone 15 Pro Max, along with run plans, checks, and build metadata. The archive includes three priority-inversion runs per device. Use the recorded acceptance checks when analysing attempts.
 
 The `ios18` and `ios26` labels refer to build targets. Each result records the operating system build actually installed on the phone. Results depend on the device, operating system, workload, and run conditions; they are not a universal ranking of synchronization mechanisms. See the [data format](docs/data-format.md) for the JSON Lines records.
 
