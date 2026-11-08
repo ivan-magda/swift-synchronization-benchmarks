@@ -85,7 +85,7 @@ simulated preparation work. Neither energy consumption nor whole-app speedup
 was measured. The cache's callback gaps also do not count every rendered-frame
 hitch. Read the limits next to each result before applying it elsewhere.
 
-The raw-data release is currently a draft. Published downloads will appear on
-the repository's [Releases page](https://github.com/ivan-magda/swift-synchronization-benchmarks/releases).
+Download the raw measurements and checksum from the
+[benchmark results release](https://github.com/ivan-magda/swift-synchronization-benchmarks/releases/tag/benchmark-results-2026-11-07).
 The result records are described in [data format](data-format.md), and
 [running SyncBench](running.md) explains how to collect and check your own runs.

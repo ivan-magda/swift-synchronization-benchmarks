@@ -36,7 +36,8 @@ and how much work each call does before replacing it with a lock.
 Each experiment page includes a small results table and its practical limits.
 The main examples use iPhone 15 Pro Max; material differences on iPhone 11 are
 called out in the text. See [campaign conditions and measurement definitions](docs/results.md)
-for the 7 November 2026 data. The raw-data release is still being prepared.
+for the 7 November 2026 data. Download the raw measurements from the
+[benchmark results release](https://github.com/ivan-magda/swift-synchronization-benchmarks/releases/tag/benchmark-results-2026-11-07).
 
 ## Run the benchmarks
 
