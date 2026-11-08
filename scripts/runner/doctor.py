@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
@@ -17,7 +17,6 @@ from runner.config import LocalConfig, Phone
 from runner.device_control import DeviceControl, DeviceControlError
 from runner.plans import Plan
 from runner.processes import CommandRunner
-from runner.run_state import RunState, StateError, state_path
 
 
 @dataclass
@@ -126,35 +125,8 @@ def doctor(
             build_info if build_info is not None else latest_build(results, target)
         )
         finding('build', info is not None, 'local build for ' + target + ' must exist')
-        if info is not None:
-            pending = plan.runs if plan else ()
-            if plan is not None:
-                path = state_path(
-                    results, plan, phone.key, info['codeHash'], dirty=info['dirty']
-                )
-                state = RunState.load_or_create(path, plan)
-                pending = state.pending_runs()
-            required_seconds = 0
-            if plan is not None:
-                required_seconds = plan.settle_seconds
-                for run in pending:
-                    # Every pending run gets a fresh per-session thermal allowance.
-                    # A normal outcome advances; only thermal refusals retry here.
-                    launches = plan.max_thermal_retries + 1
-                    required_seconds += (
-                        launches * run.time_limit_seconds
-                        + max(0, launches - 1) * plan.thermal_wait_seconds
-                        + (plan.pause_seconds if launches else 0)
-                        + (30 if launches else 0)  # Crash-report publication grace.
-                    )
-            expiry = datetime.fromisoformat(info['profileExpires'])
-            finding(
-                'profile',
-                expiry.tzinfo is not None
-                and expiry > now + timedelta(seconds=required_seconds),
-                'profile must remain valid through pending launches, thermal waits, '
-                'crash-report grace, pauses and settle time',
-            )
-    except (BuildError, StateError, ValueError, KeyError, TypeError):
-        finding('profile', False, 'build profile or pending-run metadata is invalid')
+        # Profile expiry is metadata only. Ivan disabled this preflight gate;
+        # iOS installation/launch remains responsible for signature validity.
+    except (BuildError, ValueError, KeyError, TypeError):
+        finding('build', False, 'build metadata is invalid')
     return findings

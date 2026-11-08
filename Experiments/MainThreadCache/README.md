@@ -28,7 +28,7 @@ The cell dequeues normally, times this lookup and assigns the returned UIImage t
 
 ## How it is timed
 
-A full-screen UICollectionView has four columns of square cells, 10,000 items and UIKit's default prefetching. Item i uses key i modulo 1,000. DisplayLinkLoop advances the content offset by `scrollPointsPerSecond / maximumFramesPerSecond` points per callback. At the bottom it wraps to the top. Each row uses the same geometry, speed, frame count and seed.
+A full-screen UICollectionView has four columns of square cells, 10,000 items and UIKit's default prefetching. Item i uses key i modulo 1,000. DisplayLinkLoop advances the content offset by `scrollPointsPerSecond / maximumFramesPerSecond` points per callback. The step is fixed per callback: delayed callbacks reduce the actual scrolling speed over elapsed time. At the bottom it wraps to the top. Each row uses the same geometry, step, frame count and seed.
 
 After `warmupFrames`, Clock.now brackets only the application's cache lookup inside the real cell callback. A fixed read buffer is allocated before the block using scroll distance, cell size, visible rows and a prefetch margin. It never grows; overflow fails correctness. Measured frames also record their start tick and `targetTimestamp - timestamp` in nanoseconds. Frame gaps show main-thread delays per frame, not render-server hitches, and include the real UIKit work of configuring cells. The frame-interval value is the display link's scheduled interval; gaps between frameStart values reveal missed or delayed callbacks.
 
@@ -40,7 +40,7 @@ A coordinator starts the display loop only after the writers are ready. Installa
 
 `mainThreadCache.scroll` requires all measured frames before the deadline, at least one measured read, no read-buffer overflow, at least one store by every writer and no missing or inconsistent entry. Every measured read checks that its UIImage is identical to `images[imageIndex]`, with index bounds checked first. Detail includes `frames 600/600; reads 950, writes 50, violations 0`, overflow and the decode checksum.
 
-Requests require `frames >= 1`, `warmupFrames >= 0`, scroll speed 1…20,000 points per second, positive decode work and a pause fitting UInt32 microseconds. Frame duration and storage arithmetic must fit before allocation. The acceptance plan includes two and four writers, 60 warm-up and 600 measured frames. These acceptance inputs passed on the Simulator and on both phones with pinned iOS builds; the pilot still sets performance tunables.
+Requests require `frames >= 1`, `warmupFrames >= 0`, nominal scroll speed 1…20,000 points per second (used to derive the fixed step per callback), positive decode work and a pause fitting UInt32 microseconds. Frame duration and storage arithmetic must fit before allocation. The acceptance plan includes two and four writers, 60 warm-up and 600 measured frames. These acceptance inputs passed on the Simulator and on both phones with pinned iOS builds; the pilot still sets performance tunables.
 
 ## Read the code in this order
 

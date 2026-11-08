@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "name": "main-optional-8a-iphone15-ios26",
+  "buildTarget": "ios26",
+  "smoke": false,
+  "iosBuilds": {
+    "iphone15": "23G90"
+  },
+  "seed": 2026110703,
+  "shuffle": true,
+  "settleSeconds": 30,
+  "pauseSeconds": 5,
+  "thermalWaitSeconds": 300,
+  "maxThermalRetries": 3,
+  "maxAttempts": 3,
+  "runs": [
+    {
+      "name": "mainThreadCache-two-writers",
+      "experiment": "mainThreadCache",
+      "variant": "default",
+      "repeats": 12,
+      "timeLimitSeconds": 900,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "mainActor"
+      ],
+      "operations": [
+        "scroll"
+      ],
+      "tunables": {
+        "threads": 2,
+        "qos": "userInitiated",
+        "warmupBatches": 0,
+        "measuredBatches": 1,
+        "subBatches": 1,
+        "operationsPerBatch": {
+          "default": 1
+        },
+        "referenceLoopIterations": 1000000,
+        "mainThreadCache": {
+          "warmupFrames": 60,
+          "frames": 1800,
+          "scrollPointsPerSecond": 3000,
+          "decodeIterations": 10000,
+          "writeIntervalMicroseconds": 350000
+        }
+      }
+    },
+    {
+      "name": "mainThreadCache-four-writers",
+      "experiment": "mainThreadCache",
+      "variant": "default",
+      "repeats": 12,
+      "timeLimitSeconds": 900,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "objcSync",
+        "mainActor"
+      ],
+      "operations": [
+        "scroll"
+      ],
+      "tunables": {
+        "threads": 4,
+        "qos": "userInitiated",
+        "warmupBatches": 0,
+        "measuredBatches": 1,
+        "subBatches": 1,
+        "operationsPerBatch": {
+          "default": 1
+        },
+        "referenceLoopIterations": 1000000,
+        "mainThreadCache": {
+          "warmupFrames": 60,
+          "frames": 1800,
+          "scrollPointsPerSecond": 3000,
+          "decodeIterations": 10000,
+          "writeIntervalMicroseconds": 700000
+        }
+      }
+    }
+  ]
+}

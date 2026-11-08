@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "name": "main-optional-8b-iphone11-ios26",
+  "buildTarget": "ios26",
+  "smoke": false,
+  "iosBuilds": {
+    "iphone11": "23G71"
+  },
+  "seed": 2026110704,
+  "shuffle": true,
+  "settleSeconds": 30,
+  "pauseSeconds": 5,
+  "thermalWaitSeconds": 300,
+  "maxThermalRetries": 3,
+  "maxAttempts": 3,
+  "runs": [
+    {
+      "name": "all-mechanisms",
+      "experiment": "priorityInversion",
+      "variant": "default",
+      "repeats": 10,
+      "timeLimitSeconds": 3600,
+      "mechanisms": [
+        "mutex",
+        "osAllocatedUnfairLock",
+        "osAllocatedUnfairLockAdaptiveSpin",
+        "osUnfairLock",
+        "nsLock",
+        "nsRecursiveLock",
+        "pthreadMutex",
+        "pthreadReadWriteLock",
+        "serialQueue",
+        "barrierQueueSyncWrite",
+        "barrierQueueAsyncWrite",
+        "dispatchSemaphore",
+        "actor",
+        "objcSync"
+      ],
+      "operations": [
+        "utilityHolder",
+        "backgroundHolder"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInteractive",
+        "warmupBatches": 0,
+        "measuredBatches": 1,
+        "subBatches": 1,
+        "operationsPerBatch": {
+          "default": 1
+        },
+        "referenceLoopIterations": 1000000,
+        "priorityInversion": {
+          "holderWorkIterations": 2195390,
+          "loadQoS": "userInitiated",
+          "loadMilliseconds": 300,
+          "mainDelayMicroseconds": 1000,
+          "pauseMilliseconds": 700,
+          "warmupTrials": 3,
+          "trials": 100
+        }
+      }
+    }
+  ]
+}

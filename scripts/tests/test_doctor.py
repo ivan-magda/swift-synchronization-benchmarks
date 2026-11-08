@@ -120,10 +120,10 @@ class DoctorTests(unittest.TestCase):
                 'developer-mode',
                 'ios-build',
                 'unlocked',
-                'profile',
             ):
                 self.assertFalse(findings[name].ok, name)
             self.assertTrue(findings['available'].ok)
+            self.assertNotIn('profile', findings)
 
     def test_ios_build_fails_when_a_non_smoke_plan_lacks_the_phone(self):
         class Devices:
@@ -229,93 +229,26 @@ class DoctorTests(unittest.TestCase):
             )
             self.assertTrue(calibration_finding(plan).ok)
 
-    def test_profile_budget_covers_retries_waits_pauses_and_only_pending_runs(self):
-        plan = replace(
-            load_plan(Path('plans/smoke-base-comparison.json')),
-            max_attempts=2,
-            max_thermal_retries=1,
-            thermal_wait_seconds=30,
-            settle_seconds=10,
-            pause_seconds=5,
-        )
-
+    def test_profile_expiry_does_not_block_launches(self):
         class Devices:
             def list_devices(self):
-                return [
-                    DeviceInfo(PHONE.udid, 'iPhone', '26.0', 'FIXTURE', True, True)
-                ]
+                return [DeviceInfo(PHONE.udid, 'iPhone', '26.0', 'FIXTURE', True, True)]
 
             def is_unlocked(self, udid):
                 return True
 
-        from runner.run_state import RunState, state_path
-
-        with tempfile.TemporaryDirectory() as temporary:
-            results = Path(temporary) / 'results'
-            info = {
-                'buildID': 'fixture',
-                'codeHash': 'a' * 64,
-                'profileExpires': (NOW + timedelta(seconds=1300)).isoformat(),
-                'dirty': True,
-            }
-
-            # Per run: 2 launches * 300 + 30 thermal wait + 30 crash grace + 5 pause.
-            # Two runs plus settle require 1340 seconds; one requires 675.
-            findings = doctor(
-                CONFIG,
-                PHONE,
-                plan,
-                results,
-                BuildRunner(),
-                Devices(),
-                NOW,
-                build_info=info,
-            )
-            self.assertFalse(
-                next(item for item in findings if item.name == 'profile').ok
-            )
-            state = RunState.load_or_create(
-                state_path(
-                    results, plan, PHONE.key, info['codeHash'], dirty=info['dirty']
-                ),
-                plan,
-            )
-            for _ in range(2):
-                state.record_attempt(
-                    plan.runs[0].run_id,
-                    {'accepted': False, 'status': 'refused', 'reasonCode': 'thermal'},
+        plan = load_plan(Path('plans/smoke-base-comparison.json'))
+        for expiry in ((NOW - timedelta(days=1)).isoformat(),
+                       (NOW + timedelta(seconds=1)).isoformat()):
+            with self.subTest(expiry=expiry), tempfile.TemporaryDirectory() as temporary:
+                findings = doctor(
+                    CONFIG, PHONE, plan, Path(temporary) / 'results',
+                    BuildRunner(), Devices(), NOW,
+                    build_info={'buildID': 'fixture', 'codeHash': 'a' * 64,
+                                'dirty': False, 'profileExpires': expiry},
                 )
-            # Previous thermal exhaustion must not reduce a fresh session's budget.
-            findings = doctor(
-                CONFIG, PHONE, plan, results, BuildRunner(), Devices(), NOW,
-                build_info=info,
-            )
-            self.assertFalse(
-                next(item for item in findings if item.name == 'profile').ok
-            )
-            state.record_attempt(plan.runs[0].run_id, {'accepted': True})
-            findings = doctor(
-                CONFIG,
-                PHONE,
-                plan,
-                results,
-                BuildRunner(),
-                Devices(),
-                NOW,
-                build_info=info,
-            )
-            self.assertTrue(
-                next(item for item in findings if item.name == 'profile').ok
-            )
-
-            # Clean sessions cannot spend progress accepted in the dev namespace.
-            findings = doctor(
-                CONFIG, PHONE, plan, results, BuildRunner(), Devices(), NOW,
-                build_info=dict(info, dirty=False),
-            )
-            self.assertFalse(
-                next(item for item in findings if item.name == 'profile').ok
-            )
+                self.assertNotIn('profile', {item.name for item in findings})
+                self.assertTrue(all(item.ok for item in findings), findings)
 
     def test_run_command_handles_failure_missing_command_and_timeout(self):
         import sys

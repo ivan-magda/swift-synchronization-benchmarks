@@ -1,0 +1,448 @@
+{
+  "schema": 1,
+  "name": "main-required-iphone11-ios18",
+  "buildTarget": "ios18",
+  "smoke": false,
+  "iosBuilds": {
+    "iphone11": "23G71"
+  },
+  "seed": 2026110702,
+  "shuffle": true,
+  "settleSeconds": 30,
+  "pauseSeconds": 5,
+  "thermalWaitSeconds": 300,
+  "maxThermalRetries": 3,
+  "maxAttempts": 3,
+  "runs": [
+    {
+      "name": "one-thread-read",
+      "experiment": "baseComparison",
+      "variant": "oneThread",
+      "repeats": 12,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 278264,
+          "atomic": 1612904,
+          "atomicRelaxed": 5084748,
+          "managedAtomic": 3503652,
+          "managedAtomicRelaxed": 2850360
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "one-thread-write",
+      "experiment": "baseComparison",
+      "variant": "oneThread",
+      "repeats": 12,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "write"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 269696,
+          "atomic": 5748512,
+          "atomicRelaxed": 4240284,
+          "managedAtomic": 3488376,
+          "managedAtomicRelaxed": 2144776
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "one-thread-increment",
+      "experiment": "baseComparison",
+      "variant": "oneThread",
+      "repeats": 12,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "increment"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 291548,
+          "atomic": 507508,
+          "atomicRelaxed": 602108,
+          "managedAtomic": 600004,
+          "managedAtomicRelaxed": 507940
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "two-threads-read",
+      "experiment": "baseComparison",
+      "variant": "twoThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read"
+      ],
+      "tunables": {
+        "threads": 2,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 79652,
+          "atomic": 7361964,
+          "atomicRelaxed": 5925928,
+          "managedAtomic": 2287896,
+          "managedAtomicRelaxed": 3361348
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "two-threads-write",
+      "experiment": "baseComparison",
+      "variant": "twoThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "write"
+      ],
+      "tunables": {
+        "threads": 2,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 59716,
+          "atomic": 8888892,
+          "atomicRelaxed": 9486168,
+          "managedAtomic": 1787044,
+          "managedAtomicRelaxed": 2702704
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "two-threads-increment",
+      "experiment": "baseComparison",
+      "variant": "twoThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "increment"
+      ],
+      "tunables": {
+        "threads": 2,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 72980,
+          "atomic": 235736,
+          "atomicRelaxed": 473376,
+          "managedAtomic": 288084,
+          "managedAtomicRelaxed": 307536
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "six-threads-read",
+      "experiment": "baseComparison",
+      "variant": "sixThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read"
+      ],
+      "tunables": {
+        "threads": 6,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 18156,
+          "atomic": 7380076,
+          "atomicRelaxed": 10000000,
+          "managedAtomic": 3206844,
+          "managedAtomicRelaxed": 3990692
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "six-threads-write",
+      "experiment": "baseComparison",
+      "variant": "sixThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "write"
+      ],
+      "tunables": {
+        "threads": 6,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 14388,
+          "atomic": 751928,
+          "atomicRelaxed": 1926476,
+          "managedAtomic": 737580,
+          "managedAtomicRelaxed": 1615836
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "six-threads-increment",
+      "experiment": "baseComparison",
+      "variant": "sixThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "increment"
+      ],
+      "tunables": {
+        "threads": 6,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 13772,
+          "atomic": 13680,
+          "atomicRelaxed": 35936,
+          "managedAtomic": 13064,
+          "managedAtomicRelaxed": 34356
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "twelve-threads-read",
+      "experiment": "baseComparison",
+      "variant": "twelveThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read"
+      ],
+      "tunables": {
+        "threads": 12,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 13084,
+          "atomic": 7361964,
+          "atomicRelaxed": 7817592,
+          "managedAtomic": 4159448,
+          "managedAtomicRelaxed": 3915172
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "twelve-threads-write",
+      "experiment": "baseComparison",
+      "variant": "twelveThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "write"
+      ],
+      "tunables": {
+        "threads": 12,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 15432,
+          "atomic": 245256,
+          "atomicRelaxed": 589756,
+          "managedAtomic": 230784,
+          "managedAtomicRelaxed": 586988
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "twelve-threads-increment",
+      "experiment": "baseComparison",
+      "variant": "twelveThreads",
+      "repeats": 20,
+      "timeLimitSeconds": 180,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "increment"
+      ],
+      "tunables": {
+        "threads": 12,
+        "qos": "userInitiated",
+        "warmupBatches": 6,
+        "measuredBatches": 12,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 10000,
+          "mutex": 8208,
+          "atomic": 37280,
+          "atomicRelaxed": 19960,
+          "managedAtomic": 9116,
+          "managedAtomicRelaxed": 21460
+        },
+        "referenceLoopIterations": 1000000
+      }
+    },
+    {
+      "name": "hotFlag-default",
+      "experiment": "hotFlag",
+      "variant": "default",
+      "repeats": 12,
+      "timeLimitSeconds": 900,
+      "mechanisms": [
+        "mutex",
+        "atomic",
+        "atomicRelaxed",
+        "managedAtomic",
+        "managedAtomicRelaxed"
+      ],
+      "operations": [
+        "read",
+        "readGroups"
+      ],
+      "tunables": {
+        "threads": 1,
+        "qos": "userInitiated",
+        "warmupBatches": 3,
+        "measuredBatches": 5,
+        "subBatches": 4,
+        "operationsPerBatch": {
+          "default": 1000000,
+          "mutex": 20908800,
+          "atomic": 60908800,
+          "atomicRelaxed": 100000000,
+          "managedAtomic": 30360000,
+          "managedAtomicRelaxed": 31097200
+        },
+        "referenceLoopIterations": 1000000
+      }
+    }
+  ]
+}

@@ -7,6 +7,9 @@
 /results/
 /local.json
 /.superpowers/
+/docs/superpowers/
+/docs/harness-design.md
+/docs/phase-1-decisions.md
 
 # SourceKit-LSP / Xcode build server (machine-specific paths)
 /buildServer.json
