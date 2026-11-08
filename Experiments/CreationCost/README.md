@@ -2,7 +2,40 @@
 
 ## Question
 
-What does creating and destroying a class holding one protected `Int` cost in time and live heap space? How much does each mechanism add over the unprotected class?
+What does creating and destroying a class holding one protected `Int` cost in time and allocator-reported memory? How much does each mechanism add over the unprotected class?
+
+## Results
+
+Similar access times do not imply similar creation or memory costs. In this test,
+a class containing Mutex cost about as much to create as the ordinary class,
+with roughly 16 extra allocator-reported bytes per object.
+
+Selected [7 November 2026 results](../../docs/results.md), iPhone 15 Pro Max,
+ios26 target, 100,000 objects per batch and 12 launches. The main campaign used
+three warm-up and five measured batches. Timing covers the creation/destruction
+loop; extra bytes are paired differences from the ordinary class in each launch.
+
+| Object contains | Create (ns/object) | Destroy (ns/object) | Extra reported bytes/object |
+| --- | ---: | ---: | ---: |
+| Ordinary class | 15.71 | 17.50 | 0 |
+| `Mutex` | 15.31 | 16.62 | ≈16 |
+| `OSAllocatedUnfairLock` | 24.29 | 35.64 | ≈32 |
+| `NSLock` | 26.79 | 36.20 | ≈112 |
+| Serial queue | 152.17 | 81.04 | ≈160 |
+| `actor` | 20.72 | 22.33 | ≈96 |
+| `@MainActor` class | 16.24 | 17.36 | ≈0 |
+| `Atomic` | 15.72 | 16.97 | ≈0 |
+| `ManagedAtomic` | 23.29 | 39.79 | ≈32 |
+
+A private serial queue per object took about ten times as long to create as Mutex.
+That matters when there are many small objects; one queue shared by a larger
+subsystem is a different design. The memory pattern also appeared on iPhone 11.
+
+These are concrete wrapper classes after warm-up. Allocator-reported growth is
+not exact object size, physical footprint or a count of allocation events.
+The small timing advantage over the ordinary class does not mean that adding a
+Mutex makes allocation faster. MainActor objects were created and destroyed on
+the main thread, so their row includes no cross-actor access cost.
 
 ## Rows
 

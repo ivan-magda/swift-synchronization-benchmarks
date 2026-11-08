@@ -4,6 +4,38 @@
 
 What does one synchronous read of a shared `Bool` cost while the main thread toggles it about every 10 ms? How often do groups of 100 reads wait behind a write?
 
+## Results
+
+Atomic was the cheapest way to read this flag while another thread changed it.
+The saving over `Mutex` was about **1.54 ns per read** on iPhone 15, so the number
+of reads matters when deciding whether a change is worthwhile.
+
+Selected [7 November 2026 results](../../docs/results.md), iPhone 15 Pro Max,
+ios26 target, 12 launches. These are batch mean times, summarized across launches.
+
+| Mechanism | Mean time per read (ns) |
+| --- | ---: |
+| `Atomic`, acquire/release | 0.320 |
+| `Atomic`, relaxed | 0.322 |
+| `ManagedAtomic`, acquire/release | 0.796 |
+| `Mutex` | 1.859 |
+| `OSAllocatedUnfairLock` | 1.858 |
+| Allocated unfair lock + adaptive spin | 8.893 |
+| Serial queue | 202.780 |
+
+Use Atomic when the flag and its memory-ordering requirements fit the operation.
+If the flag is part of a larger protected state, this result alone is not a reason
+to split it out of a `Mutex`.
+
+Relaxed reads offered no material advantage on iPhone 15. On iPhone 11 they did:
+about 0.455 ns versus 0.612 ns for acquire. The ios18/ios26 build-target comparison
+made little difference to flag reads on either phone.
+
+The separate `readGroups` measurements time **100 reads**, not one. Some atomic
+groups recorded zero ticks; their p99 was one tick on iPhone 15. Use the batch
+means above for the fast rows. There are no per-write timestamps, so slow groups
+cannot be attributed specifically to waiting behind a write.
+
 ## Rows
 
 Seventeen rows compare `Mutex`, allocated unfair locks (default and adaptive spin), a raw unfair lock, `NSLock`, `NSRecursiveLock`, pthread mutex and read/write lock, serial queue, concurrent queue with synchronous or asynchronous barrier writes, semaphore, Objective-C synchronization, and acquiring or relaxed `Atomic` and `ManagedAtomic`. The pthread read/write lock takes a read lock for reads. Variant `default` runs one reader at the requested QoS. Operations are `read` and `readGroups`; there is no pause between reads.

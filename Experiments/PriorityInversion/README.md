@@ -4,6 +4,47 @@
 
 How long does the main thread wait for a low-QoS holder when higher-QoS work keeps every CPU busy? Does each mechanism let the holder finish soon enough, compared with the `os_unfair_lock` and `DispatchSemaphore` references?
 
+## Results
+
+A cheap uncontended lock does not guarantee a short wait when another thread
+already holds it. Under this CPU load, most ordinary locks had waits around
+13 ms on iPhone 15. Semaphore, rwlock and synchronous barrier writes had much
+longer waits.
+
+This is a **partial campaign: three launches per phone**, with 100 measured trials
+per mechanism/QoS in each launch. The table shows iPhone 15 Pro Max, ios26 target,
+and a `background` holder from the [7 November 2026 campaign](../../docs/results.md).
+CPU load lasted 300 ms; holder work was calibrated to about 5 ms without that load.
+Wait is measured from main-thread arrival to protected access. The table reports
+the median of the three launch medians.
+
+| Mechanism | Median wait (ms) | Waits >250 ms, out of 300 |
+| --- | ---: | ---: |
+| `Mutex` | 12.95 | 0 |
+| `OSAllocatedUnfairLock` | 12.97 | 0 |
+| `NSLock` | 12.96 | 0 |
+| Concurrent queue, sync barrier writes | 61.94 | 28 |
+| `DispatchSemaphore` | 65.63 | 7 |
+| `pthread_rwlock` | 68.55 | 57 |
+
+Long waits varied sharply between launches. Background rwlock produced 28, 1 and
+28 waits above 250 ms; sync barrier produced 27, 1 and 0. These counts do not
+establish a stable probability for an application. On iPhone 11, the same slower
+group had medians around 21–22 ms and no waits above 250 ms.
+
+Across both QoS groups, iPhone 15 had 93 censored trials: access occurred only
+after the load deadline. Their waits under sustained load are lower bounds near
+299 ms, not exact 300 ms observations. All medians in the table remain identifiable
+with those bounds included.
+
+The actor row has different semantics. Its timer ends when the actor begins
+protected access, before returning to MainActor. The awaiting task suspends; this
+is not synchronous main-thread blocking.
+
+Mutex remains a reasonable starting point here, but reducing the work held under
+the lock matters too. The timing results alone do not prove a particular runtime
+or kernel priority-donation mechanism.
+
 ## Rows
 
 Fourteen mechanisms × two holder QoS levels (`utilityHolder` and `backgroundHolder`): `Mutex`, allocated unfair lock, allocated unfair lock with adaptive spin, `os_unfair_lock`, `NSLock`, `NSRecursiveLock`, pthread mutex, pthread read-write lock, Objective-C synchronization, serial queue, synchronous barrier queue, asynchronous barrier queue, semaphore and actor. Each block has one controller pthread, one holder pthread and one load pthread per CPU. The actor and asynchronous barrier submit holder work to their own executor or queue.

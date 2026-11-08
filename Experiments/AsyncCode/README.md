@@ -4,6 +4,44 @@
 
 What does an increment cost when async code calls an actor, the main actor or a lock along five caller paths? How do grouping 100 operations and changing Swift isolation settings affect that cost?
 
+## Results
+
+The cost of using an actor depended on where the call came from and how much
+work it did. Grouping updates made a much larger difference than choosing between
+the fast lock wrappers.
+
+Selected [7 November 2026 results](../../docs/results.md), iPhone 15 Pro Max,
+ios26 target. Times are per update, calculated from batches and summarized across
+launches; the rows use separate configurations. Caller paths use 20 launches,
+while grouping and isolation settings use 12.
+
+| Actor operation | Mean time per update |
+| --- | ---: |
+| One counter, background Task | 52.61 ns |
+| One counter, MainActor to actor and back | 4.89 µs |
+| 128 counters, one await per update | 58.08 ns |
+| 128 counters, 100 updates per await | 1.23 ns |
+
+Grouping 100 real updates reduced actor time per update by about **47×**. This is
+a descriptive comparison of separate launch configurations, not a paired speedup.
+Mutex with the same grouping was still faster, at about **0.69 ns/update**. Grouping
+is useful only where the application can keep those updates together.
+
+With 50 tasks, the median of per-launch call p99 values was **6.29 µs** for Mutex,
+**11.44 µs** for NSLock and **24.90 µs** for actor. NSLock's call p50 recorded zero
+ticks in 16 of 20 iPhone 15 launches. That is a clock-resolution limit, not a
+zero-cost operation.
+
+The isolation probe also confirmed that `async` does not mean off-main execution.
+The template's `nonisolated async` function stayed on the main thread; the Swift 6
+configuration without Approachable Concurrency and the `@concurrent` variant ran
+off it. Several settings differ between the two modules, so this is not the
+effect of changing language mode alone.
+
+If an actor already owns the state, look at call frequency and grouping before
+replacing it with a lock. A short synchronous update can still use Mutex inside
+async code; the protected closure must contain no suspension.
+
 ## Rows
 
 7A compares code already on an actor (`onActor`), one background task calling a counter (`fromBackgroundTask`), 50 competing tasks (`fromManyTasks`), a main-actor caller (`fromMainActor`), and a background caller updating main-actor state (`toMainActor`). The middle three paths compare an actor with `Mutex`, `OSAllocatedUnfairLock` and `NSLock`; the first and last use their named actor. 7B compares one actor await per 100 operations, one await per operation, and one mutex acquisition per 100 operations over 128 counters. 7C calls a probe from the main actor with template defaults, Swift 6 settings or `@concurrent`.

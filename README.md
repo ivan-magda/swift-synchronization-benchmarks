@@ -15,9 +15,28 @@ The experiments cover locks, queues, actors, and atomics in workloads such as co
 
 ## Results
 
-The [benchmark results from 7 November 2026](https://github.com/ivan-magda/swift-synchronization-benchmarks/releases/tag/benchmark-results-2026-11-07) contains raw measurements from iPhone 11 Pro Max and iPhone 15 Pro Max, along with run plans, checks, and build metadata. The archive includes three priority-inversion runs per device. Use the recorded acceptance checks when analysing attempts.
+**Start with `Mutex` for short, synchronous access to shared state.** It performed
+well in the counter, request registry and transactional store, and added little
+creation overhead. Atomic is worth considering for an independent counter or
+flag. If an actor already owns the state, look at how often you cross its boundary
+and how much work each call does before replacing it with a lock.
 
-The `ios18` and `ios26` labels refer to build targets. Each result records the operating system build actually installed on the phone. Results depend on the device, operating system, workload, and run conditions; they are not a universal ranking of synchronization mechanisms. See the [data format](docs/data-format.md) for the JSON Lines records.
+- Ordinary locks beat rwlock and barrier queues in the
+  [store test](Experiments/TransactionalStore/README.md#results), even with 98% reads.
+- Adaptive spin shortened long calls in the
+  [request registry](Experiments/RequestRegistry/README.md#results), while making
+  the typical call slower. Total throughput rose by about 7% with eight threads
+  and no pauses between requests.
+- Doing 100 updates per await reduced time per update by about 47× in the
+  [async test](Experiments/AsyncCode/README.md#results).
+- Queue lookups took about four times as long as Mutex in the
+  [image cache](Experiments/MainThreadCache/README.md#results), but neither produced
+  display-link callback gaps above the chosen delay threshold.
+
+Each experiment page includes a small results table and its practical limits.
+The main examples use iPhone 15 Pro Max; material differences on iPhone 11 are
+called out in the text. See [campaign conditions and measurement definitions](docs/results.md)
+for the 7 November 2026 data. The raw-data release is still being prepared.
 
 ## Run the benchmarks
 

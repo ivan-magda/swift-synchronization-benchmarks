@@ -2,13 +2,47 @@
 
 ## Question
 
-How much does a cache read delay a scrolling UIKit screen while two to four background writers decode and replace images?
+How much does a cache read delay a scrolling UIKit screen while two to four background writers simulate image preparation and replace cached images?
+
+## Results
+
+Queue lookups took about four times as long as Mutex lookups, but that difference
+did not produce an advantage in the measured callback-delay metric.
+
+Selected [7 November 2026 results](../../docs/results.md), iPhone 15 Pro Max,
+ios26 target, four background writers and 12 launches. Timings cover the cache
+lookup in `cellForItemAt`, not the rest of cell configuration. Each value is the
+median of the corresponding per-launch percentile. Each block recorded 1,800
+display-link callbacks after 60 warm-up callbacks.
+
+| Mechanism | Lookup p50 (µs) | Lookup p99 (µs) |
+| --- | ---: | ---: |
+| `Mutex` | 2.02 | 8.16 |
+| Direct `MainActor` access | 2.10 | 8.29 |
+| `NSLock` | 2.42 | 10.02 |
+| Serial queue | 7.94 | 19.25 |
+| Concurrent queue, sync barrier writes | 8.21 | 20.21 |
+| Concurrent queue, async barrier writes | 8.27 | 19.89 |
+
+Across both writer configurations, neither phone had a callback gap greater than
+1.5 times the scheduled display interval: **0 of 604,464 gaps per phone**. This
+measures CADisplayLink callback spacing, not render-server hitches or all dropped
+frames. A cheaper lookup did not establish smoother scrolling in this workload.
+
+The MainActor cache was read directly by UIKit, without an actor hop. There is no
+speed reason here to move an already MainActor-owned cache behind a Mutex.
+
+The cache was prefilled, all reads were hits, and writers updated it infrequently.
+Their preparation work simulated decoding; it did not decode image files. Two
+writers paused 350 ms each; four paused 700 ms, keeping similar aggregate pacing.
+The MainActor variant completed slightly fewer writes, so this is not an exact
+equal-write-count comparison.
 
 ## Rows
 
 Fourteen rows compare Mutex, allocated unfair locks (default and adaptive spin), a raw unfair lock, NSLock, NSRecursiveLock, pthread mutex and read/write lock, serial queue, concurrent queue with synchronous or asynchronous barrier writes, semaphore, Objective-C synchronization and a main-actor cache. Each row owns its dictionary and protection. Read/write locks take a read lock for lookups; queue readers use sync. Main-actor reads are direct and detached writers await each main-actor store. Variant `default` uses operation `scroll`; `threads` is the number of writers at the requested QoS.
 
-At block setup, CacheImages draws 64 images and builds 1,000 URL keys. Every key is filled before scrolling begins. Writers replace entries for existing keys, so dictionary capacity does not grow. Each seeded writer chooses a key and an image, runs exactly `decodeIterations` of referenceLoop outside the cache, stores the complete image/index pair, then pauses `writeIntervalMicroseconds`. The decode result reaches the correctness detail. An immutable per-image work-count array, selected by the runtime image index, keeps the configured work associated with each write. The pilot adjusts the pause toward a 95/5 read/write ratio. The reported reads cover measured frames only; writes include writer startup and warm-up through frame completion. The pilot must account for these different windows when interpreting the ratio.
+At block setup, CacheImages draws 64 images and builds 1,000 URL keys. Every key is filled before scrolling begins. Writers replace entries for existing keys, so dictionary capacity does not grow. Each seeded writer chooses a key and an image, runs exactly `decodeIterations` of referenceLoop outside the cache, stores the complete image/index pair, then pauses `writeIntervalMicroseconds`. The decode result reaches the correctness detail. An immutable per-image work-count array, selected by the runtime image index, keeps the configured work associated with each write. The pilot adjusted the pause toward a 95/5 read/write ratio. The reported reads cover measured frames only; writes include writer startup and warm-up through frame completion. Those different windows prevent interpreting the raw counts as an exact read/write ratio.
 
 ## One operation
 
@@ -40,7 +74,7 @@ A coordinator starts the display loop only after the writers are ready. Installa
 
 `mainThreadCache.scroll` requires all measured frames before the deadline, at least one measured read, no read-buffer overflow, at least one store by every writer and no missing or inconsistent entry. Every measured read checks that its UIImage is identical to `images[imageIndex]`, with index bounds checked first. Detail includes `frames 600/600; reads 950, writes 50, violations 0`, overflow and the decode checksum.
 
-Requests require `frames >= 1`, `warmupFrames >= 0`, nominal scroll speed 1…20,000 points per second (used to derive the fixed step per callback), positive decode work and a pause fitting UInt32 microseconds. Frame duration and storage arithmetic must fit before allocation. The acceptance plan includes two and four writers, 60 warm-up and 600 measured frames. These acceptance inputs passed on the Simulator and on both phones with pinned iOS builds; the pilot still sets performance tunables.
+Requests require `frames >= 1`, `warmupFrames >= 0`, nominal scroll speed 1…20,000 points per second (used to derive the fixed step per callback), positive decode work and a pause fitting UInt32 microseconds. Frame duration and storage arithmetic must fit before allocation. The acceptance plan includes two and four writers, 60 warm-up and 600 measured frames. These acceptance inputs passed on the Simulator and on both phones with pinned iOS builds; the main-campaign settings are described in Results above.
 
 ## Read the code in this order
 

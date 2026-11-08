@@ -4,6 +4,42 @@
 
 What do synchronous reads and transactional writes cost when six workers share 10,000 records, read 98% of the time and write 2% of the time? How does a transaction of twenty records compare with one record?
 
+## Results
+
+**98% reads did not make shared-reader locking faster.** For these short
+transactions, `Mutex`, `OSAllocatedUnfairLock` and `pthread_mutex` completed the
+most work per second.
+
+Selected [7 November 2026 results](../../docs/results.md), iPhone 15 Pro Max,
+ios26 target, six threads and 20 launches. Throughput counts completed read/write
+transactions across all threads and includes draining async writes.
+
+| Mechanism | One-record transactions (million/s) | Twenty-record transactions (million/s) |
+| --- | ---: | ---: |
+| `Mutex` | 34.81 | 9.37 |
+| `OSAllocatedUnfairLock` | 34.67 | 9.50 |
+| `pthread_mutex` | 35.10 | 9.29 |
+| `NSLock` | 22.48 | 8.05 |
+| `pthread_rwlock` | 3.88 | 3.07 |
+| Concurrent queue, sync barrier writes | 1.69 | 1.60 |
+| Concurrent queue, async barrier writes | 2.09 | 1.47 |
+| Serial queue | 0.46 | 0.45 |
+
+Compare mechanisms within a column. The two transaction sizes also use different
+read-timing frequency and write placement, so the change between columns is not
+an isolated measurement of record count.
+
+Throughput is only part of the result. For twenty-record writes, `pthread_mutex`
+had a p99 of **14.94 µs**, versus **7.96 µs** for `Mutex`, despite similar throughput.
+Adaptive spin lowered write p99 to **6.21 µs**, but reduced throughput to
+**5.80 million transactions/s**. Write timing ends inside the protected section,
+before unlock and return.
+
+The broad throughput result repeated on iPhone 11, although rwlock came much
+closer to Mutex for twenty records. Start with an ordinary lock for this kind of
+short work; choose shared-reader protection based on measurements, not the read
+percentage alone.
+
 ## Rows
 
 Thirteen rows compare `Mutex`, allocated unfair locks (default and adaptive spin), a raw unfair lock, `NSLock`, `NSRecursiveLock`, pthread mutex and read/write lock, serial queue, concurrent queue with synchronous or asynchronous barrier writes, semaphore and Objective-C synchronization. Each store owns one array of 10,000 records, partitioned into fixed groups of one (`singleRecord`) or twenty (`twentyRecords`). Variant `default` uses six workers at the requested QoS. Read/write locks take shared read locks; concurrent queues allow concurrent readers. Every write increments the group's version and stores that version as every record's value.
